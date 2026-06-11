@@ -1,8 +1,8 @@
 { config, pkgs, user, ... }: {
 
   networking = {
-    computerName = "Toms MacBook";             # Host name
-    hostName = "toms-macbook";
+    computerName = "Mattias MacBook";           # Host name
+    hostName = "mattias-macbook";
   };
 
 }

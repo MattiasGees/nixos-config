@@ -236,7 +236,7 @@
   }; 
 
   system = {
-    primaryUser = "chaosinthecrd";
+    primaryUser = "mattias";
     defaults = {
       NSGlobalDomain = {                  # Global macOS system settings
         KeyRepeat = 1;

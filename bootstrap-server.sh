@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Bootstrap script for setting up chaosinthecrd user and nix on non-NixOS servers
+# Bootstrap script for setting up mattias user and nix on non-NixOS servers
 # Usage: curl -L https://raw.githubusercontent.com/YOUR_REPO/master/bootstrap-server.sh | sudo bash
 
 set -e
 
-USERNAME="chaosinthecrd"
+USERNAME="mattias"
 USER_HOME="/home/$USERNAME"
 
 echo "==> Setting up server environment for $USERNAME"
@@ -55,7 +55,7 @@ if [ ! -d ~/.config/nixos-config ]; then
     echo "==> Cloning nixos-config repository"
     mkdir -p ~/.config
     # TODO: Update this with your actual repository URL
-    git clone https://github.com/chaosinthecrd/nixos-config.git ~/.config/nixos-config
+    git clone https://github.com/mattiasgees/nixos-config.git ~/.config/nixos-config
 else
     echo "==> nixos-config repository already exists"
 fi
@@ -69,9 +69,9 @@ fi
 # Apply home-manager configuration
 cd ~/.config/nixos-config
 echo "==> Applying home-manager configuration"
-home-manager switch --flake .#chaosinthecrd
+home-manager switch --flake .#mattias
 
 echo "==> Setup complete!"
-echo "==> Please change the password for user chaosinthecrd"
+echo "==> Please change the password for user mattias"
 echo "==> Log out and log back in for changes to take effect"
 EOF

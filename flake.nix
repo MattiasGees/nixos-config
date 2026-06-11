@@ -1,5 +1,5 @@
 {
-  description = "Tom's Personal NixOS and Darwin System Flake Configuration";
+  description = "Mattias's Personal NixOS and Darwin System Flake Configuration";
 
   inputs =                                                                  # All flake references used to build my NixOS setup. These are dependencies.
     {
@@ -32,7 +32,7 @@
       mkDarwin = import ./lib/mkdarwin.nix;
       mkSys = import ./lib/mksys.nix;
       mkServer = import ./lib/mkserver.nix;
-      user = "chaosinthecrd";
+      user = "mattias";
       system = "x86_64-linux";
       pkgs  = import nixpkgs {
       inherit system; 

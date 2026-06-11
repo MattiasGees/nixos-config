@@ -5,7 +5,7 @@
 
   nix = {
     settings = {
-      trusted-users = [ "chaosinthecrd" "root" ];
+      trusted-users = [ "mattias" "root" ];
     };
 
     package = pkgs.nix;

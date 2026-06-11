@@ -129,7 +129,7 @@ alias tailscale="/Applications/Tailscale.app/Contents/MacOS/Tailscale"
 # ─────────────────────────────────────────────────────────────
 
 # Rebuild nix config (darwin)
-alias switch="sudo NIXPKGS_ALLOW_UNFREE=1 make -C /Users/chaosinthecrd/Git/nixos-config switch"
+alias switch="sudo NIXPKGS_ALLOW_UNFREE=1 make -C /Users/mattias/Documents/git/nixos-config switch"
 
 # ─────────────────────────────────────────────────────────────
 # Work

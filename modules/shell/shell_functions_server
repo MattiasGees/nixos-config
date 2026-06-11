@@ -226,15 +226,15 @@ ts-rec() {
     local base=localhost:5001
     local platform=""
   else
-    local base=europe-west2-docker.pkg.dev/tailscale-sandbox/chaosinthecrd
+    local base=europe-west2-docker.pkg.dev/tailscale-sandbox/mattias
     local platform="flyio"
   fi
 
   local rrepo="$base/tsrecorder"
 
   old=$(pwd)
-  cd /Users/chaosinthecrd/Git/corp/cmd/tsrecorder
-  PUSH=true TAGS=$next REPOS=$rrepo VERSION_GIT_HASH=foo VERSION_PATCH=wi VERSION_MINOR=wih VERSION_MAJOR=wah VERSION_EXTRA_HASH="blah" /Users/chaosinthecrd/Git/corp/cmd/tsrecorder/publish.sh
+  cd /Users/mattias/Git/corp/cmd/tsrecorder
+  PUSH=true TAGS=$next REPOS=$rrepo VERSION_GIT_HASH=foo VERSION_PATCH=wi VERSION_MINOR=wih VERSION_MAJOR=wah VERSION_EXTRA_HASH="blah" /Users/mattias/Git/corp/cmd/tsrecorder/publish.sh
   cd $old
 
   if [ "$ctx" = "kind" ] || [ "$ctx" = "kind-kind" ]; then

@@ -43,9 +43,9 @@ in
     LC_TIME = "en_GB.UTF-8";
   };
 
-  users.users.chaosinthecrd = {
+  users.users.mattias = {
     isNormalUser = true;
-    home = "/home/chaosinthecrd";
+    home = "/home/mattias";
     extraGroups = [ "libvirt" "qemu-libvirtd" "kvm" "libvirtd" "audio" "disk" "video" "networkmanger" "docker" "wheel" ];
     shell = pkgs.zsh;
     group = "users";
@@ -61,7 +61,7 @@ in
   ];
 
   # Enable automatic login for the user.
-  services.getty.autologinUser = "chaosinthecrd";
+  services.getty.autologinUser = "mattias";
 
   services.flatpak.enable = true;
 
@@ -76,7 +76,7 @@ in
   programs.ssh = {
     startAgent = true;
     enableAskPassword = true;
-    askPassword = "/etc/profiles/per-user/chaosinthecrd/bin/ksshaskpass";
+    askPassword = "/etc/profiles/per-user/mattias/bin/ksshaskpass";
   };
 
   # Enable mosh (mobile shell)
@@ -145,7 +145,7 @@ in
     onBoot = "ignore";
     onShutdown = "shutdown";
     extraConfig = ''
-      user="chaosinthecrd"
+      user="mattias"
     '';
   };
 
@@ -174,7 +174,7 @@ in
     settings = rec {
       initial_session = {
         command = "${pkgs.hyprland}/bin/Hyprland";
-	      user = "chaosinthecrd";
+	      user = "mattias";
     };
     default_session = initial_session;
   };
@@ -186,7 +186,7 @@ in
   };
 
   services.xremap = {
-    userName = "chaosinthecrd";  # run as a systemd service in alice
+    userName = "mattias";  # run as a systemd service in alice
     serviceMode = "user";  # run xremap as user
     withWlroots = true;
     config = {

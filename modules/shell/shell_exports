@@ -2,16 +2,16 @@
 
 # PATH
 export NIXPKGS_ALLOW_UNFREE=1
-export PATH=/etc/profiles/per-user/chaosinthecrd/bin:$PATH
-export PATH=/Users/chaosinthecrd/Library/Python/3.9/bin:$PATH 
+export PATH=/etc/profiles/per-user/mattias/bin:$PATH
+export PATH=/Users/mattias/Library/Python/3.9/bin:$PATH
 export PATH=/run/wrappers/bin:/run/current-system/sw/bin:/opt/homebrew/bin:$PATH
-export PATH=/etc/profiles/per-user/tom.meadows/bin:$PATH
+export PATH=/etc/profiles/per-user/mattias/bin:$PATH
 export PATH="${KREW_ROOT:-$HOME/.krew}/bin:$PATH"
 export DOCKER_HOST="unix://$HOME/.colima/docker.sock"
 # Defaults
 export SHELL=zsh
 export EDITOR='nvim'
-export DEFAULT_USER=tom
+export DEFAULT_USER=mattias
 export WLR_DRM_NO_MODIFIERS=1
 # Directory Env Vars
 export GOPATH=$HOME/go
@@ -26,7 +26,7 @@ export KUBECONFIG=$HOME/.kube/config
 export VIRTUALENVWRAPPER_PYTHON=/usr/bin/python3
 
 # SSH
-# export SSH_ASKPASS="/etc/profiles/per-user/chaosinthecrd/bin/ksshaskpass"
+# export SSH_ASKPASS="/etc/profiles/per-user/mattias/bin/ksshaskpass"
 export SSH_ASKPASS_REQUIRE="force"
 
 # COSIGN
@@ -45,5 +45,5 @@ export GPG_TTY=$(tty)
 # Tailscale dev
 export TAILSCALE_REPO="$HOME/Git/tailscale"
 export CORP_REPO="$HOME/Git/corp"
-export VALUES_FILE="$HOME/Git/tailscale/chaosinthecrd/values.yaml"
-export REGISTRY="europe-west2-docker.pkg.dev/tailscale-sandbox/chaosinthecrd"
+export VALUES_FILE="$HOME/Git/tailscale/mattias/values.yaml"
+export REGISTRY="europe-west2-docker.pkg.dev/tailscale-sandbox/mattias"

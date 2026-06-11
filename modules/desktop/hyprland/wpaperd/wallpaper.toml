@@ -1,4 +1,4 @@
 [default]
-path = "/home/chaosinthecrd/Git/nixos-config/wallpapers/anime"
+path = "/home/mattias/Documents/git/nixos-config/wallpapers/anime"
 duration = "1m"
 sorting = "random"

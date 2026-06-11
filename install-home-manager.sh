@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # Install home-manager configuration for existing user
-# Usage: Run as the chaosinthecrd user
+# Usage: Run as the mattias user
 #   curl -L https://raw.githubusercontent.com/YOUR_REPO/master/install-home-manager.sh | bash
 
 set -e
 
-USERNAME="chaosinthecrd"
+USERNAME="mattias"
 
 if [ "$USER" != "$USERNAME" ]; then
     echo "Error: This script must be run as user $USERNAME"
@@ -46,7 +46,7 @@ if [ ! -d ~/.config/nixos-config ]; then
     echo "==> Cloning nixos-config repository"
     mkdir -p ~/.config
     # TODO: Update this with your actual repository URL
-    git clone https://github.com/chaosinthecrd/nixos-config.git ~/.config/nixos-config
+    git clone https://github.com/mattiasgees/nixos-config.git ~/.config/nixos-config
 else
     echo "==> Updating nixos-config repository"
     cd ~/.config/nixos-config

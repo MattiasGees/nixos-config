@@ -12,6 +12,6 @@ POWER=$(blueutil --power)
 if [ $POWER -eq 0 ]; then
   sketchybar --set $NAME icon="$BLUETOOTH_ICON" label="Off" --set '/bluetooth.*/' drawing=on
 else
-  CONNECTED=$(blueutil --connected --format json | /etc/profiles/per-user/chaosinthecrd/bin/jq length)
+  CONNECTED=$(blueutil --connected --format json | /etc/profiles/per-user/mattias/bin/jq length)
   sketchybar --set $NAME icon="$BLUETOOTH_ICON" label="$CONNECTED" --set '/bluetooth.*/' drawing=on
 fi

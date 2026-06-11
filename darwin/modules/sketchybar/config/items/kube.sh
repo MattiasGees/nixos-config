@@ -2,7 +2,7 @@
 
 # Explicitly set KUBECONFIG and PATH for brew services compatibility
 export KUBECONFIG="${KUBECONFIG:-$HOME/.kube/config}"
-export PATH="/etc/profiles/per-user/chaosinthecrd/bin:/opt/homebrew/bin:${KREW_ROOT:-$HOME/.krew}/bin:$PATH"
+export PATH="/etc/profiles/per-user/mattias/bin:/opt/homebrew/bin:${KREW_ROOT:-$HOME/.krew}/bin:$PATH"
 
 source "$HOME/.config/sketchybar/colorpresets/custom-theme.sh"
 

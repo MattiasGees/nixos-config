@@ -4,14 +4,14 @@ This guide covers setting up servers with this Nix configuration for both NixOS 
 
 ## NixOS Servers
 
-For NixOS servers, the user `chaosinthecrd` is automatically provisioned by the system configuration.
+For NixOS servers, the user `mattias` is automatically provisioned by the system configuration.
 
 ### Installation
 
 1. Install NixOS with a minimal profile
 2. Clone this repository:
    ```bash
-   git clone https://github.com/chaosinthecrd/nixos-config.git /etc/nixos-config
+   git clone https://github.com/mattiasgees/nixos-config.git /etc/nixos-config
    ```
 
 3. Apply the configuration:
@@ -24,7 +24,7 @@ For NixOS servers, the user `chaosinthecrd` is automatically provisioned by the 
    ```
 
 The configuration will:
-- Create the `chaosinthecrd` user with sudo access
+- Create the `mattias` user with sudo access
 - Install mosh, SSH, and essential tools
 - Configure firewall rules for mosh
 - Set up home-manager for the user
@@ -38,11 +38,11 @@ For non-NixOS systems, you have two options:
 This script will create the user and install everything:
 
 ```bash
-curl -L https://raw.githubusercontent.com/chaosinthecrd/nixos-config/master/bootstrap-server.sh | sudo bash
+curl -L https://raw.githubusercontent.com/mattias/nixos-config/master/bootstrap-server.sh | sudo bash
 ```
 
 This will:
-- Create the `chaosinthecrd` user if it doesn't exist
+- Create the `mattias` user if it doesn't exist
 - Install Nix in multi-user mode
 - Clone this repository
 - Install and configure home-manager
@@ -51,10 +51,10 @@ This will:
 
 ### Option 2: Manual Setup (For Existing User)
 
-If the `chaosinthecrd` user already exists, run this as that user:
+If the `mattias` user already exists, run this as that user:
 
 ```bash
-curl -L https://raw.githubusercontent.com/chaosinthecrd/nixos-config/master/install-home-manager.sh | bash
+curl -L https://raw.githubusercontent.com/mattias/nixos-config/master/install-home-manager.sh | bash
 ```
 
 This will:
@@ -69,17 +69,17 @@ If you prefer to create the user manually first:
 
 ```bash
 # Create user with home directory
-sudo useradd -m -s /bin/bash -G sudo chaosinthecrd
+sudo useradd -m -s /bin/bash -G sudo mattias
 
 # Set password
-sudo passwd chaosinthecrd
+sudo passwd mattias
 
 # Add sudo permissions
-echo "chaosinthecrd ALL=(ALL) NOPASSWD:ALL" | sudo tee /etc/sudoers.d/chaosinthecrd
-sudo chmod 0440 /etc/sudoers.d/chaosinthecrd
+echo "mattias ALL=(ALL) NOPASSWD:ALL" | sudo tee /etc/sudoers.d/mattias
+sudo chmod 0440 /etc/sudoers.d/mattias
 ```
 
-Then run Option 2 above as the `chaosinthecrd` user.
+Then run Option 2 above as the `mattias` user.
 
 ## Post-Installation
 
@@ -95,7 +95,7 @@ git pull
 sudo nixos-rebuild switch --flake .#server
 
 # For non-NixOS with home-manager:
-home-manager switch --flake .#chaosinthecrd
+home-manager switch --flake .#mattias
 ```
 
 ### Mosh Connection
@@ -103,16 +103,16 @@ home-manager switch --flake .#chaosinthecrd
 Connect to your server using mosh:
 
 ```bash
-mosh chaosinthecrd@your-server
+mosh mattias@your-server
 ```
 
 If you encounter issues with mosh not finding the server binary, you can explicitly specify it:
 
 ```bash
-mosh --server=/run/current-system/sw/bin/mosh-server chaosinthecrd@your-server  # NixOS
+mosh --server=/run/current-system/sw/bin/mosh-server mattias@your-server  # NixOS
 
 # For non-NixOS, mosh-server will be in:
-mosh --server=$HOME/.local/state/nix/profiles/home-manager/home-path/bin/mosh-server chaosinthecrd@your-server
+mosh --server=$HOME/.local/state/nix/profiles/home-manager/home-path/bin/mosh-server mattias@your-server
 ```
 
 ### SSH Keys
@@ -120,7 +120,7 @@ mosh --server=$HOME/.local/state/nix/profiles/home-manager/home-path/bin/mosh-se
 Don't forget to copy your SSH public key to the server:
 
 ```bash
-ssh-copy-id chaosinthecrd@your-server
+ssh-copy-id mattias@your-server
 ```
 
 ## What Gets Installed

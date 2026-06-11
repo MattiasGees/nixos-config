@@ -75,8 +75,8 @@ in
   };
 
   # Enable automatic login for the user.
-  services.getty.autologinUser = "chaosinthecrd";
-  users.groups.libvirtd.members = [ "root" "chaosinthecrd"];
+  services.getty.autologinUser = "mattias";
+  users.groups.libvirtd.members = [ "root" "mattias"];
 
   # List packages installed in system profile. To search, run:
   # $ nix search wget

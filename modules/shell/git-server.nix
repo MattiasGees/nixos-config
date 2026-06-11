@@ -3,8 +3,8 @@
   programs = {
     git = {
       enable = true;
-      userName = "chaosinthecrd";
-      userEmail = "tom@tmlabs.co.uk";
+      userName = "Mattias Gees";
+      userEmail = "mattias@gees.dev";
       extraConfig = {
         core = { excludesFile = "~/.config/global-gitignore"; };
         pull = { rebase = "true"; };

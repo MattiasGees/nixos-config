@@ -30,9 +30,9 @@
     LC_TIME = "en_GB.UTF-8";
   };
 
-  users.users.chaosinthecrd = {
+  users.users.mattias = {
     isNormalUser = true;
-    home = "/home/chaosinthecrd";
+    home = "/home/mattias";
     extraGroups = [ "wheel" "docker" "networkmanager" ];
     shell = pkgs.zsh;
     group = "users";
