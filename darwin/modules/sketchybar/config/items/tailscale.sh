@@ -151,26 +151,45 @@ update_popup_transitional() {
   fi
 }
 
-# Handle click - cycle through states
+# Handle clicks - left click switches tailnets, right click toggles on/off
 if [ "$SENDER" = "mouse.clicked" ]; then
   # Get current state
   CURRENT=$(get_current_tailnet)
 
-  # Determine next state (tailnet name for display) and profile ID (for switch command)
-  case "$CURRENT" in
-    "$TAILNET_WORK")
-      NEXT="$TAILNET_PERSONAL"
-      NEXT_PROFILE="$PROFILE_PERSONAL"
-      ;;
-    "$TAILNET_PERSONAL")
-      NEXT="off"
-      NEXT_PROFILE=""
-      ;;
-    *)
+  # Check which mouse button was clicked (left=1, right=2)
+  # BUTTON variable is provided by sketchybar
+  if [ "$BUTTON" = "right" ]; then
+    # RIGHT CLICK: Toggle on/off
+    if [ "$CURRENT" = "off" ]; then
+      # Turn on to work tailnet (default)
       NEXT="$TAILNET_WORK"
       NEXT_PROFILE="$PROFILE_WORK"
-      ;;
-  esac
+      ACTION="up"
+    else
+      # Turn off
+      NEXT="off"
+      NEXT_PROFILE=""
+      ACTION="down"
+    fi
+  else
+    # LEFT CLICK: Switch between work and personal (only if currently on)
+    if [ "$CURRENT" = "off" ]; then
+      # If off, turn on to work tailnet
+      NEXT="$TAILNET_WORK"
+      NEXT_PROFILE="$PROFILE_WORK"
+      ACTION="up"
+    elif [ "$CURRENT" = "$TAILNET_WORK" ]; then
+      # Switch from work to personal
+      NEXT="$TAILNET_PERSONAL"
+      NEXT_PROFILE="$PROFILE_PERSONAL"
+      ACTION="switch"
+    else
+      # Switch from personal to work
+      NEXT="$TAILNET_WORK"
+      NEXT_PROFILE="$PROFILE_WORK"
+      ACTION="switch"
+    fi
+  fi
 
   # Update display and popup IMMEDIATELY (before the actual switch)
   update_display "$NEXT"
@@ -178,17 +197,12 @@ if [ "$SENDER" = "mouse.clicked" ]; then
 
   # Run the actual switch in background, then trigger updates
   (
-    if [ "$NEXT" = "off" ]; then
+    if [ "$ACTION" = "down" ]; then
       "$TAILSCALE_CMD" down 2>/dev/null
       sleep 1
-    else
+    elif [ "$ACTION" = "up" ]; then
       "$TAILSCALE_CMD" switch "$NEXT_PROFILE" 2>/dev/null
-      sleep 1
-      # If not running after switch, bring it up
-      STATE=$("$TAILSCALE_CMD" status --json 2>/dev/null | jq -r '.BackendState // empty')
-      if [ "$STATE" != "Running" ]; then
-        "$TAILSCALE_CMD" up 2>/dev/null
-      fi
+      "$TAILSCALE_CMD" up 2>/dev/null
       # Poll until BackendState is Running (max 10 seconds)
       for i in 1 2 3 4 5 6 7 8 9 10; do
         sleep 1
@@ -197,7 +211,21 @@ if [ "$SENDER" = "mouse.clicked" ]; then
           break
         fi
       done
+    else
+      # ACTION = "switch"
+      "$TAILSCALE_CMD" switch "$NEXT_PROFILE" 2>/dev/null
+      # Poll until the tailnet has actually changed (max 10 seconds)
+      for i in 1 2 3 4 5 6 7 8 9 10; do
+        sleep 1
+        STATUS=$("$TAILSCALE_CMD" status --json 2>/dev/null)
+        BACKEND=$(echo "$STATUS" | jq -r '.BackendState // empty')
+        TAILNET=$(echo "$STATUS" | jq -r '.CurrentTailnet.Name // empty')
+        if [ "$BACKEND" = "Running" ] && [ "$TAILNET" = "$NEXT" ]; then
+          break
+        fi
+      done
     fi
+
     # Update the display with actual state
     ACTUAL=$("$TAILSCALE_CMD" status --json 2>/dev/null)
     BACKEND=$(echo "$ACTUAL" | jq -r '.BackendState // empty')
@@ -206,14 +234,14 @@ if [ "$SENDER" = "mouse.clicked" ]; then
       IP=$("$TAILSCALE_CMD" ip -4 2>/dev/null)
       # Update icon color
       case "$TAILNET" in
-        "tailscale.com")
-          sketchybar --set tailscale icon.color="0xff08F7FE"
+        "$TAILNET_WORK")
+          sketchybar --set tailscale icon.color="$COLOR_TAILSCALE"
           ;;
-        "tpmeadows1@gmail.com")
-          sketchybar --set tailscale icon.color="0xffD83F87"
+        "$TAILNET_PERSONAL")
+          sketchybar --set tailscale icon.color="$COLOR_PERSONAL"
           ;;
         *)
-          sketchybar --set tailscale icon.color="0xffA4B3B6"
+          sketchybar --set tailscale icon.color="$COLOR_OFF"
           ;;
       esac
       # Update popup
@@ -221,7 +249,7 @@ if [ "$SENDER" = "mouse.clicked" ]; then
       sketchybar --set tailscale.tailnet label="Tailnet: $TAILNET" drawing=on 2>/dev/null
       sketchybar --set tailscale.ip label="IP: $IP" drawing=on 2>/dev/null
     else
-      sketchybar --set tailscale icon.color="0xffA4B3B6"
+      sketchybar --set tailscale icon.color="$COLOR_OFF"
       sketchybar --set tailscale.status label="Status: Off" 2>/dev/null
       sketchybar --set tailscale.tailnet drawing=off 2>/dev/null
       sketchybar --set tailscale.ip drawing=off 2>/dev/null

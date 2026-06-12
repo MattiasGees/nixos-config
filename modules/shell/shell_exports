@@ -26,7 +26,11 @@ export KUBECONFIG=$HOME/.kube/config
 export VIRTUALENVWRAPPER_PYTHON=/usr/bin/python3
 
 # SSH
-# export SSH_ASKPASS="/etc/profiles/per-user/mattias/bin/ksshaskpass"
+if [ -x /opt/homebrew/bin/ssh-askpass ]; then
+  export SSH_ASKPASS="/opt/homebrew/bin/ssh-askpass"
+elif [ -x /etc/profiles/per-user/mattias/bin/ksshaskpass ]; then
+  export SSH_ASKPASS="/etc/profiles/per-user/mattias/bin/ksshaskpass"
+fi
 export SSH_ASKPASS_REQUIRE="force"
 
 # COSIGN

@@ -1,5 +1,17 @@
 return {
-  -- Enhanced gopls configuration to fix go.mod replace directive errors
+  -- Treesitter for Go
+  {
+    "nvim-treesitter/nvim-treesitter",
+    opts = { ensure_installed = { "go", "gomod", "gosum", "gowork" } },
+  },
+
+  -- Mason tools for Go
+  {
+    "mason-org/mason.nvim",
+    opts = { ensure_installed = { "goimports", "gopls", "delve" } },
+  },
+
+  -- gopls LSP configuration
   {
     "neovim/nvim-lspconfig",
     opts = {
@@ -9,6 +21,8 @@ return {
             gopls = {
               -- Fix go.mod replace directive errors
               allowModfileModifications = true,
+              -- Let goimports handle formatting/imports, not gopls
+              gofumpt = false,
               -- Enable inlay hints
               hints = {
                 assignVariableTypes = true,

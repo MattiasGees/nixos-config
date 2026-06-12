@@ -70,18 +70,16 @@ sketchybar --add item days_until left \
                             icon.color=$LAVENDER \
                             label.padding_right=0
 
-# 2. Network Speed (Ensuring small text)
+# 2. Network Speed (triggered on network changes and manual clicks)
 sketchybar --add item network left 15 \
-           --set network update_freq=60 \
-                         icon.color=$LAVENDER \
+           --set network icon.color=$LAVENDER \
                          script="$ITEM_DIR/netspeed.sh" \
                          label.padding_right=4 \
                          popup.background.color=$ITEM_COLOR \
                          popup.background.corner_radius=8 \
                          popup.background.border_color=$ITEM_COLOR \
                          popup.background.border_width=1 \
-                         click_script="$ITEM_DIR/netspeed.sh" \
-           --subscribe network mouse.entered mouse.exited
+           --subscribe network wifi_change mouse.clicked mouse.entered mouse.exited
 
 # Kubernetes Context
 sketchybar --add item kube left \
@@ -188,5 +186,8 @@ sketchybar --add item notch_gap_right right \
 
 # --- Finalize ---
 sketchybar --update
+
+# Trigger initial network speed display
+sketchybar --trigger network
 
 echo "Sketchybar 'Rosé Pine' theme loaded."

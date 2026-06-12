@@ -44,13 +44,14 @@ return {
           height = 0.9,
           border = "rounded",
           keys = {
-            claude_hide = {
-              "<C-,>",
-              function(self)
-                self:hide()
+            -- EscEsc to exit terminal insert mode (so you can scroll)
+            exit_terminal = {
+              "<Esc><Esc>",
+              function()
+                vim.cmd("stopinsert")
               end,
               mode = "t",
-              desc = "Hide Claude",
+              desc = "Exit terminal insert mode",
             },
           },
         },
@@ -74,11 +75,12 @@ return {
     },
     keys = {
       { "<leader>ac", "<cmd>ClaudeCode<cr>", desc = "Toggle Claude" },
+      { "<C-i>", "<cmd>ClaudeCode<cr>", mode = { "n", "t" }, desc = "Toggle Claude" },
       { "<leader>af", "<cmd>ClaudeCodeFocus<cr>", desc = "Focus Claude" },
       { "<leader>ar", "<cmd>ClaudeCode --resume<cr>", desc = "Resume Claude" },
       { "<leader>aC", "<cmd>ClaudeCode --continue<cr>", desc = "Continue Claude" },
       { "<leader>am", "<cmd>ClaudeCodeSelectModel<cr>", desc = "Select Claude model" },
-      { "<leader>ab", "<cmd>ClaudeCodeAdd %<cr>", desc = "Add current buffer to Claude" },
+      { "<C-a>", "<cmd>ClaudeCodeAdd %<cr>", mode = "n", desc = "Add current buffer to Claude" },
       { "<leader>as", "<cmd>ClaudeCodeSend<cr>", mode = "v", desc = "Send selection to Claude" },
       { "<leader>aa", "<cmd>ClaudeCodeDiffAccept<cr>", desc = "Accept Claude changes" },
       { "<leader>ad", "<cmd>ClaudeCodeDiffDeny<cr>", desc = "Reject Claude changes" },

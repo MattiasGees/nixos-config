@@ -33,17 +33,10 @@ if [ "$SENDER" = "mouse.exited" ]; then
 fi
 
 # --- Configuration ---
-STATE_FILE="/tmp/sketchybar_netspeed_state"
-LAST_TEST_FILE="/tmp/sketchybar_netspeed_last_test"
-ERROR_FILE="/tmp/sketchybar_netspeed_error"
+STATE_DIR="/tmp/sketchybar_netspeed"
 LOCK_FILE="/tmp/sketchybar_netspeed.lock"
 TEST_CMD="networkQuality"
-SIGNAL_THRESHOLD=15
-MIN_TEST_INTERVAL=300      # Minimum seconds between signal-triggered tests
-NETWORK_CHANGE_INTERVAL=30 # Shorter interval for network changes (always want fresh data on new network)
-STALE_DATA_INTERVAL=1800   # Refresh if no test in 30 minutes
-ERROR_RETRY_INTERVAL=60    # Retry every 60 seconds when in error state
-MAX_RETRIES=3              # Max retries before giving up until next trigger
+mkdir -p "$STATE_DIR"  # Ensure state directory exists
 
 # --- Acquire Lock (prevent concurrent runs) ---
 # Use mkdir for atomic lock (works on macOS)
@@ -65,27 +58,6 @@ if ! mkdir "$LOCK_FILE" 2>/dev/null; then
 fi
 trap 'rmdir "$LOCK_FILE" 2>/dev/null' EXIT
 
-# --- Helper: Check if enough time has passed (with configurable interval) ---
-time_since_last_test() {
-  if [ ! -f "$LAST_TEST_FILE" ]; then
-    echo "999999"  # No record, return large number
-    return
-  fi
-  LAST_TEST=$(cat "$LAST_TEST_FILE")
-  NOW=$(date +%s)
-  echo $((NOW - LAST_TEST))
-}
-
-can_test_with_interval() {
-  local INTERVAL=$1
-  local ELAPSED=$(time_since_last_test)
-  [ "$ELAPSED" -ge "$INTERVAL" ]
-}
-
-can_auto_test() {
-  can_test_with_interval "$MIN_TEST_INTERVAL"
-}
-
 # --- Helper: Clear error state ---
 clear_error() {
   rm -f "$ERROR_FILE"
@@ -102,9 +74,10 @@ set_error() {
 update_popup() {
   local STATUS=$1
   local SSID=$2
-  local SPEED=$3
-  local RSSI=$4
-  local LAST_TEST_TIME=$5
+  local DL_SPEED=$3
+  local UL_SPEED=$4
+  local RSSI=$5
+  local LAST_TEST_TIME=$6
 
   # Format the last test time
   if [ -n "$LAST_TEST_TIME" ] && [ "$LAST_TEST_TIME" != "0" ]; then
@@ -127,10 +100,16 @@ update_popup() {
       --set "$NAME".network label="Network: $SSID" \
         label.font="Iosevka Nerd Font:Regular:13.0" label.color="$THEME_SAGE"
 
-  # Line 3: Speed
-  sketchybar --set "$NAME".speed label="Speed: ${SPEED} Mbps" 2>/dev/null || \
-    sketchybar --add item "$NAME".speed popup."$NAME" \
-      --set "$NAME".speed label="Speed: ${SPEED} Mbps" \
+  # Line 2: Download Speed
+  sketchybar --set "$NAME".download label="Download: ${DL_SPEED} Mbps" 2>/dev/null || \
+    sketchybar --add item "$NAME".download popup."$NAME" \
+      --set "$NAME".download label="Download: ${DL_SPEED} Mbps" \
+        label.font="Iosevka Nerd Font:Regular:13.0" label.color="$THEME_SAGE"
+
+  # Line 3: Upload Speed
+  sketchybar --set "$NAME".upload label="Upload: ${UL_SPEED} Mbps" 2>/dev/null || \
+    sketchybar --add item "$NAME".upload popup."$NAME" \
+      --set "$NAME".upload label="Upload: ${UL_SPEED} Mbps" \
         label.font="Iosevka Nerd Font:Regular:13.0" label.color="$THEME_SAGE"
 
   # Line 4: Signal (only for WiFi)
@@ -202,28 +181,29 @@ run_speed_test() {
   fi
 
   DL_SPEED=$(echo "$RESULT" | grep "Downlink capacity" | awk '{printf "%.0f", $3}')
+  UL_SPEED=$(echo "$RESULT" | grep "Uplink capacity" | awk '{printf "%.0f", $3}')
 
-  if [ -z "$DL_SPEED" ]; then
-    echo "Error: Could not parse download speed."
+  if [ -z "$DL_SPEED" ] || [ -z "$UL_SPEED" ]; then
+    echo "Error: Could not parse speeds (DL: $DL_SPEED, UL: $UL_SPEED)."
     NEW_RETRY=$((RETRY_COUNT + 1))
     set_error "Failed to parse speed result" "$NEW_RETRY"
     sketchybar --set "$NAME" icon="$ICON" label="Err" icon.color=0xffE98074 label.color="$COLOR_POOR"
     LAST_TEST=$(cat "$LAST_TEST_FILE" 2>/dev/null || echo "0")
-    update_popup "error" "$CURRENT_SSID" "—" "$CURRENT_RSSI" "$LAST_TEST"
+    update_popup "error" "$CURRENT_SSID" "—" "—" "$CURRENT_RSSI" "$LAST_TEST"
     echo "--- TEST FAILED (will retry $NEW_RETRY/$MAX_RETRIES) ---"
     return 1
   fi
 
-  echo "Parsed Download Speed: $DL_SPEED Mbps"
+  echo "Parsed Download Speed: $DL_SPEED Mbps, Upload Speed: $UL_SPEED Mbps"
 
   # Success - clear any error state
   clear_error
 
-  echo "${CURRENT_SSID}|${DL_SPEED}|${CURRENT_RSSI}" >"$STATE_FILE"
+  echo "${CURRENT_SSID}|${DL_SPEED}|${UL_SPEED}|${CURRENT_RSSI}" >"$STATE_FILE"
   date +%s >"$LAST_TEST_FILE"
   SPEED_COLOR=$(get_speed_color "$DL_SPEED")
-  sketchybar --set "$NAME" icon="$ICON" label="${DL_SPEED} Mbps" icon.color="$ICON_COLOR" label.color="$SPEED_COLOR"
-  update_popup "ok" "$CURRENT_SSID" "$DL_SPEED" "$CURRENT_RSSI" "$(date +%s)"
+  sketchybar --set "$NAME" icon="$ICON" label="↓${DL_SPEED} ↑${UL_SPEED}" icon.color="$ICON_COLOR" label.color="$SPEED_COLOR"
+  update_popup "ok" "$CURRENT_SSID" "$DL_SPEED" "$UL_SPEED" "$CURRENT_RSSI" "$(date +%s)"
   echo "--- TEST COMPLETE ---"
   return 0
 }
@@ -238,6 +218,9 @@ WIFI_INFO=$(system_profiler SPAirPortDataType 2>/dev/null)
 # Extract SSID from "Current Network Information:" section - the SSID is the line after it ending with ":"
 CURRENT_SSID=$(echo "$WIFI_INFO" | awk '/Current Network Information:/{getline; gsub(/^[[:space:]]+|:[[:space:]]*$/, ""); print; exit}')
 
+# Get BSSID (MAC address of access point) for unique network identification
+CURRENT_BSSID=$(echo "$WIFI_INFO" | awk '/BSSID:/ {print $2; exit}')
+
 # Get signal strength from system_profiler (no sudo required)
 CURRENT_RSSI=$(echo "$WIFI_INFO" | awk -F'[/ ]' '/Signal \/ Noise/ {for(i=1;i<=NF;i++) if($i ~ /^-[0-9]+$/) {print $i; exit}}')
 [ -z "$CURRENT_RSSI" ] && CURRENT_RSSI=0
@@ -246,15 +229,22 @@ CURRENT_RSSI=$(echo "$WIFI_INFO" | awk -F'[/ ]' '/Signal \/ Noise/ {for(i=1;i<=N
 if [ -z "$CURRENT_SSID" ] || [ "$CURRENT_SSID" = "" ]; then
   echo "No WiFi SSID found. Assuming Wired connection."
   CURRENT_SSID="Wired"
+  CURRENT_BSSID="wired"
   CURRENT_RSSI=0
 else
-  echo "Current Network: $CURRENT_SSID (RSSI: $CURRENT_RSSI)"
+  echo "Current Network: $CURRENT_SSID (BSSID: $CURRENT_BSSID, RSSI: $CURRENT_RSSI)"
 fi
 
-# 2. Click Handler
+# Generate network-specific file paths using BSSID
+NETWORK_ID=$(echo "$CURRENT_BSSID" | tr ':' '_')  # Replace colons with underscores for filename
+STATE_FILE="$STATE_DIR/${NETWORK_ID}_state"
+LAST_TEST_FILE="$STATE_DIR/${NETWORK_ID}_last_test"
+ERROR_FILE="$STATE_DIR/${NETWORK_ID}_error"
+
+# 2. Click Handler - Manual trigger
 if [ "$SENDER" = "mouse.clicked" ]; then
-  # Reset retry count on manual click
-  rm -f "$ERROR_FILE"
+  echo "Manual click detected - running speed test"
+  rm -f "$ERROR_FILE"  # Reset retry count on manual click
   run_speed_test "User Clicked"
   exit 0
 fi
@@ -266,74 +256,26 @@ if should_retry_error; then
   exit 0
 fi
 
-# 4. State Reconciliation
+# 4. State Reconciliation - check if we have cached data for this network
 if [ ! -f "$STATE_FILE" ]; then
-  if can_auto_test; then
-    run_speed_test "First Run / No State File"
-  else
-    echo "First run but rate-limited. Setting placeholder."
-    sketchybar --set "$NAME" icon="$ICON" label="--" icon.color="$ICON_COLOR" label.color="$COLOR_GOOD"
-    update_popup "ok" "$CURRENT_SSID" "--" "$CURRENT_RSSI" "0"
-  fi
+  echo "No cached data for this network - running speed test"
+  run_speed_test "First Run / No State File for Network"
   exit 0
 fi
 
 # Parse state file (use | as delimiter to handle SSIDs with spaces)
-IFS='|' read -r LAST_SSID LAST_SPEED LAST_RSSI <"$STATE_FILE"
-echo "Previous State: SSID=$LAST_SSID, Speed=$LAST_SPEED, RSSI=$LAST_RSSI"
+IFS='|' read -r LAST_SSID LAST_DL_SPEED LAST_UL_SPEED LAST_RSSI <"$STATE_FILE"
+echo "Previous State: SSID=$LAST_SSID, DL=$LAST_DL_SPEED, UL=$LAST_UL_SPEED, RSSI=$LAST_RSSI"
 
-# CHECK A: Network Change? (use shorter interval - we always want fresh data on new network)
-if [ "$CURRENT_SSID" != "$LAST_SSID" ]; then
-  echo "Network Changed ($LAST_SSID -> $CURRENT_SSID)."
-  clear_error  # Clear error on network change
-  if can_test_with_interval "$NETWORK_CHANGE_INTERVAL"; then
-    run_speed_test "Network Change"
-  else
-    echo "Rate-limited (network change). Updating SSID, keeping old speed."
-    echo "${CURRENT_SSID}|${LAST_SPEED}|${CURRENT_RSSI}" >"$STATE_FILE"
-    SPEED_COLOR=$(get_speed_color "$LAST_SPEED")
-    sketchybar --set "$NAME" icon="$ICON" label="${LAST_SPEED} Mbps" icon.color="$ICON_COLOR" label.color="$SPEED_COLOR"
-    LAST_TEST=$(cat "$LAST_TEST_FILE" 2>/dev/null || echo "0")
-    update_popup "ok" "$CURRENT_SSID" "$LAST_SPEED" "$CURRENT_RSSI" "$LAST_TEST"
-  fi
-  exit 0
-fi
-
-# CHECK B: Major Signal Shift? (WiFi Only)
-if [ "$CURRENT_SSID" != "Wired" ] && [ -n "$LAST_RSSI" ] && [ "$LAST_RSSI" != "0" ]; then
-  # Calculate delta
-  DIFF=$((CURRENT_RSSI - LAST_RSSI))
-  DIFF=${DIFF#-}
-
-  echo "Signal Delta: $DIFF dBm (Threshold: $SIGNAL_THRESHOLD)"
-
-  if [ "$DIFF" -gt "$SIGNAL_THRESHOLD" ]; then
-    if can_auto_test; then
-      run_speed_test "Signal Shift > $SIGNAL_THRESHOLD dBm"
-    else
-      echo "Rate-limited. Skipping signal-triggered test."
-    fi
-    exit 0
-  fi
-fi
-
-# CHECK C: Stale data? (periodic refresh)
-if can_test_with_interval "$STALE_DATA_INTERVAL"; then
-  echo "Data is stale (no test in $STALE_DATA_INTERVAL seconds). Refreshing."
-  run_speed_test "Periodic Refresh"
-  exit 0
-fi
-
-# 5. No Changes? Maintain Display
-echo "No significant changes detected. Maintaining display."
-echo "${CURRENT_SSID}|${LAST_SPEED}|${CURRENT_RSSI}" >"$STATE_FILE"
-SPEED_COLOR=$(get_speed_color "$LAST_SPEED")
-sketchybar --set "$NAME" icon="$ICON" label="${LAST_SPEED} Mbps" icon.color="$ICON_COLOR" label.color="$SPEED_COLOR"
+# 5. Display cached data
+echo "Displaying cached data for current network."
+SPEED_COLOR=$(get_speed_color "$LAST_DL_SPEED")
+sketchybar --set "$NAME" icon="$ICON" label="↓${LAST_DL_SPEED} ↑${LAST_UL_SPEED}" icon.color="$ICON_COLOR" label.color="$SPEED_COLOR"
 
 # Update popup with current state
 LAST_TEST=$(cat "$LAST_TEST_FILE" 2>/dev/null || echo "0")
 if [ -f "$ERROR_FILE" ]; then
-  update_popup "error" "$CURRENT_SSID" "$LAST_SPEED" "$CURRENT_RSSI" "$LAST_TEST"
+  update_popup "error" "$CURRENT_SSID" "$LAST_DL_SPEED" "$LAST_UL_SPEED" "$CURRENT_RSSI" "$LAST_TEST"
 else
-  update_popup "ok" "$CURRENT_SSID" "$LAST_SPEED" "$CURRENT_RSSI" "$LAST_TEST"
+  update_popup "ok" "$CURRENT_SSID" "$LAST_DL_SPEED" "$LAST_UL_SPEED" "$CURRENT_RSSI" "$LAST_TEST"
 fi

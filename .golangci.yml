@@ -1,0 +1,24 @@
+run:
+  timeout: 5m  # Increase from default 1m
+
+  # Only lint changed files for faster feedback
+  # new: true
+
+linters:
+  enable:
+    - errcheck
+    - gosimple
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+
+  # Disable slow linters that gopls already covers
+  disable:
+    - gocyclo
+    - gocognit
+    - lll
+
+linters-settings:
+  errcheck:
+    check-blank: true
