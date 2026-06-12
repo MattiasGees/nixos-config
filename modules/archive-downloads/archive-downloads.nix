@@ -1,7 +1,7 @@
 { config, pkgs, lib, ... }:
 
 let
-  nixConfigDir = "${config.home.homeDirectory}/Git/nixos-config";
+  nixConfigDir = "${config.home.homeDirectory}/Documents/git/nixos-config";
   archiveScript = "${nixConfigDir}/scripts/archive-downloads.sh";
   isDarwin = pkgs.stdenv.isDarwin;
   isLinux = pkgs.stdenv.isLinux;

@@ -2,7 +2,7 @@
 
 # Fuzzy search aliases and functions with descriptions
 halp() {
-  local nixconfig=$HOME/Git/nixos-config/modules/shell
+  local nixconfig=$HOME/Documents/git/nixos-config/modules/shell
   local choice
   local tmpfile=$(mktemp)
 
@@ -131,7 +131,7 @@ ksec() {
 
 # Push nix config with commit message
 push-nix() {
-  cd ~/Git/nixos-config
+  cd ~/Documents/git/nixos-config
   git add .
   git commit -a -m "$1"
   git push
@@ -140,7 +140,7 @@ push-nix() {
 
 # Pull, merge and push nix config
 sync-nix() {
-  cd ~/Git/nixos-config
+  cd ~/Documents/git/nixos-config
   git add .
   git stash
   git checkout master

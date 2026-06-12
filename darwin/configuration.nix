@@ -34,13 +34,13 @@
       "FelixKratz/formulae"
       # "homebrew/cask-drivers"
       "koekeishiya/formulae"
-      "theseal/ssh-askpass"
+      # "theseal/ssh-askpass"
     ];
     brews = [
       "FelixKratz/formulae/sketchybar"
-      "theseal/ssh-askpass/ssh-askpass"
-      "ddcctl"
-      "ykman"
+      # "theseal/ssh-askpass/ssh-askpass"
+      # "ddcctl"
+      # "ykman"
       "gpg"
       "openssh"
       "pinentry"
@@ -54,7 +54,7 @@
     ];
     casks = [
       "firefox"
-      "akiflow"
+      # "akiflow"
       "corelocationcli"
       "beeper"
       "launchcontrol"
@@ -62,33 +62,33 @@
       "kitty"
       "gpg-suite"
       "google-chrome"
-      "now-tv-player"
+      # "now-tv-player"
       "plex"
       "steam"
       "ghostty"
-      "alacritty"
+      # "alacritty"
       "slack"
       "spotify"
       "claude-code"
-      "notion"
-      "raycast"
-      "transmission"
-      "gitify"
-      "via"
+      # "notion"
+      # "raycast"
+      # "transmission"
+      # "gitify"
+      # "via"
       "vlc"
       "visual-studio-code"
-      "tidal"
+      # "tidal"
       "insomnia"
       "nordvpn"
-      "nordpass"
+      # "nordpass"
       "iterm2"
       # installs new version that I do not like
       # "readdle-spark"
-      "element"
+      # "element"
       "zoom"
-      "microsoft-teams"
+      # "microsoft-teams"
       "sf-symbols"
-      "hiddenbar"
+      # "hiddenbar"
     ];
   };
 
@@ -124,8 +124,6 @@
       extraConfig = ''
         yabai -m rule --add app='^Emacs$' manage=on
         yabai -m rule --add title='Preferences' manage=off layer=above
-        yabai -m rule --add title='NordPass Password Manager' manage=off layer=above
-        yabai -m rule --add title='^(Opening)' manage=off layer=above
         yabai -m rule --add title='Library' manage=off layer=above
         yabai -m rule --add app='^System Preferences$' manage=off layer=above
         yabai -m rule --add app='Activity Monitor' manage=off layer=above
@@ -255,7 +253,7 @@
         dashboard-in-overlay = true;
         expose-animation-duration = 0.0;
         launchanim = false;
-        orientation = "left";
+        orientation = "bottom";
         showhidden = true;
         mru-spaces = false;
         show-recents = false;

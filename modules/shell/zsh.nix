@@ -2,7 +2,7 @@
 { config, pkgs, ... }:
 let
   # stuffing the gitignore stuff in here as well
-  nixConfigDir = "${config.home.homeDirectory}/Git/nixos-config";
+  nixConfigDir = "${config.home.homeDirectory}/Documents/git/nixos-config";
   inherit (config.lib.file) mkOutOfStoreSymlink;
 
   # this idea is from https://github.com/BrianHicks/dotfiles.nix/blob/master/dotfiles/zsh.nix

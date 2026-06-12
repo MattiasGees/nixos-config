@@ -1,7 +1,7 @@
 { config, ... }:
 
 let
-  nixConfigDir = "${config.home.homeDirectory}/Git/nixos-config";
+  nixConfigDir = "${config.home.homeDirectory}/Documents/git/nixos-config";
   inherit (config.lib.file) mkOutOfStoreSymlink;
 in
 

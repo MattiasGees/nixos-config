@@ -19,7 +19,7 @@ disk: "40GiB"
 
 # Only mount the nixos-config directory, not the entire home
 mounts:
-  - location: "~/Git/nixos-config"
+  - location: "~/Documents/git/nixos-config"
     writable: false
     9p:
       securityModel: "none"
