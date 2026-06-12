@@ -9,7 +9,7 @@ in {
   imports = [
         ../../modules/shell/git.nix
         ../../modules/shell/zsh.nix
-        ../../modules/editors/nvim/nvim.nix
+        # ../../modules/editors/nvim/nvim.nix
         ../../modules/archive-downloads/archive-downloads.nix
         ../../pkgs/default.nix
         ../../darwin/modules/kitty/kitty.nix
@@ -18,7 +18,7 @@ in {
         ../../darwin/modules/sketchybar/sketchybar.nix
         ../../darwin/modules/yabai/yabai.nix
         ../../darwin/modules/skhd/skhd.nix
-        ../../darwin/modules/syncthing/syncthing.nix
+        # ../../darwin/modules/syncthing/syncthing.nix
         ../../pkgs/macos.nix
         ]) ++ (lib.optionals pkgs.stdenv.isLinux [
         ../../modules/desktop/hyprland/home.nix

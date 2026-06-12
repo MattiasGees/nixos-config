@@ -6,7 +6,7 @@ in {
       ./core.nix
       ./dev.nix
       ./kube.nix
-      ./ssc.nix
+      # ./ssc.nix
     ];
 	
      programs.zsh.enable = true;                            # Shell needs to be enabled

@@ -69,7 +69,7 @@
       # "alacritty"
       "slack"
       "spotify"
-      "claude-code"
+      "claude"
       # "notion"
       # "raycast"
       # "transmission"
@@ -139,7 +139,7 @@
 
         shift + alt - t : ghostty
 
-        shift + alt - f : firefox
+        shift + alt - f : google-chrome
 
         alt - h : yabai -m window --focus west
         alt - j : yabai -m window --focus south
