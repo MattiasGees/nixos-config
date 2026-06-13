@@ -115,14 +115,20 @@
       darwinConfigurations.macbook-m1 = mkDarwin "macbook-m1" rec {
         inherit darwin home-manager user;
         system = "aarch64-darwin";
-        pkgs = import nixpkgs { inherit system; };
+        pkgs = import nixpkgs {
+          inherit system;
+          config = { allowUnfree = true; allowInsecure = true; };
+        };
         lib = pkgs.lib;
       };
 
       darwinConfigurations.macbook-x86 = mkDarwin "macbook-x86" rec {
         inherit darwin home-manager user;
         system = "x86_64-darwin";
-        pkgs = import nixpkgs { inherit system; };
+        pkgs = import nixpkgs {
+          inherit system;
+          config = { allowUnfree = true; allowInsecure = true; };
+        };
         lib = pkgs.lib;
       };
 

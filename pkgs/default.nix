@@ -10,5 +10,5 @@ in {
     ];
 	
      programs.zsh.enable = true;                            # Shell needs to be enabled
-     programs.neovim.enable = true;
+     programs.neovim.enable = false;
   }
