@@ -41,7 +41,7 @@ switch:
 ifeq ($(UNAME), Darwin)
 	@echo "Building and switching Darwin configuration: $(NIXNAME)"
 	NIX_CONFIG="$(NIX_CONFIG)" nix build ".#darwinConfigurations.${NIXNAME}.system" --impure
-	./result/sw/bin/darwin-rebuild switch --flake "$$(pwd)#${NIXNAME}" --impure
+	sudo ./result/sw/bin/darwin-rebuild switch --flake "$$(pwd)#${NIXNAME}" --impure
 else
 	@echo "Building and switching NixOS configuration: $(NIXNAME)"
 	sudo NIX_CONFIG="$(NIX_CONFIG)" NIXPKGS_ALLOW_UNSUPPORTED_SYSTEM=1 nixos-rebuild switch --flake ".#${NIXNAME}" --impure

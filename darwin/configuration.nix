@@ -53,6 +53,7 @@
       "mosh"
     ];
     casks = [
+      "1password"
       "firefox"
       # "akiflow"
       "corelocationcli"
