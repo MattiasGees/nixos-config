@@ -10,7 +10,7 @@ export PATH="${KREW_ROOT:-$HOME/.krew}/bin:$PATH"
 export DOCKER_HOST="unix://$HOME/.colima/docker.sock"
 # Defaults
 export SHELL=zsh
-export EDITOR='nvim'
+export EDITOR='vim'
 export DEFAULT_USER=mattias
 export WLR_DRM_NO_MODIFIERS=1
 # Directory Env Vars
@@ -45,9 +45,3 @@ export FZF_DEFAULT_COMMAND='rg --files --no-ignore --hidden --follow --glob "!.g
 
 # That stupid thing I need for GPG
 export GPG_TTY=$(tty)
-
-# Tailscale dev
-export TAILSCALE_REPO="$HOME/Git/tailscale"
-export CORP_REPO="$HOME/Git/corp"
-export VALUES_FILE="$HOME/Git/tailscale/mattias/values.yaml"
-export REGISTRY="europe-west2-docker.pkg.dev/tailscale-sandbox/mattias"

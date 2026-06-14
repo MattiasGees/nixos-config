@@ -34,11 +34,11 @@
       "FelixKratz/formulae"
       # "homebrew/cask-drivers"
       "koekeishiya/formulae"
-      # "theseal/ssh-askpass"
+      "theseal/ssh-askpass"
     ];
     brews = [
       "FelixKratz/formulae/sketchybar"
-      # "theseal/ssh-askpass/ssh-askpass"
+      "theseal/ssh-askpass/ssh-askpass"
       # "ddcctl"
       # "ykman"
       "gpg"

@@ -187,42 +187,6 @@ new-cosign-image() {
   cosign attest --predicate $HOME/.tmp/cosign/predicate.json --type custom $2/$1 --key $CK
 }
 
-# Build and deploy ts-recorder to k8s
-ts-rec() {
-  mkdir -p "$HOME/.config/dev"
-  current="$(cat "$HOME/.config/dev/recorder-version" 2>/dev/null)"
-  if [[ $current =~ ^[0-9]+$ ]]; then
-    local next=$((current + 1))
-  else
-    local next=1
-  fi
-  ctx="$(kubectl config current-context)"
-  echo "$next" >"$HOME/.config/dev/recorder-version"
-  echo "deploying $next"
-  if [ $ctx = "kind" ] || [ $ctx = "kind-kind" ]; then
-    local base=localhost:5001
-    local platform=""
-  else
-    local base=europe-west2-docker.pkg.dev/tailscale-sandbox/mattias
-    local platform="flyio"
-  fi
-
-  local rrepo="$base/tsrecorder"
-
-  old=$(pwd)
-  cd /Users/mattias/Git/corp/cmd/tsrecorder
-  PUSH=true TAGS=$next REPOS=$rrepo VERSION_GIT_HASH=foo VERSION_PATCH=wi VERSION_MINOR=wih VERSION_MAJOR=wah VERSION_EXTRA_HASH="blah" /Users/mattias/Git/corp/cmd/tsrecorder/publish.sh
-  cd $old
-
-  if [ "$ctx" = "kind" ] || [ "$ctx" = "kind-kind" ]; then
-    echo "loading image $repo:$next into kind"
-    docker pull "$rrepo:$next"
-    kind load docker-image "$rrepo:$next"
-  fi
-
-  echo "- $rrepo:$next"
-}
-
 # Reset local docker registry on port 5001
 reset_registry() {
   # Stop and remove any existing registry container

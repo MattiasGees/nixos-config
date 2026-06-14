@@ -12,9 +12,9 @@
         user = {
           name = "Mattias Gees";
           email = "mattias@gees.dev";
-          signingkey = "84B6049F3398724F3300230C9A98F924E51C73A8";
+          # signingkey = "84B6049F3398724F3300230C9A98F924E51C73A8";
         };
-        commit = { gpgsign = "true"; };
+        # commit = { gpgsign = "true"; };
       };
     };
   };
