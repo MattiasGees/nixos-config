@@ -81,6 +81,15 @@
          lib = pkgs.lib;
       };
 
+      nixosConfigurations.polaris = mkServer "polaris" rec {
+         inherit home-manager user nixpkgs system pkgs;
+         lib = pkgs.lib;
+         extraModules = [
+           disko.nixosModules.disko
+           ./disko/polaris.nix
+         ];
+      };
+
       # Standalone home-manager configurations for non-NixOS systems
       # Automatically available for both x86_64-linux and aarch64-linux
       homeConfigurations =
