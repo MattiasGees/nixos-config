@@ -147,5 +147,8 @@
       checks.x86_64-linux.polaris-zfs =
         import ./tests/polaris-zfs.nix { inherit pkgs; };
 
+      checks.x86_64-linux.polaris-disko =
+        import ./tests/polaris-disko.nix { inherit pkgs disko; };
+
     };
 }
