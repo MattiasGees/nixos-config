@@ -144,5 +144,8 @@
         lib = pkgs.lib;
       };
 
+      checks.x86_64-linux.polaris-zfs =
+        import ./tests/polaris-zfs.nix { inherit pkgs; };
+
     };
 }
