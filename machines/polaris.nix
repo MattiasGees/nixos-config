@@ -1,0 +1,34 @@
+{ config, pkgs, lib, ... }:
+{
+  imports = [
+    ../modules/server/zfs.nix
+    ../modules/server/virtualisation.nix
+  ];
+
+  networking.hostName = "polaris";
+
+  # Stable kernel (NOT linuxPackages_latest — keep ZFS compatibility).
+  boot.kernelPackages = pkgs.linuxPackages;
+  boot.loader.systemd-boot.enable = true;
+  boot.loader.efi.canTouchEfiVariables = true;
+
+  # IOMMU on now (ready for future GPU passthrough); pt = passthrough mode.
+  boot.kernelParams = [ "amd_iommu=on" "iommu=pt" ];
+
+  # Static IP. INSTALL-TIME: confirm the NIC name with `ip -o link` and adjust.
+  networking.useDHCP = lib.mkDefault false;
+  networking.interfaces.enp4s0.ipv4.addresses = [
+    { address = "192.168.1.50"; prefixLength = 24; }
+  ];
+  networking.defaultGateway = "192.168.1.1";
+  networking.nameservers = [ "192.168.1.1" ];
+
+  # SSH: key-only. Keys from github.com/mattiasgees.keys (2x ecdsa, 2x ed25519).
+  users.users.mattias.openssh.authorizedKeys.keys = [
+    "ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBKkdI6stPG4bOv3p72OsEDxs9o3jrg3Lacsook0VGkzaUcDYC2jXE4gvJtfP7UwTmVxsRJD4YJ8NGxuuRustJh0="
+    "ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBFtGUiGsLHfTl/Jb5TvKK7ReZ+qa6eT8+Jd3ZbKyE+nYstbN1ZKimi8ojjlrR+NREqV4J3aG8K0e1Pmi2MfkpSk="
+    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBt3dIJVLAvj2IrWprwngbshWN0kwwmbB64GSQsHonqd"
+    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBKfSjZEPrxBJsLTkOiZ6yJiGnjwmVg+YN58J0o+a/29"
+  ];
+  services.openssh.settings.PasswordAuthentication = false;
+}
