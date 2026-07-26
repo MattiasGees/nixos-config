@@ -1,6 +1,6 @@
 # Helper function to create server/headless NixOS configurations
 # Uses shell-only home-manager config without GUI dependencies
-name: { pkgs, nixpkgs, lib, home-manager, system, user }:
+name: { pkgs, nixpkgs, lib, home-manager, system, user, extraModules ? [] }:
 nixpkgs.lib.nixosSystem {
   inherit system pkgs;
 
@@ -17,5 +17,5 @@ nixpkgs.lib.nixosSystem {
         inherit lib pkgs user;
       };
     }
-  ];
+  ] ++ extraModules;
 }
