@@ -42,15 +42,44 @@ Related files: `disko/polaris.nix`, `disko/polaris-layout.nix`,
    ```
    This creates the ESP, ext4 root, encrypted swap, and the raw `fast` slot,
    and mounts root+boot under `/mnt`.
-5. **Create the ZFS pools** with the real device paths:
+5. **Identify the data disks, then create the ZFS pools.**
+
+   This step is destructive — pass the *right* devices. List disks with sizes and
+   stable IDs first:
+   ```bash
+   lsblk -o NAME,SIZE,MODEL,SERIAL,TYPE     # match disks by size/model
+   ls -l /dev/disk/by-id/                    # stable names to pass to the script
+   ```
+   Map them to the script's five positional arguments:
+
+   | Arg | Device | How to pick it |
+   |-----|--------|----------------|
+   | `fast_dev_a` | `/dev/disk/by-partlabel/disk-os-fastmember` | the partition disko made on NVMe #1 — **fixed partlabel, use verbatim** |
+   | `fast_dev_b` | NVMe #2 (512 GB), whole disk | the `/dev/disk/by-id/nvme-…` whose size is 512 GB (NOT the 1 TB NVMe #1) |
+   | `hdd1` `hdd2` `hdd3` | the three 14 TB disks, whole disk | the three `/dev/disk/by-id/ata-…` (or `scsi-…`) at 14 TB |
+
+   Then run, substituting the real by-id paths:
    ```bash
    sudo ./scripts/create-zfs-pools.sh \
      /dev/disk/by-partlabel/disk-os-fastmember \
-     /dev/disk/by-id/nvme-<NVMe2> \
-     /dev/disk/by-id/ata-<HDD1> /dev/disk/by-id/ata-<HDD2> /dev/disk/by-id/ata-<HDD3>
+     /dev/disk/by-id/nvme-<NVMe2-512GB> \
+     /dev/disk/by-id/ata-<HDD1-14TB> \
+     /dev/disk/by-id/ata-<HDD2-14TB> \
+     /dev/disk/by-id/ata-<HDD3-14TB>
    ```
+   > Always use `/dev/disk/by-id/` (or `by-partlabel/`) paths — never `/dev/sdX`
+   > or `/dev/nvmeXnY`, which reorder across boots and could target the wrong
+   > disk. Never pass NVMe #1 (the OS disk) as a whole-disk argument.
+
    **Immediately back up `/etc/zfs/keys/polaris.key`** somewhere safe (e.g. a
    password manager). Losing it means losing every encrypted dataset.
+
+   Verify the pools look right before installing:
+   ```bash
+   zpool status                       # fast = mirror, tank = raidz1, all ONLINE
+   zfs list                           # tank/{media,data}, fast/{appdata,db} under /mnt
+   zfs get -o value keystatus tank/data fast   # => available (encryption unlocked)
+   ```
 6. **Install** and reboot:
    ```bash
    sudo nixos-install --flake .#polaris
