@@ -90,6 +90,16 @@
          ];
       };
 
+      nixosConfigurations.polaris-vm = mkServer "polaris-vm" rec {
+         inherit home-manager user nixpkgs;
+         system = "aarch64-linux";
+         pkgs = import nixpkgs {
+           system = "aarch64-linux";
+           config = { allowUnfree = true; allowInsecure = true; };
+         };
+         lib = pkgs.lib;
+      };
+
       # Standalone home-manager configurations for non-NixOS systems
       # Automatically available for both x86_64-linux and aarch64-linux
       homeConfigurations =
