@@ -305,9 +305,10 @@ git commit -m "feat(polaris): disko OS-disk layout (ext4 root + ESP + swap + fas
 {
   imports = [ (modulesPath + "/installer/scan/not-detected.nix") ];
 
-  # INSTALL-TIME: regenerate on the real box with
-  #   nixos-generate-config --show-hardware-config
-  # and copy its boot.initrd.availableKernelModules here if these differ.
+  # INSTALL-TIME: replace this list with the real box's output from
+  #   nixos-generate-config --no-filesystems --show-hardware-config
+  # (--no-filesystems omits the fileSystems/swapDevices block that disko owns,
+  # so it merges here without conflicting). Values below are an AMD+NVMe default.
   boot.initrd.availableKernelModules = [ "nvme" "xhci_pci" "ahci" "usbhid" "usb_storage" "sd_mod" ];
   boot.initrd.kernelModules = [ ];
   boot.kernelModules = [ "kvm-amd" ];
@@ -795,10 +796,13 @@ git commit -m "docs(polaris): BIOS checklist and reinstall/recovery runbook"
 > "Fresh install", then complete the **real-hardware checklist** (spec Layer 4):
 
 - [ ] BIOS set per `docs/polaris/bios-checklist.md`.
-- [ ] `nixos-generate-config --show-hardware-config` on the box; reconcile
-      `boot.initrd.availableKernelModules` into `hardware/polaris.nix`; set the
-      real `networking.hostId` and the real NVMe by-id in `disko/polaris.nix`;
-      confirm the NIC name in `machines/polaris.nix`. Commit any changes.
+- [ ] `nixos-generate-config --no-filesystems --show-hardware-config` on the box
+      (the `--no-filesystems` flag omits the `fileSystems`/`swapDevices` block
+      that disko owns, so it merges cleanly); replace
+      `boot.initrd.availableKernelModules` in `hardware/polaris.nix` with its
+      output; set the real `networking.hostId` and the real NVMe by-id in
+      `disko/polaris.nix`; confirm the NIC name in `machines/polaris.nix`.
+      Commit any changes.
 - [ ] Fresh install completed; system reboots headless.
 - [ ] `ssh mattias@192.168.1.50` works with your key; password auth refused.
 - [ ] `dmesg | grep -i -e IOMMU -e AMD-Vi` shows IOMMU enabled.

@@ -25,8 +25,15 @@ Related files: `disko/polaris.nix`, `disko/polaris-layout.nix`,
      `networking.hostId` in `hardware/polaris.nix` (first 8 hex chars).
    - `ip -o link` → confirm the NIC name in `machines/polaris.nix`
      (default `enp4s0`).
-   - Reconcile `boot.initrd.availableKernelModules` in `hardware/polaris.nix`
-     with `nixos-generate-config --show-hardware-config`.
+   - Replace `boot.initrd.availableKernelModules` in `hardware/polaris.nix`
+     with the real machine's output from:
+     ```bash
+     nixos-generate-config --no-filesystems --show-hardware-config
+     ```
+     `--no-filesystems` omits the `fileSystems`/`swapDevices` block (disko owns
+     those), so the output merges cleanly with `hardware/polaris.nix` — do NOT
+     paste a full hardware-configuration.nix, it would clash with disko's
+     `fileSystems."/"`.
    - Commit these edits.
 4. **Partition the OS disk** (NVMe #1 only) with disko:
    ```bash

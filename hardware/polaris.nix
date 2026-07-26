@@ -5,9 +5,11 @@
 {
   imports = [ (modulesPath + "/installer/scan/not-detected.nix") ];
 
-  # INSTALL-TIME: regenerate on the real box with
-  #   nixos-generate-config --show-hardware-config
-  # and copy its boot.initrd.availableKernelModules here if these differ.
+  # INSTALL-TIME: replace this list with the real box's output from
+  #   nixos-generate-config --no-filesystems --show-hardware-config
+  # The --no-filesystems flag omits the fileSystems/swapDevices block (disko
+  # owns those), so its output is safe to merge here without conflicting with
+  # disko/polaris.nix. The values below are a typical AMD+NVMe default.
   boot.initrd.availableKernelModules = [ "nvme" "xhci_pci" "ahci" "usbhid" "usb_storage" "sd_mod" ];
   boot.initrd.kernelModules = [ ];
   boot.kernelModules = [ "kvm-amd" ];
