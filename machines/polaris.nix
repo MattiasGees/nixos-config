@@ -16,6 +16,9 @@
   boot.kernelParams = [ "amd_iommu=on" "iommu=pt" ];
 
   # Static IP. INSTALL-TIME: confirm the NIC name with `ip -o link` and adjust.
+  # nixos-server.nix enables NetworkManager; disable it here so it doesn't
+  # fight the declarative static interface config below.
+  networking.networkmanager.enable = lib.mkForce false;
   networking.useDHCP = lib.mkDefault false;
   networking.interfaces.enp4s0.ipv4.addresses = [
     { address = "192.168.1.50"; prefixLength = 24; }
