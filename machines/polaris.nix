@@ -3,6 +3,7 @@
   imports = [
     ../modules/server/zfs.nix
     ../modules/server/virtualisation.nix
+    ../modules/server/nvidia.nix
   ];
 
   networking.hostName = "polaris";
