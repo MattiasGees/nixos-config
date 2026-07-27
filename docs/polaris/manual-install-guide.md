@@ -5,7 +5,7 @@ and create the ZFS pools by hand — no disko, no `create-zfs-pools.sh`. Every
 command is spelled out.
 
 > **Mountpoints:** this guide mounts the pools under **`/srv`** (`/srv/media`,
-> `/srv/data`, `/srv/fast/*`), not `/mnt/...`. Reason: the installer mounts the
+> `/srv/data`, `/srv/fast/*`, `/srv/scratch`), not `/mnt/...`. Reason: the installer mounts the
 > target root at `/mnt`, so using `/mnt/...` for permanent ZFS mounts collides
 > with the install. `/srv` is the conventional home for served data. If you
 > truly want `/mnt/...` runtime paths you'd need a `zpool create -R` altroot
@@ -45,8 +45,8 @@ provide this), keeping `hostId`, kernel modules and `boot.zfs.extraPools`:
   ];
 ```
 The ZFS datasets are **not** listed in `fileSystems` — `boot.zfs.extraPools =
-[ "tank" "fast" ]` imports the pools at boot and ZFS mounts them at the
-mountpoints you set below.
+[ "tank" "fast" "scratch" ]` imports the pools at boot and ZFS mounts them at
+the mountpoints you set below.
 
 ---
 
@@ -72,14 +72,14 @@ lsblk -o NAME,SIZE,MODEL,SERIAL,TYPE
 ls -l /dev/disk/by-id/
 ```
 Note the stable `by-id` paths for:
-- **NVMe #1** — the 1 TB NVMe (OS + fast mirror half). → `NVME1`
+- **NVMe #1** — the 2 TB NVMe (OS + fast mirror half + scratch pool). → `NVME1`
 - **NVMe #2** — the 512 GB NVMe (fast mirror half). → `NVME2`
 - **HDD 1/2/3** — the three 14 TB disks. → `HDD1 HDD2 HDD3`
 
 Export them as shell variables so the rest of the guide is copy-paste (substitute
 the real IDs):
 ```bash
-NVME1=/dev/disk/by-id/nvme-<NVMe1-1TB>
+NVME1=/dev/disk/by-id/nvme-<NVMe1-2TB>
 NVME2=/dev/disk/by-id/nvme-<NVMe2-512GB>
 HDD1=/dev/disk/by-id/ata-<HDD1-14TB>
 HDD2=/dev/disk/by-id/ata-<HDD2-14TB>
@@ -88,15 +88,20 @@ HDD3=/dev/disk/by-id/ata-<HDD3-14TB>
 
 ## 4. Partition NVMe #1
 
-Four GPT partitions: ESP, ext4 root, swap, and the `fast` mirror member.
+Five GPT partitions: ESP, ext4 root, swap, the `fast` mirror member, and the
+`scratch` pool (rest of the 2 TB drive).
 ```bash
 sgdisk --zap-all "$NVME1"
 sgdisk -n1:0:+1G    -t1:EF00 -c1:ESP        "$NVME1"   # EFI System Partition
-sgdisk -n2:0:+450G  -t2:8300 -c2:nixos      "$NVME1"   # ext4 root
+sgdisk -n2:0:+500G  -t2:8300 -c2:nixos      "$NVME1"   # ext4 root
 sgdisk -n3:0:+8G    -t3:8200 -c3:swap       "$NVME1"   # swap (encrypted at boot)
-sgdisk -n4:0:0      -t4:BF00 -c4:fastmember "$NVME1"   # rest -> fast ZFS member
+sgdisk -n4:0:+475G  -t4:BF00 -c4:fastmember "$NVME1"   # fast ZFS mirror member
+sgdisk -n5:0:0      -t5:BF00 -c5:scratch    "$NVME1"   # rest -> single-disk scratch pool
 partprobe "$NVME1"; udevadm settle
 ```
+> `fastmember` is ~475 GiB to match NVMe #2's usable size — the mirror is capped
+> by the smaller disk, so there's no point making it larger. Everything left over
+> (~840 GiB) becomes the `scratch` pool.
 
 ## 5. Format & mount root + boot
 
@@ -164,11 +169,29 @@ zfs create -o mountpoint=/srv/data \
   tank/data
 ```
 
+## 8b. Create the `scratch` pool (single NVMe partition, no redundancy)
+
+Fast, **disposable** NVMe space for transcode temp, download staging, Docker
+overlay, caches. Single disk = **no redundancy**; keep nothing precious here.
+Unencrypted on purpose (transient, and it lives on the OS disk).
+```bash
+zpool create -f \
+  -o ashift=12 -o autotrim=on \
+  -O compression=zstd -O atime=off -O xattr=sa -O acltype=posixacl \
+  -O mountpoint=/srv/scratch \
+  scratch /dev/disk/by-partlabel/scratch
+```
+Add purpose-built datasets whenever you need them, e.g.:
+```bash
+zfs create -o mountpoint=/srv/scratch/transcode scratch/transcode
+zfs create -o mountpoint=/srv/scratch/downloads scratch/downloads
+```
+
 ## 9. Verify the pools, then persist the key & export
 
 ```bash
-zpool status                      # fast = mirror, tank = raidz1, all ONLINE
-zfs list                          # tank/{media,data}, fast/{appdata,db} present
+zpool status                      # fast = mirror, tank = raidz1, scratch = single, ONLINE
+zfs list                          # tank/{media,data}, fast/{appdata,db}, scratch present
 zfs get -o value keystatus tank/data fast   # => available (keys loaded)
 zfs get -o value encryption tank/media      # => off  (media unencrypted)
 zfs get -o value compression tank/media     # => lz4
@@ -188,6 +211,7 @@ Cleanly export the pools so first boot imports them without a `-f` force:
 ```bash
 zpool export tank
 zpool export fast
+zpool export scratch
 ```
 
 ## 10. Fill in config values
@@ -224,7 +248,7 @@ SSH in (`ssh mattias@192.168.1.50`) and confirm:
 ```bash
 zpool status                                  # both pools ONLINE
 zfs get -o value keystatus tank/data fast     # => available (auto-unlocked)
-mount | grep -E '/srv/(media|data|fast)'       # datasets mounted
+mount | grep -E '/srv/(media|data|fast|scratch)'   # datasets mounted
 dmesg | grep -i -e IOMMU -e AMD-Vi            # IOMMU active
 systemctl is-system-running                    # running (or degraded — check why)
 ```
@@ -245,5 +269,8 @@ If `keystatus` isn't `available`, the `zfs-load-key` service didn't run before
   ```bash
   zpool replace fast <old-nvme1-part-id> /dev/disk/by-partlabel/fastmember
   ```
+  The `scratch` pool lived entirely on NVMe #1, so repartitioning wipes it —
+  **re-create it** (step 8b), don't import. Its contents are disposable, so
+  that's expected.
 - **Never** run `sgdisk`/`zpool create` against the HDDs or NVMe #2 on a
   reinstall — that destroys data. Creation happens exactly once.

@@ -21,7 +21,8 @@
 
   # Import the manually-created pools at boot (they back no `fileSystems`
   # entries because their datasets use ZFS-native mountpoints).
-  boot.zfs.extraPools = [ "tank" "fast" ];
+  # scratch = single-disk NVMe pool on NVMe #1 (no redundancy, disposable).
+  boot.zfs.extraPools = [ "tank" "fast" "scratch" ];
 
   # No swapDevices / fileSystems here — disko owns them.
   nixpkgs.hostPlatform = lib.mkDefault "x86_64-linux";
