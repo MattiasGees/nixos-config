@@ -5,6 +5,13 @@
 **Host name:** `polaris` (keys `hardware/`, `machines/`, and the flake output; pairs with the laptop `pacesetter`)
 **Platform:** AMD, `x86_64-linux`
 
+> **Update (2026-07-28):** the storage approach changed after this spec was
+> written. We dropped **disko** in favour of fully manual partitioning; NVMe #1 is
+> **2 TB** (not 1 TB) and now also hosts a single-disk `scratch` pool; and an
+> **NVIDIA RTX 3080** driver was added for host-side NVENC/CUDA. The authoritative,
+> current storage + install procedure is **`docs/polaris/manual-install-guide.md`**.
+> The sections below are the original design record.
+
 ---
 
 ## 1. Purpose & goals

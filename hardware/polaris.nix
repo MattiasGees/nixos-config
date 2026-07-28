@@ -1,15 +1,15 @@
-# Real-hardware config for polaris. Disk PARTITIONS/filesystems (/,/boot,swap)
-# are provided by disko/polaris.nix — not here. This file adds the bits disko
-# doesn't: hostId, kernel modules, and import of the manually-created pools.
+# Real-hardware config for polaris. Disks are partitioned and the ZFS pools
+# created BY HAND (see docs/polaris/manual-install-guide.md) — this file records
+# the resulting layout: kernel modules, hostId, the OS filesystems, and the
+# import of the manually-created pools.
 { config, lib, pkgs, modulesPath, ... }:
 {
   imports = [ (modulesPath + "/installer/scan/not-detected.nix") ];
 
   # INSTALL-TIME: replace this list with the real box's output from
-  #   nixos-generate-config --no-filesystems --show-hardware-config
-  # The --no-filesystems flag omits the fileSystems/swapDevices block (disko
-  # owns those), so its output is safe to merge here without conflicting with
-  # disko/polaris.nix. The values below are a typical AMD+NVMe default.
+  #   nixos-generate-config --show-hardware-config
+  # (copy the boot.initrd.availableKernelModules line). The values below are a
+  # typical AMD+NVMe default.
   boot.initrd.availableKernelModules = [ "nvme" "xhci_pci" "ahci" "usbhid" "usb_storage" "sd_mod" ];
   boot.initrd.kernelModules = [ ];
   boot.kernelModules = [ "kvm-amd" ];
@@ -20,11 +20,24 @@
   networking.hostId = "a11c3b0d";
 
   # Import the manually-created pools at boot (they back no `fileSystems`
-  # entries because their datasets use ZFS-native mountpoints).
+  # entries because their datasets use ZFS-native mountpoints under /srv).
   # scratch = single-disk NVMe pool on NVMe #1 (no redundancy, disposable).
   boot.zfs.extraPools = [ "tank" "fast" "scratch" ];
 
-  # No swapDevices / fileSystems here — disko owns them.
+  # OS filesystems (created by hand from the installer — labels set by mkfs).
+  fileSystems."/" = {
+    device = "/dev/disk/by-label/nixos";
+    fsType = "ext4";
+  };
+  fileSystems."/boot" = {
+    device = "/dev/disk/by-label/BOOT";
+    fsType = "vfat";
+    options = [ "umask=0077" ];
+  };
+  swapDevices = [
+    { device = "/dev/disk/by-partlabel/swap"; randomEncryption.enable = true; }
+  ];
+
   nixpkgs.hostPlatform = lib.mkDefault "x86_64-linux";
   hardware.cpu.amd.updateMicrocode = lib.mkDefault config.hardware.enableRedistributableFirmware;
 }

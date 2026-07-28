@@ -24,15 +24,10 @@
 
       xremap-flake.url = "github:xremap/nix-flake";
 
-      disko = {
-        url = "github:nix-community/disko";
-        inputs.nixpkgs.follows = "nixpkgs";
-      };
-
       nixpkgs-wayland.inputs.nixpkgs.follows = "nixpkgs";
     };
 
-  outputs = inputs @ { self, xremap-flake, hyprland, nixpkgs, nixpkgs-unstable, home-manager, darwin, disko, ... }:   # Function that tells my flake which to use and what do what to do with the dependencies.
+  outputs = inputs @ { self, xremap-flake, hyprland, nixpkgs, nixpkgs-unstable, home-manager, darwin, ... }:   # Function that tells my flake which to use and what do what to do with the dependencies.
     let                                                                     # Variables that can be used in the config files.
       mkDarwin = import ./lib/mkdarwin.nix;
       mkSys = import ./lib/mksys.nix;
@@ -84,10 +79,6 @@
       nixosConfigurations.polaris = mkServer "polaris" rec {
          inherit home-manager user nixpkgs system pkgs;
          lib = pkgs.lib;
-         extraModules = [
-           disko.nixosModules.disko
-           ./disko/polaris.nix
-         ];
       };
 
       nixosConfigurations.polaris-vm = mkServer "polaris-vm" rec {
@@ -156,9 +147,6 @@
 
       checks.x86_64-linux.polaris-zfs =
         import ./tests/polaris-zfs.nix { inherit pkgs; };
-
-      checks.x86_64-linux.polaris-disko =
-        import ./tests/polaris-disko.nix { inherit pkgs disko; };
 
     };
 }
