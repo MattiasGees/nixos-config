@@ -257,8 +257,11 @@ cd /mnt/etc          # anywhere writable is fine; /mnt persists onto the system
 git clone https://github.com/mattiasgees/nixos-config
 cd nixos-config
 git checkout polaris-phase1          # until it's merged into your main branch
-git submodule update --init --recursive
 ```
+> No `git submodule update` needed: the repo's submodules (AstroNvim, a macOS
+> sketchybar plugin) are only used by the desktop/macOS configs. polaris' server
+> config uses `nvim-server.nix` (a plain in-repo directory), so a bare clone is
+> complete.
 Edit three values to match this machine, then commit:
 - **`hardware/polaris.nix` → `networking.hostId`** (ZFS requires a stable, unique
   host id):
