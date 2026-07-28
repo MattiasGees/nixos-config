@@ -124,23 +124,24 @@ partprobe "$NVME1"; udevadm settle
   match NVMe #2 — a mirror can't exceed its smaller member, so bigger is wasted.
 - **scratch (rest, ~840 GiB):** a fast, disposable single-disk pool.
 - `partprobe`/`udevadm settle` make the kernel re-read the table so the new
-  `by-partlabel`/`by-label` names appear before we use them.
+  `by-partlabel` names appear before we use them.
 
 ## 7. Format and mount root + boot
 
 ```bash
-mkfs.vfat -F32 -n BOOT  /dev/disk/by-partlabel/ESP
-mkfs.ext4      -L nixos /dev/disk/by-partlabel/nixos
+mkfs.vfat -F32 /dev/disk/by-partlabel/ESP
+mkfs.ext4      /dev/disk/by-partlabel/nixos
 udevadm settle
 
-mount /dev/disk/by-label/nixos /mnt
+mount /dev/disk/by-partlabel/nixos /mnt
 mkdir -p /mnt/boot
-mount /dev/disk/by-label/BOOT /mnt/boot
+mount /dev/disk/by-partlabel/ESP /mnt/boot
 ```
 *Why:*
-- UEFI requires the ESP to be **FAT** (`mkfs.vfat`). The `-n BOOT` / `-L nixos`
-  labels are exactly what `hardware/polaris.nix` references via `by-label`, so
-  the system finds its filesystems at boot regardless of device order.
+- UEFI requires the ESP to be **FAT** (`mkfs.vfat`). We don't set filesystem
+  labels — `nixos-generate-config` (step 13) will record root/boot by **UUID**,
+  the standard NixOS way (same as your `desktop` host). We mount by
+  `by-partlabel` here only because it's a stable name for the install itself.
 - We mount the target root at **`/mnt`** and the ESP at **`/mnt/boot`** because
   `nixos-install` writes the new system into `/mnt` and installs the bootloader
   into `/mnt/boot`.
@@ -262,23 +263,36 @@ git checkout polaris-phase1          # until it's merged into your main branch
 > sketchybar plugin) are only used by the desktop/macOS configs. polaris' server
 > config uses `nvim-server.nix` (a plain in-repo directory), so a bare clone is
 > complete.
-Edit three values to match this machine, then commit:
-- **`hardware/polaris.nix` → `networking.hostId`** (ZFS requires a stable, unique
-  host id):
+Generate the real hardware config for this machine:
+```bash
+nixos-generate-config --root /mnt
+```
+*Why:* this detects the OS disk and writes `/mnt/etc/nixos/hardware-configuration.nix`
+with the correct **root/boot filesystems (by UUID)** and
+**`boot.initrd.availableKernelModules`** — the standard NixOS flow, same as your
+`desktop` host. (It won't touch the ZFS pools: they mount under `/srv`, not
+`/mnt`, so it doesn't see them — that's why we import them by name via
+`extraPools` instead.)
+
+Now merge that into the repo's `hardware/polaris.nix`:
+- Copy the generated **`fileSystems."/"`**, **`fileSystems."/boot"`**, and
+  **`boot.initrd.availableKernelModules`** into `hardware/polaris.nix`, replacing
+  the `REPLACE-…-UUID` placeholders / default module list.
+- **Leave the "polaris additions" block** (`networking.hostId`,
+  `boot.zfs.extraPools`, encrypted `swapDevices`) as it is — generate-config
+  doesn't produce those.
+- Set a real `networking.hostId`:
   ```bash
   head -c 8 /dev/urandom | od -A none -t x1 | tr -d ' '   # use the first 8 hex chars
   ```
-- **`hardware/polaris.nix` → `boot.initrd.availableKernelModules`**: replace with
-  ```bash
-  nixos-generate-config --show-hardware-config
-  ```
-  output (copy just that one line — the disk/controller drivers needed to reach
-  root at boot; the guessed default may miss your board's controller).
-- **`machines/polaris.nix` → the NIC name** for the static IP (`ip -o link` shows
-  it, e.g. `enp4s0`).
+- In `machines/polaris.nix`, confirm the **NIC name** for the static IP
+  (`ip -o link`, e.g. `enp4s0`).
 
-*Why:* these are the only truly machine-specific facts — the rest of the config
-is already correct and in Git.
+Commit the edits.
+
+*Why keep it in Git:* those UUIDs stay valid as long as you don't reformat the OS
+disk, so a reinstall that keeps the disks needs no changes here. If you ever do
+reformat, just re-run `nixos-generate-config` and paste the new values.
 
 ## 14. Install and reboot
 
