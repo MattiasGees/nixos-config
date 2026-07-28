@@ -263,36 +263,31 @@ git checkout polaris-phase1          # until it's merged into your main branch
 > sketchybar plugin) are only used by the desktop/macOS configs. polaris' server
 > config uses `nvim-server.nix` (a plain in-repo directory), so a bare clone is
 > complete.
-Generate the real hardware config for this machine:
+Generate the real hardware config, then **overwrite** the repo's `hardware/polaris.nix`
+with it wholesale — no hand-merging:
 ```bash
 nixos-generate-config --root /mnt
+cp /mnt/etc/nixos/hardware-configuration.nix hardware/polaris.nix
 ```
-*Why:* this detects the OS disk and writes `/mnt/etc/nixos/hardware-configuration.nix`
-with the correct **root/boot filesystems (by UUID)** and
-**`boot.initrd.availableKernelModules`** — the standard NixOS flow, same as your
-`desktop` host. (It won't touch the ZFS pools: they mount under `/srv`, not
-`/mnt`, so it doesn't see them — that's why we import them by name via
-`extraPools` instead.)
+*Why this is safe to copy whole:* `nixos-generate-config` writes the OS disk's
+**root/boot filesystems (by UUID)** and **`boot.initrd.availableKernelModules`** —
+the standard NixOS flow, same as your `desktop` host. It does **not** touch the
+ZFS pools (they mount under `/srv`, outside `/mnt`, so it never sees them). All
+the polaris-specific storage config — `networking.hostId`, `boot.zfs.extraPools`,
+encrypted `swapDevices` — lives in a **separate** file, `hardware/polaris-storage.nix`
+(wired in via `flake.nix`), so overwriting `hardware/polaris.nix` loses nothing.
 
-Now merge that into the repo's `hardware/polaris.nix`:
-- Copy the generated **`fileSystems."/"`**, **`fileSystems."/boot"`**, and
-  **`boot.initrd.availableKernelModules`** into `hardware/polaris.nix`, replacing
-  the `REPLACE-…-UUID` placeholders / default module list.
-- **Leave the "polaris additions" block** (`networking.hostId`,
-  `boot.zfs.extraPools`, encrypted `swapDevices`) as it is — generate-config
-  doesn't produce those.
-- Set a real `networking.hostId`:
+Then set the two remaining machine-specific values and commit:
+- `hardware/polaris-storage.nix` → a real `networking.hostId`:
   ```bash
   head -c 8 /dev/urandom | od -A none -t x1 | tr -d ' '   # use the first 8 hex chars
   ```
-- In `machines/polaris.nix`, confirm the **NIC name** for the static IP
+- `machines/polaris.nix` → confirm the **NIC name** for the static IP
   (`ip -o link`, e.g. `enp4s0`).
 
-Commit the edits.
-
-*Why keep it in Git:* those UUIDs stay valid as long as you don't reformat the OS
-disk, so a reinstall that keeps the disks needs no changes here. If you ever do
-reformat, just re-run `nixos-generate-config` and paste the new values.
+*Why keep the generated file in Git:* those UUIDs stay valid as long as you don't
+reformat the OS disk, so a reinstall that keeps the disks needs no changes. If you
+ever do reformat, just re-run the two commands above to overwrite it again.
 
 ## 14. Install and reboot
 

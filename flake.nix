@@ -79,6 +79,9 @@
       nixosConfigurations.polaris = mkServer "polaris" rec {
          inherit home-manager user nixpkgs system pkgs;
          lib = pkgs.lib;
+         # Storage/ZFS config kept separate so hardware/polaris.nix can be
+         # overwritten wholesale from nixos-generate-config.
+         extraModules = [ ./hardware/polaris-storage.nix ];
       };
 
       nixosConfigurations.polaris-vm = mkServer "polaris-vm" rec {
