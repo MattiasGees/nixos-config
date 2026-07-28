@@ -1,9 +1,18 @@
-# polaris storage/ZFS config that must SURVIVE regenerating hardware/polaris.nix.
-# Wired in via flake.nix `extraModules` (NOT imported by hardware/polaris.nix),
-# so you can overwrite hardware/polaris.nix wholesale with nixos-generate-config
-# output without losing any of this. See docs/polaris/manual-install-guide.md.
+# Hand-maintained polaris hardware config that must SURVIVE regenerating
+# hardware/polaris.nix. Wired in via flake.nix `extraModules` (NOT imported by
+# hardware/polaris.nix or machines/polaris.nix), so:
+#   - hardware/polaris.nix stays pure nixos-generate-config output (overwrite it
+#     wholesale — see docs/polaris/manual-install-guide.md), and
+#   - the aarch64 polaris-vm variant does NOT inherit any of this (the NVIDIA
+#     driver and real ZFS pools don't belong on a throwaway aarch64 VM).
 { lib, ... }:
 {
+  imports = [
+    # NVIDIA RTX 3080 driver (host-side NVENC/CUDA). x86_64-only — which is
+    # exactly why it lives here and not in machines/polaris.nix.
+    ../modules/server/nvidia.nix
+  ];
+
   # ZFS requires a stable, unique host id. INSTALL-TIME: set with
   #   head -c 8 /dev/urandom | od -A none -t x1 | tr -d ' '
   networking.hostId = "a11c3b0d";

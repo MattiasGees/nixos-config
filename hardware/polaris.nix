@@ -5,9 +5,10 @@
 # (found at /mnt/etc/nixos/hardware-configuration.nix) — exactly like the
 # `desktop` host. Nothing here is hand-maintained.
 #
-# polaris' ZFS pools, hostId and encrypted swap live in hardware/polaris-storage.nix
-# (wired in via flake.nix), so they survive regenerating this file. Values below
-# are placeholders / a typical AMD+NVMe default until you run generate-config.
+# polaris' ZFS pools, hostId, encrypted swap and GPU driver live in
+# hardware/polaris-extra.nix (wired in via flake.nix), so they survive
+# regenerating this file. Values below are placeholders / a typical AMD+NVMe
+# default until you run generate-config.
 { config, lib, pkgs, modulesPath, ... }:
 {
   imports = [ (modulesPath + "/installer/scan/not-detected.nix") ];

@@ -3,7 +3,8 @@
   imports = [
     ../modules/server/zfs.nix
     ../modules/server/virtualisation.nix
-    ../modules/server/nvidia.nix
+    # NVIDIA lives in hardware/polaris-extra.nix (x86_64-only; the aarch64
+    # polaris-vm variant inherits this file, so it must stay driver-free).
   ];
 
   networking.hostName = "polaris";

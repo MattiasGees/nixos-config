@@ -274,11 +274,12 @@ cp /mnt/etc/nixos/hardware-configuration.nix hardware/polaris.nix
 the standard NixOS flow, same as your `desktop` host. It does **not** touch the
 ZFS pools (they mount under `/srv`, outside `/mnt`, so it never sees them). All
 the polaris-specific storage config — `networking.hostId`, `boot.zfs.extraPools`,
-encrypted `swapDevices` — lives in a **separate** file, `hardware/polaris-storage.nix`
-(wired in via `flake.nix`), so overwriting `hardware/polaris.nix` loses nothing.
+encrypted `swapDevices`, and the NVIDIA driver — lives in a **separate** file,
+`hardware/polaris-extra.nix` (wired in via `flake.nix`), so overwriting
+`hardware/polaris.nix` loses nothing.
 
 Then set the two remaining machine-specific values and commit:
-- `hardware/polaris-storage.nix` → a real `networking.hostId`:
+- `hardware/polaris-extra.nix` → a real `networking.hostId`:
   ```bash
   head -c 8 /dev/urandom | od -A none -t x1 | tr -d ' '   # use the first 8 hex chars
   ```
