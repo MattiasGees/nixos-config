@@ -301,7 +301,7 @@ Then set the two remaining machine-specific values and commit:
   head -c4 /dev/urandom | od -An -tx4 | tr -d ' '
   ```
 - `machines/polaris.nix` → confirm the **NIC name** for the static IP
-  (`ip -o link`, e.g. `enp4s0`).
+  (`ip -o link`; on this machine it's `enp6s0`).
 
 *Why keep the generated file in Git:* those UUIDs stay valid as long as you don't
 reformat the OS disk, so a reinstall that keeps the disks needs no changes. If you
