@@ -8,10 +8,8 @@
     qemu = {
       package = pkgs.qemu_kvm;
       swtpm.enable = true;
-      ovmf = {
-        enable = true;
-        packages = [ pkgs.OVMFFull.fd ];
-      };
+      # OVMF/UEFI firmware ships with QEMU by default now — the old
+      # qemu.ovmf submodule was removed, so we no longer set it.
     };
     onBoot = "ignore";
     onShutdown = "shutdown";
