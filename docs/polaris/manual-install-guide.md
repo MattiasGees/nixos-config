@@ -160,6 +160,23 @@ chmod 0400 /etc/zfs/keys/polaris.key
 `tank/data`). Storing it as a file (referenced by `keylocation=file://…`) lets
 the server reboot unattended — no passphrase prompt on a headless box.
 
+> **Shortcut for steps 8–11.** The three `zpool`/`zfs` blocks below are a lot to
+> type. The repo ships a script that does all of them (plus the step-8 keyfile).
+> You're already root (step 2), with `git`/`zfs` on `PATH` (step 4), so:
+> ```bash
+> git clone https://github.com/mattiasgees/nixos-config
+> ( cd nixos-config && git checkout polaris-phase1 )   # until merged to your main branch
+> bash nixos-config/scripts/create-zfs-pools.sh \
+>   /dev/disk/by-id/nvme-<NVMe2-512GB> \
+>   /dev/disk/by-id/ata-<HDD1-14TB> \
+>   /dev/disk/by-id/ata-<HDD2-14TB> \
+>   /dev/disk/by-id/ata-<HDD3-14TB>
+> ```
+> Only four devices to fill in — the fast-member and scratch partitions come from
+> their fixed GPT partlabels. It prints the verification when done; then jump to
+> **step 12** to back up the key and export. The manual steps below are the same
+> commands, spelled out.
+
 ## 9. Create the `fast` pool (NVMe mirror, encrypted)
 
 ```bash
