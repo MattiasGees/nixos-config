@@ -13,9 +13,9 @@
     ../modules/server/nvidia.nix
   ];
 
-  # ZFS requires a stable, unique host id. INSTALL-TIME: set with
-  #   head -c 8 /dev/urandom | od -A none -t x1 | tr -d ' '
-  networking.hostId = "a11c3b0d";
+  # ZFS requires a stable, unique host id: exactly 8 hex chars. Generate with:
+  #   head -c4 /dev/urandom | od -An -tx4 | tr -d ' '
+  networking.hostId = "8207d6f3";
 
   # Import the manually-created pools BY NAME (stable across reinstalls — you
   # never recreate them). ZFS mounts their datasets at the /srv native

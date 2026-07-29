@@ -296,9 +296,9 @@ encrypted `swapDevices`, and the NVIDIA driver — lives in a **separate** file,
 `hardware/polaris.nix` loses nothing.
 
 Then set the two remaining machine-specific values and commit:
-- `hardware/polaris-extra.nix` → a real `networking.hostId`:
+- `hardware/polaris-extra.nix` → a real `networking.hostId` (exactly 8 hex chars):
   ```bash
-  head -c 8 /dev/urandom | od -A none -t x1 | tr -d ' '   # use the first 8 hex chars
+  head -c4 /dev/urandom | od -An -tx4 | tr -d ' '
   ```
 - `machines/polaris.nix` → confirm the **NIC name** for the static IP
   (`ip -o link`, e.g. `enp4s0`).
