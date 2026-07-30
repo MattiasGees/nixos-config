@@ -17,6 +17,11 @@ in
 {
   xdg.configFile."global-gitignore".source = mkOutOfStoreSymlink "${nixConfigDir}/modules/shell/gitignore";
 
+  # Copy alias/function files where the (now shared) `halp` reads them, so it
+  # works the same on desktop and server without depending on the repo path.
+  xdg.configFile."nixos-shell/shell_aliases".source = ./shell_aliases;
+  xdg.configFile."nixos-shell/shell_functions".source = ./shell_functions;
+
   # .zshenv
   programs.zsh = {
     enable = true;

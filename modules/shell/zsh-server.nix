@@ -6,7 +6,7 @@ let
     ./zshrc  # Now cross-platform with defensive checks
     ./shell_exports
     ./shell_aliases
-    ./shell_functions_server  # Server version without file path dependencies
+    ./shell_functions  # portable halp (reads ~/.config/nixos-shell), no repo-path dep
   ];
   extraInitExtra = builtins.foldl' (soFar: new: soFar + "\n" + builtins.readFile new) "" extras;
 in
@@ -16,7 +16,7 @@ in
 
   # Copy shell config files for halp to read
   xdg.configFile."nixos-shell/shell_aliases".source = ./shell_aliases;
-  xdg.configFile."nixos-shell/shell_functions".source = ./shell_functions_server;
+  xdg.configFile."nixos-shell/shell_functions".source = ./shell_functions;
 
   programs.zsh = {
     enable = true;

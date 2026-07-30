@@ -2,37 +2,60 @@
 
 # Fuzzy search aliases and functions with descriptions
 halp() {
-  local nixconfig=$HOME/Documents/git/nixos-config/modules/shell
+  local nixconfig=$HOME/.config/nixos-shell
   local choice
   local tmpfile=$(mktemp)
 
-  # Build the list
-  awk '
-    /^#/ && !/^# ─/ { desc = substr($0, 3) }
-    /^alias [a-zA-Z]/ {
-      line = $0
-      sub(/^alias /, "", line)
-      eq = index(line, "=")
-      name = substr(line, 1, eq - 1)
-      cmd = substr(line, eq + 1)
-      gsub(/^["\047]|["\047]$/, "", cmd)
-      if (length(cmd) > 40) cmd = substr(cmd, 1, 37) "..."
-      printf "%-18s | %-40s | %s\n", name, cmd, (desc != "" ? desc : "-")
-      desc = ""
-    }
-  ' $nixconfig/shell_aliases >$tmpfile
+  # Build the list from config files if they exist
+  if [ -f "$nixconfig/shell_aliases" ]; then
+    awk '
+      /^#/ && !/^# ─/ { desc = substr($0, 3) }
+      /^alias [a-zA-Z]/ {
+        line = $0
+        sub(/^alias /, "", line)
+        eq = index(line, "=")
+        name = substr(line, 1, eq - 1)
+        cmd = substr(line, eq + 1)
+        gsub(/^["\047]|["\047]$/, "", cmd)
+        if (length(cmd) > 40) cmd = substr(cmd, 1, 37) "..."
+        printf "%-18s | %-40s | %s\n", name, cmd, (desc != "" ? desc : "-")
+        desc = ""
+      }
+    ' $nixconfig/shell_aliases >$tmpfile
+  else
+    # Fallback to introspection if files don't exist
+    alias | awk -F'=' '
+      {
+        name = $1
+        cmd = substr($0, index($0, "=") + 1)
+        gsub(/^["\047]|["\047]$/, "", cmd)
+        if (length(cmd) > 40) cmd = substr(cmd, 1, 37) "..."
+        printf "%-18s | %-40s | alias\n", name, cmd
+      }
+    ' >$tmpfile
+  fi
 
   echo "" >>$tmpfile
 
-  awk '
-    /^#/ && !/^# ─/ { desc = substr($0, 3) }
-    /^[a-zA-Z_][a-zA-Z0-9_-]*\(\)/ {
-      name = $0
-      sub(/\(\).*/, "", name)
-      printf "%-18s | %-40s | %s\n", name, "(function)", (desc != "" ? desc : "-")
-      desc = ""
-    }
-  ' $nixconfig/shell_functions >>$tmpfile
+  if [ -f "$nixconfig/shell_functions" ]; then
+    awk '
+      /^#/ && !/^# ─/ { desc = substr($0, 3) }
+      /^[a-zA-Z_][a-zA-Z0-9_-]*\(\)/ {
+        name = $0
+        sub(/\(\).*/, "", name)
+        printf "%-18s | %-40s | %s\n", name, "(function)", (desc != "" ? desc : "-")
+        desc = ""
+      }
+    ' $nixconfig/shell_functions >>$tmpfile
+  else
+    # Fallback to introspection
+    typeset -f | awk '
+      /^[a-zA-Z_][a-zA-Z0-9_-]* \(\)/ {
+        name = $1
+        printf "%-18s | %-40s | function\n", name, "(function)"
+      }
+    ' >>$tmpfile
+  fi
 
   choice=$(cat $tmpfile | fzf --header="Enter=execute")
   rm -f $tmpfile
