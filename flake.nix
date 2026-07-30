@@ -39,8 +39,6 @@
       config = { allowUnfree = true; allowInsecure = true; };
       overlays = [
         (final: prev: {
-          nordpass = final.callPackage ./pkgs/nordpass { };
-          waterfox = (import ./pkgs/waterfox { pkgs = pkgs; });
           waybar = inputs.nixpkgs-unstable.legacyPackages.${system}.waybar;
           swww = inputs.nixpkgs-unstable.legacyPackages.${system}.swww;
           _1password-gui = inputs.nixpkgs-unstable.legacyPackages.${system}._1password-gui;
@@ -69,6 +67,25 @@
       };
 
       nixosConfigurations.server-arm64 = mkServer "server" rec {
+         inherit home-manager user nixpkgs;
+         system = "aarch64-linux";
+         pkgs = import nixpkgs {
+           system = "aarch64-linux";
+           config = { allowUnfree = true; allowInsecure = true; };
+         };
+         lib = pkgs.lib;
+      };
+
+      nixosConfigurations.polaris = mkServer "polaris" rec {
+         inherit home-manager user nixpkgs system pkgs;
+         lib = pkgs.lib;
+         # Hand-maintained hardware extras (GPU + ZFS/swap) kept separate so
+         # hardware/polaris.nix can be overwritten wholesale from
+         # nixos-generate-config, and so the aarch64 VM doesn't inherit them.
+         extraModules = [ ./hardware/polaris-extra.nix ];
+      };
+
+      nixosConfigurations.polaris-vm = mkServer "polaris-vm" rec {
          inherit home-manager user nixpkgs;
          system = "aarch64-linux";
          pkgs = import nixpkgs {
@@ -131,6 +148,9 @@
         };
         lib = pkgs.lib;
       };
+
+      checks.x86_64-linux.polaris-zfs =
+        import ./tests/polaris-zfs.nix { inherit pkgs; };
 
     };
 }
