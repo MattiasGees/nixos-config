@@ -38,4 +38,9 @@
     "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBKfSjZEPrxBJsLTkOiZ6yJiGnjwmVg+YN58J0o+a/29"
   ];
   services.openssh.settings.PasswordAuthentication = false;
+
+  # Ship terminfo for common terminals (kitty, alacritty, foot, wezterm, …) so
+  # SSHing in doesn't error with "can't find terminal definition for
+  # xterm-kitty" and TUIs render correctly.
+  environment.enableAllTerminfo = true;
 }

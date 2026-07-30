@@ -165,7 +165,7 @@ the server reboot unattended — no passphrase prompt on a headless box.
 > You're already root (step 2), with `git`/`zfs` on `PATH` (step 4), so:
 > ```bash
 > git clone https://github.com/mattiasgees/nixos-config
-> ( cd nixos-config && git checkout polaris-phase1 )   # until merged to your main branch
+> ( cd nixos-config && git checkout mattias )   # branch that holds the polaris config
 > bash nixos-config/scripts/create-zfs-pools.sh \
 >   /dev/disk/by-id/nvme-<NVMe2-512GB> \
 >   /dev/disk/by-id/ata-<HDD1-14TB> \
@@ -274,7 +274,7 @@ another system" force. (The ext4 root stays mounted at `/mnt` for the install.)
 cd /mnt/etc          # anywhere writable is fine; /mnt persists onto the system
 git clone https://github.com/mattiasgees/nixos-config
 cd nixos-config
-git checkout polaris-phase1          # until it's merged into your main branch
+git checkout mattias          # branch that holds the polaris config
 ```
 > No `git submodule update` needed: the repo's submodules (AstroNvim, a macOS
 > sketchybar plugin) are only used by the desktop/macOS configs. polaris' server
