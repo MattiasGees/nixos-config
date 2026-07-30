@@ -26,19 +26,19 @@
       # Use faster ciphers (AES-GCM is hardware accelerated on modern CPUs)
       Ciphers chacha20-poly1305@openssh.com,aes128-gcm@openssh.com,aes256-gcm@openssh.com
 
-      # Disable slow authentication methods
-      GSSAPIAuthentication no
-
       # Speed up connection by disabling host key checking for tailscale
       # (optional - remove if you want strict security)
       Host *.ts.net
         StrictHostKeyChecking accept-new
         UserKnownHostsFile ~/.ssh/known_hosts
 
-      # Reuse connections for git operations
+      # Reuse connections for git operations; accept-new avoids an interactive
+      # host-key prompt on first connect (which hits a broken askpass on headless
+      # servers).
       Host github.com gitlab.com
         ControlMaster auto
         ControlPersist 600
+        StrictHostKeyChecking accept-new
     '';
   };
 }
