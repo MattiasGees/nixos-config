@@ -32,13 +32,10 @@
         StrictHostKeyChecking accept-new
         UserKnownHostsFile ~/.ssh/known_hosts
 
-      # Reuse connections for git operations; accept-new avoids an interactive
-      # host-key prompt on first connect (which hits a broken askpass on headless
-      # servers).
+      # Reuse connections for git operations
       Host github.com gitlab.com
         ControlMaster auto
         ControlPersist 600
-        StrictHostKeyChecking accept-new
     '';
   };
 }
