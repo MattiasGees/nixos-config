@@ -13,9 +13,11 @@
   services.zfs.trim.enable = true;
 
   # Load file-based encryption keys after import, before ZFS mounts.
-  # `zfs load-key -a` loads keys for every encrypted dataset whose
-  # keylocation is a readable file (set at dataset creation).
-  systemd.services.zfs-load-key = {
+  # `zfs load-key -a` loads keys for every encrypted dataset whose keylocation
+  # is a readable file (set at dataset creation).
+  # NOTE: the name must NOT be `zfs-load-key` — that unit name is reserved and
+  # masked by the ZFS systemd integration, so a service by that name never runs.
+  systemd.services.load-zfs-keyfiles = {
     description = "Load ZFS encryption keys from keyfiles";
     after = [ "zfs-import.target" ];
     before = [ "zfs-mount.service" ];
