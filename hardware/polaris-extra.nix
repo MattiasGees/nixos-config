@@ -29,9 +29,10 @@
     { device = "/dev/disk/by-partlabel/swap"; randomEncryption.enable = true; }
   ];
 
-  # Lock down the ESP. vfat has no per-file permissions, so without this the
-  # systemd-boot random-seed on /boot is world-readable (the install warning).
-  # Set here — not in the generated hardware/polaris.nix — so it survives
-  # regenerating that file. Merges with the /boot entry generate-config writes.
-  fileSystems."/boot".options = [ "umask=0077" ];
+  # Lock down the ESP so systemd-boot's random-seed isn't world-readable.
+  # mkForce REPLACES generate-config's `fmask=0022 dmask=0022` (0755 = world
+  # readable) rather than merging with it — a merge would produce contradictory,
+  # order-dependent mount options. Kept here so it survives regenerating
+  # hardware/polaris.nix.
+  fileSystems."/boot".options = lib.mkForce [ "umask=0077" ];
 }
