@@ -14,8 +14,10 @@
   boot.loader.systemd-boot.enable = true;
   boot.loader.efi.canTouchEfiVariables = true;
 
-  # IOMMU on now (ready for future GPU passthrough); pt = passthrough mode.
-  boot.kernelParams = [ "amd_iommu=on" "iommu=pt" ];
+  # IOMMU passthrough mode, ready for future GPU passthrough. IOMMU itself is
+  # enabled by the BIOS + AMD kernel default — `amd_iommu=on` is NOT a valid
+  # option ("AMD-Vi: Unknown option - 'on'" in dmesg), so we only set iommu=pt.
+  boot.kernelParams = [ "iommu=pt" ];
 
   # Static IP on enp6s0 (confirmed via `ip -o link` on this machine).
   # nixos-server.nix enables NetworkManager; disable it here so it doesn't
