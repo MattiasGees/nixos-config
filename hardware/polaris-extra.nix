@@ -28,4 +28,10 @@
   swapDevices = [
     { device = "/dev/disk/by-partlabel/swap"; randomEncryption.enable = true; }
   ];
+
+  # Lock down the ESP. vfat has no per-file permissions, so without this the
+  # systemd-boot random-seed on /boot is world-readable (the install warning).
+  # Set here — not in the generated hardware/polaris.nix — so it survives
+  # regenerating that file. Merges with the /boot entry generate-config writes.
+  fileSystems."/boot".options = [ "umask=0077" ];
 }

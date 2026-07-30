@@ -23,10 +23,11 @@
     fsType = "ext4";
   };
 
+  # /boot mount options (umask=0077) live in hardware/polaris-extra.nix so they
+  # survive overwriting this file with generate-config output.
   fileSystems."/boot" = {
     device = "/dev/disk/by-uuid/REPLACE-BOOT-UUID";
     fsType = "vfat";
-    options = [ "umask=0077" ];
   };
 
   swapDevices = [ ];
