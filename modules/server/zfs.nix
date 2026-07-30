@@ -19,8 +19,16 @@
   # masked by the ZFS systemd integration, so a service by that name never runs.
   systemd.services.load-zfs-keyfiles = {
     description = "Load ZFS encryption keys from keyfiles";
+    # DefaultDependencies=no is REQUIRED. This service runs before
+    # zfs-mount.service, which itself runs before local-fs.target (very early).
+    # A normal service implicitly gets After=basic.target, and basic.target is
+    # ordered after local-fs.target — so ordering this before zfs-mount created
+    # a cycle, and systemd broke it by DELETING zfs-mount.service (leaving all
+    # datasets unmounted). Opting out of default deps removes the cycle.
+    unitConfig.DefaultDependencies = false;
     after = [ "zfs-import.target" ];
-    before = [ "zfs-mount.service" ];
+    before = [ "zfs-mount.service" "shutdown.target" ];
+    conflicts = [ "shutdown.target" ];
     wantedBy = [ "zfs-mount.service" ];
     serviceConfig = {
       Type = "oneshot";
