@@ -31,7 +31,10 @@ if [ -x /opt/homebrew/bin/ssh-askpass ]; then
 elif [ -x /etc/profiles/per-user/mattias/bin/ksshaskpass ]; then
   export SSH_ASKPASS="/etc/profiles/per-user/mattias/bin/ksshaskpass"
 fi
-export SSH_ASKPASS_REQUIRE="force"
+# Only force the GUI askpass when one actually exists. On a headless server
+# neither does, and forcing a missing askpass breaks every ssh prompt — leave it
+# unset there so ssh falls back to the terminal.
+[ -n "$SSH_ASKPASS" ] && export SSH_ASKPASS_REQUIRE="force"
 
 # COSIGN
 export CK=$HOME/.cosign/cosign.key
