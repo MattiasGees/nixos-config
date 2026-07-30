@@ -18,4 +18,12 @@
       experimental-features = nix-command flakes
     '';
   };
+
+  # Handy tools available system-wide on every host (root included, unlike the
+  # home-manager packages which only land in mattias' profile).
+  environment.systemPackages = with pkgs; [
+    htop
+  ] ++ lib.optionals stdenv.isLinux [
+    nettools   # provides `ifconfig` (+ route/netstat); macOS ships its own
+  ];
 }
