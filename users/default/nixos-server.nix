@@ -70,6 +70,7 @@
   environment.systemPackages = with pkgs; [
     neovim
     git
+    gnumake   # `make switch` etc. when managing the flake as root
     wget
     curl
   ];
