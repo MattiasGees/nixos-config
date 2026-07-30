@@ -7,6 +7,10 @@
   # Don't block boot prompting for encryption credentials: our encrypted
   # datasets are NOT needed for boot (root is ext4) and use file-based keys.
   boot.zfs.requestEncryptionCredentials = false;
+  # New default from 26.11; reduces data-loss risk (won't force-import a pool
+  # that looks in-use by another host). Our pools export cleanly, so importing
+  # never needs forcing.
+  boot.zfs.forceImportRoot = false;
 
   # Weekly scrub + periodic TRIM for pool health.
   services.zfs.autoScrub.enable = true;

@@ -4,18 +4,23 @@
 {
   programs.ssh = {
     enable = true;
+    # Opt out of home-manager's soon-to-be-removed implicit defaults; we set the
+    # ones we want explicitly under settings."*" (the `Host *` block) below.
+    enableDefaultConfig = false;
 
-    # Connection multiplexing - reuse existing connections for new sessions
-    controlMaster = "auto";
-    controlPath = "~/.ssh/control-%C";
-    controlPersist = "10m";
+    settings."*" = {
+      # Connection multiplexing - reuse existing connections for new sessions
+      ControlMaster = "auto";
+      ControlPath = "~/.ssh/control-%C";
+      ControlPersist = "10m";
 
-    # Compression can help on slower networks
-    compression = true;
+      # Compression can help on slower networks
+      Compression = true;
 
-    # Keep connections alive
-    serverAliveInterval = 60;
-    serverAliveCountMax = 3;
+      # Keep connections alive
+      ServerAliveInterval = 60;
+      ServerAliveCountMax = 3;
+    };
 
     extraConfig = ''
       # Use faster ciphers (AES-GCM is hardware accelerated on modern CPUs)
