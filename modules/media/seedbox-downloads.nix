@@ -5,7 +5,7 @@
 # imports gracefully instead of hanging polaris.
 { ... }:
 let
-  seedboxTailnetIp = "SEEDBOX_TAILNET_IP";  # BUILD-TIME: `tailscale ip -4` on the seedbox
+  seedboxTailnetIp = "100.101.146.28";  # seedbox tailnet IP (`tailscale ip -4` on the seedbox)
 in
 {
   fileSystems."/mnt/media-downloads" = {
