@@ -132,8 +132,8 @@ Lifecycle of one download:
 | **Free the seedbox disk under pressure** | `qbit-autoremove` timer keyed to the seedbox `df` (see ordering below). |
 
 **Eviction ordering** (when free space < floor, remove until free ≥ floor):
-1. Only consider **download-complete** torrents past an age-grace (so the import
-   has happened) — never touch downloading or not-yet-imported torrents.
+1. Only consider **download-complete** torrents past an age-grace (default 2 h;
+   so the import has happened) — never touch downloading or not-yet-imported ones.
 2. Any **public** leftovers first (should be rare; the *arr already remove them).
 3. **Private, seed-obligation met** (qBittorrent state `pausedUP` = share limit
    reached) — zero H&R risk.
@@ -143,18 +143,18 @@ Lifecycle of one download:
 5. Never evict a torrent not yet copied to polaris (the age-grace, or an optional
    Sonarr/Radarr API import check).
 
-## 7. Open parameters (please set / confirm on review)
+## 7. Parameters (decided)
 
-| Parameter | Proposed default | Notes |
+| Parameter | Value | Notes |
 |---|---|---|
-| Mount mechanism | NFS (ro) over tailnet | SSHFS is the alternative if you prefer reusing SSH |
+| Mount mechanism | NFS (ro) over tailnet | |
 | Mount path on polaris | `/mnt/video/Downloads` | matches container path → no Remote Path Mapping |
 | Import mode | Copy | cross-machine; hardlink impossible |
-| Public seeding | none (ratio 0, removed after import) | set a small ratio if you want to be polite |
-| Free-space floor | **?? GB** (need your number) | based on the seedbox disk size |
-| "Least in demand" metric | fewest leechers + well-seeded swarm + stale `last_activity` | vs. your own upload speed |
-| Eviction "imported?" safety | complete + age-grace (≥1h) | optional stronger check: Sonarr/Radarr API import status |
-| H&R policy | obligation-met first; unmet only as last resort, logged | how aggressive to get under real pressure |
+| Public seeding | none (ratio 0, removed after import) | |
+| Free-space floor | **10 GB** free | seedbox disk is 197 GB |
+| "Least in demand" metric | fewest leechers + well-seeded swarm + stale `last_activity` | |
+| Eviction "imported?" safety | **complete + age-grace (2 h)** heuristic; job on the **seedbox** | accepts ~99%; API check is a later upgrade (§13) |
+| H&R policy | obligation-met first; unmet only as last resort, logged | |
 | `qbit-autoremove` schedule | every 15 min | |
 
 ## 8. Repo structure
@@ -217,6 +217,12 @@ Lifecycle of one download:
   it's dropped for now. Add it back only if dead/unregistered torrents or orphaned
   files actually accumulate; then it would own `rem_unregistered` + `rem_orphaned`
   only (never removal of *arr content — the no-hardlink rule stands).
+- **API-based eviction import check** — replace the age-grace heuristic with a
+  Sonarr/Radarr history lookup (a `downloadFolderImported` event per torrent hash),
+  so a failed/stuck import can never be evicted. That also moves the eviction job
+  onto **polaris** (local *arr APIs; still reads the seedbox `df` via the NFS
+  mount; deletes via the qBittorrent API over the tailnet). Add if a failed import
+  is ever silently evicted.
 - Backups: the *arr SQLite DBs already covered; qBittorrent config could join.
 - Cross-seed / ratio tooling on the seedbox (out of scope now).
 - Retiring the Synology entirely once this is proven.
