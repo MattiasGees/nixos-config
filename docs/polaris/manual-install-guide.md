@@ -383,3 +383,10 @@ zpool status tank                 # wait for resilver
 periodic TRIM run automatically (`services.zfs.autoScrub`, `services.zfs.trim`).
 Keep the keyfile backup current and the flake pushed to Git — those two rebuild
 the whole machine.
+
+---
+
+Once the OS is up, the per-service secrets, DNS records, third-party auth, and
+first-run app config that `nixos-rebuild` doesn't handle are in
+[manual-steps.md](manual-steps.md) (AWS/Caddy credentials, Tailscale, Plex,
+seedbox, *arr setup).
