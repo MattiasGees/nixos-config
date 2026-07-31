@@ -13,6 +13,7 @@
     ../modules/media/prowlarr.nix
     ../modules/media/caddy.nix
     ../modules/media/seedbox-downloads.nix
+    ../modules/media/recyclarr.nix
   ];
 
   networking.hostName = "polaris";
