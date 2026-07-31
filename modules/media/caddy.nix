@@ -11,9 +11,10 @@
     # (polaris is behind CGNAT, so HTTP-01 can't work).
     package = pkgs.caddy.withPlugins {
       plugins = [ "github.com/caddy-dns/route53@v1.5.0" ];
-      # BUILD-TIME: replace with the hash the first build prints (use lib.fakeHash
-      # so the error reports the correct sha256 to paste here).
-      hash = lib.fakeHash;
+      # FOD hash of the Caddy source with the route53 plugin vendored. Emitted by
+      # the first build (with lib.fakeHash) as "got: sha256-...". Bumping the
+      # plugin/Caddy version invalidates this — reset to lib.fakeHash to re-derive.
+      hash = "sha256-ufH4svaXadboK4OimfcYxwe0vaPtcukhHEH5kuWf7ZA=";
     };
     globalConfig = ''
       acme_dns route53
