@@ -43,7 +43,9 @@ a well-run stack; revisit only if cruft accumulates); the *arr↔Prowlarr wiring
   *arr remove** downloads. No `qbit_manage`.
 - **Seed policy:** private torrents seed to their tracker's ratio/time; public
   torrents are **not** seeded — removed right after import. Enforced via *arr
-  per-indexer seed criteria over a qBittorrent "don't seed by default" baseline.
+  per-indexer seed criteria; qBittorrent's global seed limit stays **unlimited**
+  so a mis-configured private indexer keeps seeding (no accidental hit-and-run)
+  rather than being force-paused.
 - **Disk-pressure eviction** is the one added seedbox job: when the seedbox disk
   fills, evict the least-in-demand **already-imported** torrents, obligation-met
   ones first.
@@ -98,9 +100,11 @@ Lifecycle of one download:
     `tv-sonarr → …/tv`, `radarr → …/movies`.
   - **Remove** the NAS rsync path: delete `qbittorrent-nas-sync.{sh,service,timer}`
     templates, the sshpass/NAS tasks, and the `qbittorrent_nas_*` defaults.
-  - Set the **global share limit to "don't seed" (ratio 0 / minimal time)** as the
-    safe baseline, so anything without explicit per-indexer seed criteria (i.e.
-    public) does not seed. Private indexers override this via the *arr (below).
+  - Leave the **global share limit unlimited** (no forced ratio/time), so torrents
+    without explicit *arr seed criteria keep seeding rather than being paused —
+    protecting private torrents from accidental hit-and-run. "Seed only private"
+    is enforced by the *arr per-indexer criteria (public → ratio 0; private →
+    tracker requirement), not by a global limit.
 - **NFS export (new, small role or fold into `qbittorrent`):** export
   `/mnt/video/Downloads` **read-only** to polaris' tailnet IP only (NFSv4,
   `ro,root_squash`). Read-only is safe — the *arr delete via the qBittorrent API,
@@ -127,7 +131,7 @@ Lifecycle of one download:
 
 | Requirement | Mechanism |
 |---|---|
-| **Seed only private after leech** | *arr per-indexer seed criteria (public → ratio 0, private → tracker requirement) over a qBittorrent ratio-0 baseline. |
+| **Seed only private after leech** | *arr per-indexer seed criteria (public → ratio 0, private → tracker requirement); qBittorrent global seed limit stays unlimited. |
 | **Auto-delete what's not needed** | *arr "Remove Completed Downloads" removes each grab (with data) once imported + seed goal met. |
 | **Free the seedbox disk under pressure** | `qbit-autoremove` timer keyed to the seedbox `df` (see ordering below). |
 
