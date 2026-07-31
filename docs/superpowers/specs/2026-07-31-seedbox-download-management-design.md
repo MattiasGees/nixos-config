@@ -12,16 +12,18 @@ BitTorrent traffic on the seedbox's public IP. This is **"Path A / Model 2"** fr
 the design discussion: qBittorrent stays on the seedbox as the fast **local
 working disk**, polaris holds the **permanent library**, and Sonarr/Radarr import
 completed downloads by copying them from the seedbox to polaris over the existing
-tailnet. It then adds lifecycle management: private-only seeding, automatic
-cleanup, and disk-pressure eviction on the **seedbox** disk.
+tailnet. Lifecycle (seed policy, cleanup) is handled by **Sonarr/Radarr
+themselves**; the only bespoke piece is a **disk-pressure eviction** job that
+frees the seedbox disk when it fills.
 
 **In scope:** the data-flow change (replace the NAS rsync with *arr imports over
-an NFS mount), and three management behaviours — seed only private, auto-delete
-what's no longer needed, and free the seedbox disk under pressure.
+an NFS mount), the *arr seed/removal configuration, and the seedbox disk-pressure
+eviction job.
 
 **Explicitly not in scope:** moving qBittorrent onto polaris; any new WireGuard
-tunnel (we reuse the tailnet); the *arr↔Prowlarr wiring (already done);
-Plex/backups.
+tunnel (we reuse the tailnet); `qbit_manage` (see §13 — the *arr cover its job for
+a well-run stack; revisit only if cruft accumulates); the *arr↔Prowlarr wiring
+(already done); Plex/backups.
 
 ## 2. Decisions (locked in discussion)
 
@@ -30,17 +32,21 @@ Plex/backups.
   swarm sees the seedbox IP and **seeding never uses home bandwidth**.
 - **polaris is the library.** Sonarr/Radarr **copy** completed downloads into
   `/srv/media/{Series,Movies}`. It's a copy, not a hardlink — the source (seedbox)
-  and destination (polaris) are different machines. This is the standard remote-
-  seedbox pattern; home bandwidth is used once per item (the import pull), then
-  never again.
+  and destination (polaris) are different machines. Standard remote-seedbox
+  pattern; home bandwidth is used once per item (the import pull), then never again.
 - **Transport is the existing tailnet** — no new secure connection. polaris NFS-
   mounts the seedbox's completed-downloads directory, read-only, restricted to
   polaris' tailnet IP.
-- **Seed policy:** private torrents seed to their ratio/time; public torrents are
-  **not** seeded — removed right after import.
-- **Management runs on the seedbox** (next to qBittorrent and its local disk):
-  `qbit_manage` for tagging + share-limits + cleanup, and a disk-pressure job that
-  watches the seedbox's local free space.
+- **Sonarr/Radarr own the torrent lifecycle** — seed policy (per-indexer seed
+  criteria), import (copy), and removal. Because the import is a cross-machine
+  **copy with no hardlink**, only the *arr know an import succeeded, so **only the
+  *arr remove** downloads. No `qbit_manage`.
+- **Seed policy:** private torrents seed to their tracker's ratio/time; public
+  torrents are **not** seeded — removed right after import. Enforced via *arr
+  per-indexer seed criteria over a qBittorrent "don't seed by default" baseline.
+- **Disk-pressure eviction** is the one added seedbox job: when the seedbox disk
+  fills, evict the least-in-demand **already-imported** torrents, obligation-met
+  ones first.
 
 ## 3. Architecture & data flow
 
@@ -52,14 +58,14 @@ INTERNET (swarm)
 │   /var/qbittorrent/downloads/incomplete           │
 │   /mnt/video/Downloads/{tv,movies}   (complete)   │
 │        │  NFS export (ro) over tailnet            │
-│   qbit_manage  +  disk-pressure eviction (timers) │
+│   disk-pressure eviction (systemd timer)          │
 └────────┼──────────────────────────────────────────┘
          │  tailnet (existing)         ▲ import = COPY (home bw, once per item)
 ┌────────┴──────────────────────────────────────────┐
 │ POLARIS                                            │
 │   mounts seedbox:/mnt/video/Downloads (ro)         │
-│   Sonarr/Radarr import → copy into                 │
-│   /srv/media/{Series,Movies}   (ZFS, Plex library) │
+│   Sonarr/Radarr: import(copy) + seed policy +      │
+│     removal → /srv/media/{Series,Movies}  (ZFS)    │
 └────────────────────────────────────────────────────┘
 ```
 
@@ -67,11 +73,13 @@ Lifecycle of one download:
 1. qBittorrent (seedbox) downloads to local disk under the right category dir.
 2. Sonarr/Radarr (polaris) see it via the qBittorrent API, read it over the NFS
    mount, and **copy** it into the library, renamed/organised for Plex.
-3. **Public** torrent → removed from the seedbox right after import (no seeding).
-4. **Private** torrent → keeps seeding from the seedbox's local disk to its ratio,
-   then is removed. The polaris library copy is untouched by any removal.
-5. If the seedbox disk fills, the disk-pressure job evicts the least-in-demand
-   **already-imported** torrents early (polaris copy survives).
+3. **Public** torrent → seed criteria = ratio 0, so it's "seeding-complete" at
+   once; the *arr remove it (with data) right after import. No seeding.
+4. **Private** torrent → seed criteria = the tracker's requirement; qBittorrent
+   seeds from local disk until met, then the *arr remove it. The polaris library
+   copy is untouched by any removal.
+5. If the seedbox disk fills, the eviction job removes the least-in-demand
+   **already-imported** torrents early (obligation-met first).
 
 ## 4. Bandwidth & disk model (why this shape)
 
@@ -79,7 +87,7 @@ Lifecycle of one download:
   seedbox-IP connectability.
 - **Home bandwidth** is used only for the one-time import copy per item.
 - **The seedbox disk is the constrained resource** (holds active private seeds) →
-  hence requirement 3 targets the *seedbox's* `df`, not polaris.
+  hence the eviction job targets the *seedbox's* `df`, not polaris.
 - polaris disk is effectively unbounded for this purpose (user's stated position).
 
 ## 5. Components & responsibilities
@@ -90,28 +98,15 @@ Lifecycle of one download:
     `tv-sonarr → …/tv`, `radarr → …/movies`.
   - **Remove** the NAS rsync path: delete `qbittorrent-nas-sync.{sh,service,timer}`
     templates, the sshpass/NAS tasks, and the `qbittorrent_nas_*` defaults.
-  - Global share-limit knobs (`max_ratio`, `max_seeding_minutes`) become
-    subordinate to per-tag limits set by `qbit_manage` (below).
+  - Set the **global share limit to "don't seed" (ratio 0 / minimal time)** as the
+    safe baseline, so anything without explicit per-indexer seed criteria (i.e.
+    public) does not seed. Private indexers override this via the *arr (below).
 - **NFS export (new, small role or fold into `qbittorrent`):** export
   `/mnt/video/Downloads` **read-only** to polaris' tailnet IP only (NFSv4,
-  `ro,root_squash`). Read-only is safe because the *arr and `qbit_manage` delete
-  via the qBittorrent API / locally on the seedbox — polaris never writes here.
-- **`qbit-manage` role (new):** run [`qbit_manage`](https://github.com/StuffAnThings/qbit_manage)
-  (podman container, matching the existing pattern) on a timer against the local
-  qBittorrent API:
-  - Tag each torrent `private`/`public` from its private flag.
-  - **Share-limit groups:** `public → max_ratio 0` (action: pause → the *arr then
-    removes it post-import); `private → seed to ratio/time` then pause for removal.
-  - `rem_unregistered` (drop dead/unregistered private torrents) and
-    `rem_orphaned` (delete stray files under the complete dir owned by no torrent).
-- **`qbit-autoremove` role (new):** disk-pressure eviction on a short timer:
-  - If seedbox free space under the complete-dir filesystem < floor, remove the
-    least-in-demand **completed, already-imported** torrents (data included) until
-    free ≥ floor.
-  - Order: public/idle first; **private only as a last resort** (hit-and-run
-    risk), and `log()` every eviction.
-  - Candidate tool: [`autoremove-torrents`](https://github.com/jerrymakesjelly/autoremove-torrents)
-    (`free_space` strategy) or a small Python script against the API.
+  `ro,root_squash`). Read-only is safe — the *arr delete via the qBittorrent API,
+  never by writing to this share.
+- **`qbit-autoremove` role (new):** disk-pressure eviction on a short systemd
+  timer, against the local qBittorrent API. See §6/§7 for the ordering.
 
 ### polaris (nixos-config)
 - **`modules/media/seedbox-downloads.nix` (new):** an NFS **client** mount of
@@ -119,20 +114,34 @@ Lifecycle of one download:
   qBittorrent container reports, so **no Remote Path Mapping** is needed), over
   the tailnet, `ro`, with `x-systemd.automount` + `soft`/`nofail` so a seedbox
   blip can't wedge boot.
-- **Sonarr/Radarr config (manual, documented in `manual-steps.md`):** download
-  client = qBittorrent at the seedbox tailnet IP:8080 (categories as above);
-  **Completed Download Handling** on, **import mode = Copy**; **Remove Completed
-  Downloads** on (removes via API after import + once seeding is complete — so
-  public go immediately, private after ratio). Let `qbit_manage` own the seed
-  policy; the *arr just import and remove.
+- **Sonarr/Radarr config (manual, documented in `manual-steps.md`):**
+  - Download client = qBittorrent at the seedbox tailnet IP:8080 (categories as
+    above); **Completed Download Handling** on, **import mode = Copy**; **Remove
+    Completed Downloads** on.
+  - **Per-indexer seed criteria** (Settings → Indexers → each indexer): public
+    trackers → **Seed Ratio 0 / Seed Time 0** (removed right after import); private
+    trackers → the tracker's required ratio/time. This is what makes "seed only
+    private" hold, on top of the qBittorrent ratio-0 baseline.
 
 ## 6. Requirements → mechanisms
 
 | Requirement | Mechanism |
 |---|---|
-| **Seed only private after leech** | `qbit_manage` tags private/public and sets per-tag share limits: public `max_ratio 0` (removed post-import), private seeds to ratio. |
-| **Auto-delete what's not needed** | *arr "Remove Completed Downloads" (post-import) + `qbit_manage` `rem_unregistered` + `rem_orphaned`. |
-| **Free the seedbox disk under pressure** | `qbit-autoremove` timer keyed to the seedbox `df`, evicting least-in-demand already-imported torrents; public/idle first, private last. |
+| **Seed only private after leech** | *arr per-indexer seed criteria (public → ratio 0, private → tracker requirement) over a qBittorrent ratio-0 baseline. |
+| **Auto-delete what's not needed** | *arr "Remove Completed Downloads" removes each grab (with data) once imported + seed goal met. |
+| **Free the seedbox disk under pressure** | `qbit-autoremove` timer keyed to the seedbox `df` (see ordering below). |
+
+**Eviction ordering** (when free space < floor, remove until free ≥ floor):
+1. Only consider **download-complete** torrents past an age-grace (so the import
+   has happened) — never touch downloading or not-yet-imported torrents.
+2. Any **public** leftovers first (should be rare; the *arr already remove them).
+3. **Private, seed-obligation met** (qBittorrent state `pausedUP` = share limit
+   reached) — zero H&R risk.
+4. Only if still under floor: **private, obligation *not* met**, **lowest-share
+   first** (fewest leechers / lowest recent upload / stalest activity) — H&R risk;
+   `log()` each removal.
+5. Never evict a torrent not yet copied to polaris (the age-grace, or an optional
+   Sonarr/Radarr API import check).
 
 ## 7. Open parameters (please set / confirm on review)
 
@@ -141,25 +150,24 @@ Lifecycle of one download:
 | Mount mechanism | NFS (ro) over tailnet | SSHFS is the alternative if you prefer reusing SSH |
 | Mount path on polaris | `/mnt/video/Downloads` | matches container path → no Remote Path Mapping |
 | Import mode | Copy | cross-machine; hardlink impossible |
-| Public seeding | none (removed after import) | set a small ratio instead if you want to be polite |
+| Public seeding | none (ratio 0, removed after import) | set a small ratio if you want to be polite |
 | Free-space floor | **?? GB** (need your number) | based on the seedbox disk size |
 | "Least in demand" metric | fewest leechers + well-seeded swarm + stale `last_activity` | vs. your own upload speed |
-| Eviction "imported?" safety | completed + age-grace (≥1h) | optional stronger check: query Sonarr/Radarr API for import status |
-| `qbit_manage` schedule | hourly | |
+| Eviction "imported?" safety | complete + age-grace (≥1h) | optional stronger check: Sonarr/Radarr API import status |
+| H&R policy | obligation-met first; unmet only as last resort, logged | how aggressive to get under real pressure |
 | `qbit-autoremove` schedule | every 15 min | |
 
 ## 8. Repo structure
 
 | File | Repo | Change |
 |---|---|---|
-| `roles/qbittorrent/*` | ansible | modify: drop NAS rsync; keep container + categories |
+| `roles/qbittorrent/*` | ansible | modify: drop NAS rsync; ratio-0 baseline; keep container + categories |
 | `roles/qbittorrent` NFS export task | ansible | add: export complete dir (ro) to polaris tailnet IP |
-| `roles/qbit-manage/*` | ansible | new: qbit_manage container + config + timer |
 | `roles/qbit-autoremove/*` | ansible | new: disk-pressure eviction + timer |
-| `server.yml` seedbox play | ansible | add the two new roles |
+| `server.yml` seedbox play | ansible | add the new role |
 | `modules/media/seedbox-downloads.nix` | nixos-config | new: NFS client mount |
 | `machines/polaris.nix` | nixos-config | import the mount module |
-| `docs/polaris/manual-steps.md` | nixos-config | document *arr download-client + import settings |
+| `docs/polaris/manual-steps.md` | nixos-config | document *arr download-client + seed criteria |
 
 ## 9. Migration
 
@@ -180,28 +188,35 @@ Lifecycle of one download:
 - A test grab: appears in qBittorrent (seedbox) → Sonarr/Radarr import a **copy**
   into `/srv/media/…` → Plex sees it.
 - A **public** torrent is gone from qBittorrent shortly after import; a **private**
-  one keeps seeding.
-- `qbit_manage` logs show correct private/public tagging + share-limit groups.
+  one keeps seeding until its ratio/time, then the *arr remove it.
 - Fill the seedbox past the floor (or lower it temporarily) → `qbit-autoremove`
-  removes least-in-demand imported torrents and free space recovers; the polaris
-  library copies remain.
+  removes least-in-demand imported torrents (obligation-met first) and free space
+  recovers; the polaris library copies remain.
 - `curl`-checking the swarm IP still shows the seedbox public IP.
 
 ## 12. Risks & caveats
 
 - **Duplicate copy:** every item exists on both the seedbox (seed) and polaris
   (library) until the seed is removed — inherent to seeding-from-seedbox.
-- **Eviction safety:** we infer "imported" from completed + age (and optionally an
-  *arr API check). A mis-inference could evict a not-yet-imported torrent; the
-  age-grace + public-first ordering keeps this low-risk. Private eviction risks
-  hit-and-run on that tracker — last resort, and logged.
+- **Unregistered-while-seeding (deferred gap):** if a tracker unregisters a private
+  torrent *before* your seed goal is met, the *arr wait forever for a goal that
+  can't complete, so it lingers. Uncommon; the eviction job mops it up under
+  pressure (zero-share, complete). If these pile up, add `qbit_manage`
+  `rem_unregistered` (§13).
+- **Hit-and-run:** under real disk pressure the eviction job may remove a private
+  torrent before its seed obligation is met (step 4) → an H&R strike. Ordering
+  puts obligation-met torrents first and logs any encroachment.
+- **Eviction safety:** "imported" is inferred from complete + age-grace (optionally
+  an *arr API check). Age-grace + public-first keeps a mis-inference low-risk.
 - **NFS over tailnet:** use `soft,nofail,automount` so a seedbox/tailnet blip
   degrades imports gracefully rather than hanging polaris.
-- **Container file access:** `qbit_manage`/eviction need the same paths the
-  container reports; run them with the complete dir mounted at the identical path.
 
 ## 13. Deferred / future
 
+- **`qbit_manage`** — the *arr cover seed policy + removal for a well-run stack, so
+  it's dropped for now. Add it back only if dead/unregistered torrents or orphaned
+  files actually accumulate; then it would own `rem_unregistered` + `rem_orphaned`
+  only (never removal of *arr content — the no-hardlink rule stands).
 - Backups: the *arr SQLite DBs already covered; qBittorrent config could join.
 - Cross-seed / ratio tooling on the seedbox (out of scope now).
 - Retiring the Synology entirely once this is proven.
