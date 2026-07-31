@@ -8,6 +8,10 @@
     # polaris-vm variant inherits this file, so it must stay driver-free).
     ../modules/media/common.nix
     ../modules/media/plex.nix
+    ../modules/media/sonarr.nix
+    ../modules/media/radarr.nix
+    ../modules/media/prowlarr.nix
+    ../modules/media/caddy.nix
   ];
 
   networking.hostName = "polaris";
