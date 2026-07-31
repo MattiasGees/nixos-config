@@ -6,7 +6,12 @@
       "Read(//Users/mattias/**)",
       "Bash(nix-channel --list)",
       "Bash(curl -sS \"https://raw.githubusercontent.com/nix-community/home-manager/7dbd305f8b81050f223f00bcfbc8a6b74e048806/modules/programs/git.nix\" -o /tmp/git.nix)",
-      "Read(//tmp/**)"
+      "Read(//tmp/**)",
+      "Bash(nix-env -qaP -A nixpkgs.flux)",
+      "Bash(nix-env -qaP -A nixpkgs.fluxcd)",
+      "Bash(NIX_CONFIG=\"experimental-features = nix-command flakes\" nix search nixpkgs '^flux')",
+      "Bash(/run/current-system/sw/bin/nix --extra-experimental-features 'nix-command flakes' search nixpkgs '^flux')",
+      "Bash(/nix/var/nix/profiles/default/bin/nix --extra-experimental-features 'nix-command flakes' search nixpkgs '^flux')"
     ]
   }
 }
