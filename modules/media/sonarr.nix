@@ -2,7 +2,7 @@
 # keeping on the redundant NVMe mirror), library access via the shared
 # `media` group. No openFirewall — localhost only, Caddy is the only ingress
 # (port 8989).
-{ ... }:
+{ pkgs, lib, ... }:
 {
   services.sonarr = {
     enable = true;
@@ -11,4 +11,14 @@
 
   # media = read/write /srv/media (root folder: /srv/media/Series).
   users.users.sonarr.extraGroups = [ "media" ];
+
+  # The nixpkgs module does not create a custom dataDir, and the parent
+  # /srv/fast/appdata is root-owned, so Sonarr (running as `sonarr`) cannot
+  # create it itself ("Access to the path /srv/fast/appdata/sonarr is denied").
+  # Create + chown it as root before start. The `+` prefix runs as root despite
+  # User=sonarr; the unit's RequiresMountsFor=/srv/fast/appdata/sonarr guarantees
+  # the ZFS dataset is mounted first, so this never writes under the mountpoint.
+  systemd.services.sonarr.serviceConfig.ExecStartPre = lib.mkBefore [
+    "+${pkgs.coreutils}/bin/install -d -o sonarr -g sonarr -m 0700 /srv/fast/appdata/sonarr"
+  ];
 }
