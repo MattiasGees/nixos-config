@@ -10,11 +10,15 @@
     # Caddy built with the Route53 DNS plugin for the ACME DNS-01 challenge
     # (polaris is behind CGNAT, so HTTP-01 can't work).
     package = pkgs.caddy.withPlugins {
-      plugins = [ "github.com/caddy-dns/route53@v1.5.0" ];
+      # v1.6.2+ is required: it targets libdns v1 (Record is an interface).
+      # Earlier tags (e.g. v1.5.0) use the old struct API and fail to compile
+      # against Caddy 2.11's libdns v1 with "invalid composite literal type
+      # libdns.Record".
+      plugins = [ "github.com/caddy-dns/route53@v1.6.2" ];
       # FOD hash of the Caddy source with the route53 plugin vendored. Emitted by
       # the first build (with lib.fakeHash) as "got: sha256-...". Bumping the
       # plugin/Caddy version invalidates this — reset to lib.fakeHash to re-derive.
-      hash = "sha256-ufH4svaXadboK4OimfcYxwe0vaPtcukhHEH5kuWf7ZA=";
+      hash = lib.fakeHash;
     };
     globalConfig = ''
       acme_dns route53
