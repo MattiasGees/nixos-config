@@ -219,4 +219,5 @@ their SQLite DBs on `/srv/fast/appdata`, not in git.
 | Seedbox role | `ansible/roles/plex-proxy` |
 
 See also: [manual-install-guide.md](manual-install-guide.md) (from-ISO OS + ZFS
-setup) and [bios-checklist.md](bios-checklist.md).
+setup), [updating.md](updating.md) (flake/Caddy/kernel updates), and
+[bios-checklist.md](bios-checklist.md).
