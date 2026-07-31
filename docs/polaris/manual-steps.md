@@ -202,6 +202,61 @@ their SQLite DBs on `/srv/fast/appdata`, not in git.
 
 ---
 
+## 7. Route indexer / RSS traffic via the seedbox
+
+Make Prowlarr/Sonarr/Radarr fetch from indexers (searches + RSS sync) through the
+**seedbox's public IP** instead of the home (CGNAT) IP — for indexers that block
+residential IPs or tie an account to a fixed address. This uses the apps' own
+Proxy feature, not a Tailscale exit node, so **only these apps** detour; the rest
+of polaris is unaffected.
+
+### 7a. Deploy the proxy (Ansible)
+
+An HTTP proxy (`tinyproxy`) runs on the seedbox, **bound to its tailnet IP only**
+(`seedbox-proxy` role in the ansible repo):
+
+```bash
+cd ~/Documents/git/ansible
+ansible-playbook server.yml --limit seedbox      # installs + configures tinyproxy
+tailscale ip -4                                   # run on the seedbox: note its tailnet IP
+```
+
+It listens on the seedbox tailnet IP, port **8888**, and accepts only the tailnet
+range (`100.64.0.0/10`) — never the public interface. Outbound requests still
+egress via the seedbox's public IP (that's the point). DNS for the indexers is
+resolved on the seedbox, so your home resolver never sees those hostnames.
+
+### 7b. Point each app at it (in the web UIs)
+
+For **all three** (Sonarr/Radarr query indexers directly — Prowlarr only *syncs
+the definitions* to them), go to **Settings → General → Proxy**:
+
+| Field | Value |
+|-------|-------|
+| Use Proxy | ✅ |
+| Proxy Type | `HTTP(S)` |
+| Hostname | *seedbox tailnet IP* (from 7a) |
+| Port | `8888` |
+| Bypass Proxy for Local Addresses | ✅ |
+| Ignored Addresses | `100.*` |
+
+`Ignored Addresses: 100.*` keeps tailnet-internal traffic (the download client,
+Prowlarr↔app sync) direct; only public indexer traffic goes through the proxy.
+
+### 7c. Verify
+
+```bash
+# From polaris — should print the SEEDBOX public IP, not your home IP:
+curl -x http://<seedbox-tailnet-ip>:8888 https://ifconfig.me ; echo
+curl https://ifconfig.me ; echo          # contrast: your home/CGNAT IP
+```
+
+Then in Sonarr/Radarr/Prowlarr, an indexer **Test** should still pass. (If a test
+fails only when proxied, that indexer may use HTTPS on a non-standard port — add
+a matching `ConnectPort` in the role's `tinyproxy.conf.j2`.)
+
+---
+
 ## Quick reference
 
 | Thing | Value |
@@ -216,7 +271,8 @@ their SQLite DBs on `/srv/fast/appdata`, not in git.
 | ZFS key | `/etc/zfs/keys/polaris.key` (**back up offline**) |
 | Caddy AWS creds | `/etc/caddy/route53.env` (`0600 root`) |
 | Terraform (IAM) | `infrastructure/stacks/kubernetes/polaris-caddy-iam.tf` |
-| Seedbox role | `ansible/roles/plex-proxy` |
+| Seedbox roles | `ansible/roles/{plex-proxy,seedbox-proxy}` |
+| Indexer egress proxy | seedbox tailnet IP `:8888` (HTTP, tinyproxy) |
 
 See also: [manual-install-guide.md](manual-install-guide.md) (from-ISO OS + ZFS
 setup), [updating.md](updating.md) (flake/Caddy/kernel updates), and
