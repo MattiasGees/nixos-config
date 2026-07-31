@@ -18,7 +18,7 @@
       # FOD hash of the Caddy source with the route53 plugin vendored. Emitted by
       # the first build (with lib.fakeHash) as "got: sha256-...". Bumping the
       # plugin/Caddy version invalidates this — reset to lib.fakeHash to re-derive.
-      hash = lib.fakeHash;
+      hash = "sha256-/9c9b+S98V+eDj6mzb6KfAWWSBCrZoUzA1JDrMxuKQ0=";
     };
     globalConfig = ''
       acme_dns route53
