@@ -4,29 +4,48 @@
 # on the LAN and the tailnet (wildcard *.polaris.mattiasgees.be -> tailnet
 # IP, set up out-of-band in Route53).
 { pkgs, lib, ... }:
+let
+  # Per-site TLS using the Route53 DNS-01 challenge.
+  #
+  # Why the custom resolvers + delay: polaris resolves DNS only through the LAN
+  # router, and the mattiasgees.be zone has Route53's default 24h SOA negative
+  # TTL. A lookup of _acme-challenge.<app> before the record exists poisons the
+  # router's cache with NXDOMAIN for 24h, so certmagic's propagation check never
+  # sees the record it just created ("timed out ... last error: <nil>"). Point
+  # the check at fresh public resolvers (which never cached that NXDOMAIN) and
+  # give Route53 a moment to settle, bypassing the router cache entirely.
+  acmeTls = ''
+    tls {
+      dns route53
+      resolvers 1.1.1.1 8.8.8.8
+      propagation_delay 30s
+      propagation_timeout 5m
+    }
+  '';
+  proxy = port: ''
+    reverse_proxy localhost:${toString port}
+    ${acmeTls}
+  '';
+in
 {
   services.caddy = {
     enable = true;
-    # Caddy built with the Route53 DNS plugin for the ACME DNS-01 challenge
-    # (polaris is behind CGNAT, so HTTP-01 can't work).
+    # Caddy built with the Route53 DNS plugin. v1.6.2+ targets libdns v1 (matches
+    # Caddy 2.11); older tags (e.g. v1.5.0) use the old struct API and fail to
+    # compile with "invalid composite literal type libdns.Record".
     package = pkgs.caddy.withPlugins {
-      # v1.6.2+ is required: it targets libdns v1 (Record is an interface).
-      # Earlier tags (e.g. v1.5.0) use the old struct API and fail to compile
-      # against Caddy 2.11's libdns v1 with "invalid composite literal type
-      # libdns.Record".
       plugins = [ "github.com/caddy-dns/route53@v1.6.2" ];
       # FOD hash of the Caddy source with the route53 plugin vendored. Emitted by
       # the first build (with lib.fakeHash) as "got: sha256-...". Bumping the
       # plugin/Caddy version invalidates this — reset to lib.fakeHash to re-derive.
       hash = "sha256-/9c9b+S98V+eDj6mzb6KfAWWSBCrZoUzA1JDrMxuKQ0=";
     };
-    globalConfig = ''
-      acme_dns route53
-      email mattias@gees.dev
-    '';
-    virtualHosts."sonarr.polaris.mattiasgees.be".extraConfig = "reverse_proxy localhost:8989";
-    virtualHosts."radarr.polaris.mattiasgees.be".extraConfig = "reverse_proxy localhost:7878";
-    virtualHosts."prowlarr.polaris.mattiasgees.be".extraConfig = "reverse_proxy localhost:9696";
+    # ACME account email (was in globalConfig alongside acme_dns; the DNS
+    # challenge now lives per-site in the tls block so it can set resolvers).
+    email = "mattias@gees.dev";
+    virtualHosts."sonarr.polaris.mattiasgees.be".extraConfig = proxy 8989;
+    virtualHosts."radarr.polaris.mattiasgees.be".extraConfig = proxy 7878;
+    virtualHosts."prowlarr.polaris.mattiasgees.be".extraConfig = proxy 9696;
   };
 
   # AWS creds for Route53 (AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY / AWS_REGION),
