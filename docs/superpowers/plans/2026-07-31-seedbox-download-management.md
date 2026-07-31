@@ -19,7 +19,7 @@
 - **Only the *arr remove torrents** (they alone know an import succeeded — the cross-machine copy has no hardlink signal). The eviction job is the sole exception and only ever removes **download-complete torrents past a 2 h age-grace**.
 - **qBittorrent global seed limit stays UNLIMITED.** "Seed only private" is enforced by *arr per-indexer seed criteria (public → ratio 0 / time 0; private → the tracker's requirement) — never by a global ratio-0 (that would risk H&R on a mis-configured private indexer).
 - **Eviction free-space floor = 10 GB** (seedbox disk is 197 GB). Eviction order: public first → private-obligation-met → (last resort, logged) private-unmet lowest-share. Never evict a not-yet-imported (within-grace) torrent.
-- **Mount path on polaris is `/mnt/video/Downloads`** — identical to the path the qBittorrent container reports, so **no Remote Path Mapping** is needed in the *arr.
+- **Mount path on polaris is `/mnt/media-downloads`** — identical to the path the qBittorrent container reports, so **no Remote Path Mapping** is needed in the *arr.
 - No secrets in git. qBittorrent WebUI creds / any API password stay in existing vault/host files.
 - Verification = successful deploy + functional check (no CI). For the eviction script, verification = pytest on its pure selection logic.
 
@@ -50,7 +50,7 @@
 - Delete: `roles/qbittorrent/templates/qbittorrent-nas-sync.{sh,service,timer}.j2`
 
 **Interfaces:**
-- Produces: qBittorrent on the seedbox with categories `tv-sonarr → /mnt/video/Downloads/tv`, `radarr → /mnt/video/Downloads/movies`, WebUI on the tailnet:8080, **no** NAS-sync timer, **unlimited** global seed limit.
+- Produces: qBittorrent on the seedbox with categories `tv-sonarr → /mnt/media-downloads/tv`, `radarr → /mnt/media-downloads/movies`, WebUI on the tailnet:8080, **no** NAS-sync timer, **unlimited** global seed limit.
 
 - [ ] **Step 1: Remove the NAS-sync tasks.** In `roles/qbittorrent/tasks/main.yml`, delete every task related to NAS sync: "Install sshpass", "Install NAS SSH password file", "Install NAS sync script", "Install NAS sync systemd service", "Install NAS sync systemd timer", "Enable and start NAS sync timer". Also delete the now-unused `/etc/qbittorrent` dir task **only if** it was solely for the NAS secret (keep it if other tasks use it).
 
@@ -71,6 +71,10 @@ git rm roles/qbittorrent/templates/qbittorrent-nas-sync.sh.j2 \
 # hit-and-run on a mis-configured private indexer.
 qbittorrent_max_ratio: -1          # -1 = no global ratio limit
 qbittorrent_max_seeding_minutes: -1
+# Rename the completed-downloads dir away from the Synology-era "video" name.
+# Cascades to the categories (…/tv, …/movies), the dir-creation task, and the
+# container bind mount, which all reference qbittorrent_complete_dir.
+qbittorrent_complete_dir: /mnt/media-downloads     # was /mnt/video/Downloads
 ```
 And in `roles/qbittorrent/templates/qBittorrent.conf.j2` ensure the share-limit keys render `-1` (no forced pause). Confirm the rendered keys match this qBittorrent version (5.0.3) — e.g. `Session\GlobalMaxRatio=-1`, `Session\GlobalMaxSeedingMinutes=-1`. If the template hard-codes an action, leave `MaxRatioAction` unused since the limit is `-1`.
 
@@ -91,6 +95,8 @@ systemctl list-timers | grep nas-sync   # -> empty (timer gone)
 ```
 Expected: qBittorrent active; the `qbittorrent-nas-sync.timer` no longer present. (Leftover unit files may remain until removed; note in the report if a manual `systemctl disable --now qbittorrent-nas-sync.timer` + file cleanup is needed on the box.)
 
+**Migration note (path rename):** any in-flight torrents still point at the old `/mnt/video/Downloads`. Before/at deploy, either drain them or relocate: move the data (`mv /mnt/video/Downloads/* /mnt/media-downloads/`) and set each torrent's location to the new path in qBittorrent (Set Location → `/mnt/media-downloads/{tv,movies}`), then force-recheck. The old `/mnt/video` mountpoint/folder can then be removed. Do this before enabling the NFS export (Task 2) so polaris mounts the populated new path.
+
 - [ ] **Step 7: Commit.**
 ```bash
 git add -A roles/qbittorrent
@@ -107,8 +113,8 @@ git commit -m "feat(qbittorrent): drop NAS rsync; unlimited seed baseline"
 - Modify: `roles/qbittorrent/defaults/main.yml`
 
 **Interfaces:**
-- Consumes: `qbittorrent_complete_dir` (`/mnt/video/Downloads`).
-- Produces: an NFSv4 export of `/mnt/video/Downloads` to polaris' tailnet IP, read-only, reachable over `tailscale0` on port 2049.
+- Consumes: `qbittorrent_complete_dir` (`/mnt/media-downloads`).
+- Produces: an NFSv4 export of `/mnt/media-downloads` to polaris' tailnet IP, read-only, reachable over `tailscale0` on port 2049.
 
 - [ ] **Step 1: Add export defaults.** In `roles/qbittorrent/defaults/main.yml`:
 ```yaml
@@ -174,7 +180,7 @@ qbittorrent_tailscale_interface: "tailscale0"
 ```bash
 ansible-playbook server.yml --limit seedbox
 # on the seedbox:
-exportfs -v            # shows /mnt/video/Downloads to 100.93.157.59 (ro)
+exportfs -v            # shows /mnt/media-downloads to 100.93.157.59 (ro)
 ss -tlnp | grep 2049   # nfsd listening
 ```
 Expected: the export is listed, read-only, to the polaris IP.
@@ -194,14 +200,14 @@ git commit -m "feat(qbittorrent): NFSv4 export of complete dir (ro) to polaris"
 - Modify: `machines/polaris.nix`
 
 **Interfaces:**
-- Consumes: the NFS export from Task 2 (seedbox tailnet IP, `/mnt/video/Downloads`).
-- Produces: `/mnt/video/Downloads` on polaris, read-only, automounted, showing the seedbox's `tv/` and `movies/` dirs.
+- Consumes: the NFS export from Task 2 (seedbox tailnet IP, `/mnt/media-downloads`).
+- Produces: `/mnt/media-downloads` on polaris, read-only, automounted, showing the seedbox's `tv/` and `movies/` dirs.
 
 - [ ] **Step 1: Create the mount module** `modules/media/seedbox-downloads.nix`:
 ```nix
 # Read-only NFS mount of the seedbox's completed-downloads dir, over the tailnet.
 # Sonarr/Radarr import (copy) from here into /srv/media. Mounted at the SAME path
-# the qBittorrent container reports (/mnt/video/Downloads) so the *arr need no
+# the qBittorrent container reports (/mnt/media-downloads) so the *arr need no
 # Remote Path Mapping. automount + soft + nofail: a seedbox/tailnet blip degrades
 # imports gracefully instead of hanging polaris.
 { ... }:
@@ -209,8 +215,8 @@ let
   seedboxTailnetIp = "SEEDBOX_TAILNET_IP";  # BUILD-TIME: `tailscale ip -4` on the seedbox
 in
 {
-  fileSystems."/mnt/video/Downloads" = {
-    device = "${seedboxTailnetIp}:/mnt/video/Downloads";
+  fileSystems."/mnt/media-downloads" = {
+    device = "${seedboxTailnetIp}:/mnt/media-downloads";
     fsType = "nfs";
     options = [
       "ro" "nfsvers=4" "soft" "nofail"
@@ -230,8 +236,8 @@ in
 cd ~/Documents/git/nixos-config
 sudo nixos-rebuild build --flake .#polaris --impure    # builds clean
 make switch NIXNAME=polaris
-ls /mnt/video/Downloads                                # -> tv  movies (from the seedbox)
-findmnt /mnt/video/Downloads                           # nfs4, ro
+ls /mnt/media-downloads                                # -> tv  movies (from the seedbox)
+findmnt /mnt/media-downloads                           # nfs4, ro
 ```
 Expected: the seedbox's completed-downloads dirs are visible read-only. (First `ls` triggers the automount.)
 
@@ -353,7 +359,7 @@ NOW_FIXED = None  # tests import this to prove the module loads
 
 AGE_GRACE = int(os.environ.get("QBIT_AGE_GRACE", 7200))          # 2 h
 FLOOR_BYTES = int(os.environ.get("QBIT_FLOOR_GB", "10")) * 1024**3
-COMPLETE_DIR = os.environ.get("QBIT_COMPLETE_DIR", "/mnt/video/Downloads")
+COMPLETE_DIR = os.environ.get("QBIT_COMPLETE_DIR", "/mnt/media-downloads")
 _MET_STATES = {"pausedUP", "stoppedUP"}   # paused after hitting share limit
 
 def _tier(tor):
@@ -421,7 +427,7 @@ python3 -m pytest -q     # 4 passed
 ---
 qbit_autoremove_floor_gb: 10
 qbit_autoremove_age_grace_seconds: 7200
-qbit_autoremove_complete_dir: /mnt/video/Downloads
+qbit_autoremove_complete_dir: /mnt/media-downloads
 qbit_autoremove_interval: "15min"
 qbit_autoremove_qbit_host: "127.0.0.1"   # override to the seedbox tailnet IP if WebUI isn't on localhost
 qbit_autoremove_qbit_port: 8080

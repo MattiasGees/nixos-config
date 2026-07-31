@@ -58,14 +58,14 @@ INTERNET (swarm)
 ┌──┴───────────────────────────────────────────────┐
 │ SEEDBOX  (qBittorrent (podman), local disk)       │
 │   /var/qbittorrent/downloads/incomplete           │
-│   /mnt/video/Downloads/{tv,movies}   (complete)   │
+│   /mnt/media-downloads/{tv,movies}   (complete)   │
 │        │  NFS export (ro) over tailnet            │
 │   disk-pressure eviction (systemd timer)          │
 └────────┼──────────────────────────────────────────┘
          │  tailnet (existing)         ▲ import = COPY (home bw, once per item)
 ┌────────┴──────────────────────────────────────────┐
 │ POLARIS                                            │
-│   mounts seedbox:/mnt/video/Downloads (ro)         │
+│   mounts seedbox:/mnt/media-downloads (ro)         │
 │   Sonarr/Radarr: import(copy) + seed policy +      │
 │     removal → /srv/media/{Series,Movies}  (ZFS)    │
 └────────────────────────────────────────────────────┘
@@ -106,7 +106,7 @@ Lifecycle of one download:
     is enforced by the *arr per-indexer criteria (public → ratio 0; private →
     tracker requirement), not by a global limit.
 - **NFS export (new, small role or fold into `qbittorrent`):** export
-  `/mnt/video/Downloads` **read-only** to polaris' tailnet IP only (NFSv4,
+  `/mnt/media-downloads` **read-only** to polaris' tailnet IP only (NFSv4,
   `ro,root_squash`). Read-only is safe — the *arr delete via the qBittorrent API,
   never by writing to this share.
 - **`qbit-autoremove` role (new):** disk-pressure eviction on a short systemd
@@ -114,7 +114,7 @@ Lifecycle of one download:
 
 ### polaris (nixos-config)
 - **`modules/media/seedbox-downloads.nix` (new):** an NFS **client** mount of
-  `seedbox:/mnt/video/Downloads` at `/mnt/video/Downloads` (matching the path the
+  `seedbox:/mnt/media-downloads` at `/mnt/media-downloads` (matching the path the
   qBittorrent container reports, so **no Remote Path Mapping** is needed), over
   the tailnet, `ro`, with `x-systemd.automount` + `soft`/`nofail` so a seedbox
   blip can't wedge boot.
@@ -152,7 +152,7 @@ Lifecycle of one download:
 | Parameter | Value | Notes |
 |---|---|---|
 | Mount mechanism | NFS (ro) over tailnet | |
-| Mount path on polaris | `/mnt/video/Downloads` | matches container path → no Remote Path Mapping |
+| Mount path on polaris | `/mnt/media-downloads` | matches container path → no Remote Path Mapping |
 | Import mode | Copy | cross-machine; hardlink impossible |
 | Public seeding | none (ratio 0, removed after import) | |
 | Free-space floor | **10 GB** free | seedbox disk is 197 GB |
