@@ -196,9 +196,7 @@ their SQLite DBs on `/srv/fast/appdata`, not in git.
 2. **Sonarr** (`…/sonarr…`): **Settings → Media Management → Root Folders** →
    add `/srv/media/Series`.
 3. **Radarr**: root folder `/srv/media/Movies`.
-4. **Download client** — *next phase*, not wired yet (seedbox qBittorrent →
-   `/srv/media/Downloads`). Until then the apps run and are reachable but have no
-   download path.
+4. **Download client** — seedbox qBittorrent, wired per section 8 below.
 
 ---
 
@@ -257,6 +255,73 @@ a matching `ConnectPort` in the role's `tinyproxy.conf.j2`.)
 
 ---
 
+## 8. Download client (qBittorrent on the seedbox)
+
+qBittorrent runs on the seedbox, not polaris — Sonarr/Radarr talk to it over the
+tailnet, and its completed-downloads dir reaches polaris via the read-only NFS
+mount from `modules/media/seedbox-downloads.nix` (`/mnt/media-downloads`, see
+[Task 3](../../modules/media/seedbox-downloads.nix)). The mount path is
+**identical** to the path the qBittorrent container reports internally, so no
+Remote Path Mapping is needed in either app — that's the whole reason the mount
+lives at `/mnt/media-downloads` and not somewhere more "natural".
+
+### 8a. Add the download client (in the web UIs)
+
+**Sonarr** → Settings → Download Clients → add **qBittorrent**:
+
+| Field | Value |
+|-------|-------|
+| Host | seedbox tailnet IP (§ Quick reference) |
+| Port | `8080` |
+| Category | `tv-sonarr` |
+
+**Radarr** → same, but Category `radarr`.
+
+For both apps:
+
+- **Completed Download Handling**: **on**.
+- **Remove Completed Downloads**: **on** — this is what lets the *arr, not a
+  cron job, be the sole thing that deletes a torrent from qBittorrent (see
+  Global Constraints). They only do this once *their own* import has
+  succeeded, which is the signal a blind eviction script can't see.
+- **Media Management → Completed Download Handling → Import Mode**: **Copy**,
+  never Move/Hardlink — the download lives on the seedbox's filesystem and the
+  library on polaris' `tank/data`; hardlinks can't cross a network mount.
+- **Remote Path Mapping**: leave empty / do not add one. The NFS mount already
+  presents the seedbox path at the same `/mnt/media-downloads` the container
+  reports, so a mapping would be redundant (and wrong if it drifted).
+
+### 8b. Seed policy (per-indexer seed criteria)
+
+qBittorrent's **global seed limit stays unlimited** — on purpose. Seeding is
+governed per-indexer, in each app's **Settings → Indexers → (edit indexer) →
+Seed Ratio / Seed Time**, so a mis-configured global ratio-0 can't accidentally
+hit-and-run a private tracker:
+
+| Indexer type | Seed Ratio | Seed Time | Effect |
+|---|---|---|---|
+| Public | `0` | `0` | Seeding is considered "done" immediately at import; the *arr remove the torrent from qBittorrent right after Completed Download Handling runs. |
+| Private | tracker's H&R requirement | tracker's H&R requirement | qBittorrent keeps seeding until the criteria are met; the *arr then remove it. |
+
+This is also why the eviction job on the seedbox (separate task) is only ever
+allowed to sweep **download-complete torrents past a 2 h age-grace**, in the
+order public → private-obligation-met → last-resort private-unmet-lowest-share:
+it must never race a private torrent that's still short of its own seed
+criteria.
+
+### 8c. Functional verify (test grab)
+
+1. Grab one **public** item. After import: it appears under `/srv/media/…` (a
+   *copy*, not a move), and the torrent disappears from qBittorrent within one
+   *arr poll cycle (Seed Ratio/Time = 0 → immediately eligible for removal).
+2. Grab one **private** item. After import: it's in `/srv/media/…` **and still
+   seeding** in qBittorrent — it stays until its Seed Ratio/Time target is hit.
+3. For both, confirm the swarm sees the seedbox, not home: check the tracker
+   announce or `curl` the peer IP a client reports — it should be the seedbox's
+   **public IP** (`85.17.236.99`), never the CGNAT home IP.
+
+---
+
 ## Quick reference
 
 | Thing | Value |
@@ -273,6 +338,8 @@ a matching `ConnectPort` in the role's `tinyproxy.conf.j2`.)
 | Terraform (IAM) | `infrastructure/stacks/kubernetes/polaris-caddy-iam.tf` |
 | Seedbox roles | `ansible/roles/{plex-proxy,seedbox-proxy}` |
 | Indexer egress proxy | seedbox tailnet IP `:8888` (HTTP, tinyproxy) |
+| Seedbox download client | qBittorrent, seedbox tailnet IP `:8080` |
+| Seedbox downloads mount | `/mnt/media-downloads` (ro NFS from seedbox, `modules/media/seedbox-downloads.nix`) |
 
 See also: [manual-install-guide.md](manual-install-guide.md) (from-ISO OS + ZFS
 setup), [updating.md](updating.md) (flake/Caddy/kernel updates), and
