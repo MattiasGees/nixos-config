@@ -12,9 +12,12 @@ sonarr:
     base_url: http://localhost:8989
     api_key: !env_var SONARR_API_KEY
 
-    include:
-      # Quality definitions (per-quality size limits) — recommended by TRaSH.
-      - template: sonarr-quality-definition-series
+    # Quality definitions (per-quality size limits) — the native recyclarr key,
+    # NOT a config-templates `include` (recyclarr's bundled includes come up empty
+    # on this box, which breaks any `- template:` reference). Profiles + custom
+    # formats below come from the guide by trash_id, so no includes are needed.
+    quality_definition:
+      type: series
 
     quality_profiles:
       - trash_id: 72dae194fc92bf828f32cde7744e51a1 # WEB-1080p (size-first default)
