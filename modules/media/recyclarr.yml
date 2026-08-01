@@ -24,11 +24,13 @@ sonarr:
       - trash_id: c4cadd6b35b95f62c3d47a408e53e2f7 # WEB-2160p (Combined): prefer 4K, fall back to 1080p
 
     custom_formats:
-      # Prefer x265 on WEB-1080p: the profile import brings x265 (HD) in at TRaSH's
-      # default -10000 (reject); flip it to +150 so the small HEVC release beats the
-      # h264 WEB-DL among reputable groups. (WEB-2160p is left at TRaSH defaults.)
+      # Prefer x265 on WEB-1080p, size-first: the profile import brings x265 (HD)
+      # in at TRaSH's default -10000 (reject); set it to +2000 — high enough to
+      # beat even a top-tier h264 WEB-DL group (e.g. NTb scored ~+1775), so ANY
+      # non-junk x265 wins. LQ / Upscaled / BR-DISK stay at -10000, so genuinely
+      # bad x265 is still blocked. (WEB-2160p is left at TRaSH defaults.)
       - trash_ids:
           - 47435ece6b99a0b477caf360e79ba0bb # x265 (HD)
         assign_scores_to:
           - name: WEB-1080p
-            score: 150
+            score: 2000
