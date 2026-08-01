@@ -343,25 +343,28 @@ installed so you can choose per series:
 
 ### Run it
 
-The config uses `!env_var SONARR_API_KEY` (no secret in git), so provide the key
-at sync time. Get it from **Sonarr → Settings → General → API Key**.
+The config uses `!env_var SONARR_API_KEY` / `!env_var RADARR_API_KEY` (no secret
+in git), so provide both keys at sync time. Get each from **Settings → General →
+API Key** in Sonarr / Radarr.
 
 ```bash
 # Dry run first — validates the config and shows changes WITHOUT applying:
-SONARR_API_KEY=<key> recyclarr sync --config /etc/recyclarr/recyclarr.yml --preview
+SONARR_API_KEY=<key> RADARR_API_KEY=<key> recyclarr sync --config /etc/recyclarr/recyclarr.yml --preview
 # Apply:
-SONARR_API_KEY=<key> recyclarr sync --config /etc/recyclarr/recyclarr.yml
+SONARR_API_KEY=<key> RADARR_API_KEY=<key> recyclarr sync --config /etc/recyclarr/recyclarr.yml
 ```
 
-Then in Sonarr, set each series' **Quality Profile**: `WEB-1080p x265` for size-first,
-`WEB-1080p` for h264, `WEB-2160p (Combined)` for the ones you want in 4K. Re-run `recyclarr sync` after
-editing the config (or to pull TRaSH updates) — it's idempotent.
+Then set each item's **Quality Profile**:
+- **Sonarr:** `WEB-1080p x265` (size-first), `WEB-1080p` (h264), or `WEB-2160p (Combined)` (4K).
+- **Radarr:** `HD Bluray + WEB x265` (size-first), `HD Bluray + WEB` (h264), or `UHD Bluray + WEB` (4K).
+
+Re-run `recyclarr sync` after editing the config (or to pull TRaSH updates) — it's idempotent.
 
 Notes:
-- **Tune the x265 bias:** if a top-tier h264 still beats x265 in `--preview`, bump
-  the `+150` in `modules/media/recyclarr.yml` (e.g. `+500`).
-- **Radarr (movies):** not wired yet — the same pattern with Radarr's own
-  `x265 (HD)` trash_id and movie templates would add it.
+- **Tune the x265 bias:** the `x265 (HD)` override is **+2000** (size-first — beats even
+  a top-tier h264 group). Adjust in `modules/media/recyclarr.yml` if you want it looser.
+- **Instance names are global:** Sonarr is `main`, Radarr is `movies` — recyclarr
+  rejects the whole config if two instances share a name.
 
 ---
 

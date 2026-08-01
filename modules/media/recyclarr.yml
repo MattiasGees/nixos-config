@@ -42,3 +42,35 @@ sonarr:
         assign_scores_to:
           - name: WEB-1080p x265
             score: 2000
+
+# Radarr (movies) — same idea: a default HD profile (h264-first), an x265-favoured
+# copy of it, and the UHD profile. The two HD profiles reuse one trash_id, so each
+# needs an explicit `name:` (recyclarr silently skips the instance otherwise).
+radarr:
+  # Instance name must be unique across ALL services (can't reuse sonarr's "main").
+  movies:
+    base_url: http://localhost:7878
+    api_key: !env_var RADARR_API_KEY
+
+    quality_definition:
+      type: movie
+
+    quality_profiles:
+      # Default HD Bluray + WEB — untweaked TRaSH profile (h264-first).
+      - trash_id: d1d67249d3890e49bc12e275d989a7e9
+        name: HD Bluray + WEB
+      # Same TRaSH base, size-first — the x265 (HD) boost below applies to THIS one.
+      - trash_id: d1d67249d3890e49bc12e275d989a7e9
+        name: HD Bluray + WEB x265
+      # UHD Bluray + WEB (4K) — default, untweaked.
+      - trash_id: 64fb5f9858489bdac2af690e27c8f42f
+
+    custom_formats:
+      # Size-first x265 on "HD Bluray + WEB x265" only: flip x265 (HD) from TRaSH's
+      # default -10000 to +2000. NOTE: Radarr's x265 (HD) trash_id differs from
+      # Sonarr's. The plain "HD Bluray + WEB" keeps TRaSH defaults (h264-first).
+      - trash_ids:
+          - dc98083864ea246d05a42df0d05f81cc # x265 (HD)
+        assign_scores_to:
+          - name: HD Bluray + WEB x265
+            score: 2000
