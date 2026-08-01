@@ -54,13 +54,15 @@ radarr:
 
     quality_definition:
       type: movie
-      # Allow smaller x265 encodes. TRaSH's Bluray-1080p floor is 50.8 MB/min
-      # (~8.1 GB min for a ~160-min movie), which rejects a legit ~40 MB/min x265.
-      # Lower it to 15 MB/min. Sizes are MB-per-minute; this is Radarr-wide (all
-      # profiles) but only relaxes the floor — it doesn't force small files.
+      # Bluray-1080p size floor. TRaSH's default is 50.8 MB/min (~8.1 GB for a
+      # ~160-min movie). Set to 35 MB/min: rejects tiny low-bitrate x265 (e.g.
+      # B3YG1R 3.46 GB / 169 min ≈ 21 MB/min) while keeping a good encode (e.g.
+      # Chivaman 8.8 GB / 169 min ≈ 53 MB/min). Units are MB-per-minute, so this
+      # is runtime-normalised. Radarr-wide (all profiles). Don't push much past
+      # ~38 or you'll start rejecting decent efficient x265 (~40 MB/min).
       qualities:
         - name: Bluray-1080p
-          min: 15
+          min: 35
 
     quality_profiles:
       # Default HD Bluray + WEB — untweaked TRaSH profile (h264-first).
