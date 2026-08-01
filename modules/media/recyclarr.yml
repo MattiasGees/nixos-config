@@ -81,3 +81,24 @@ radarr:
         assign_scores_to:
           - name: HD Bluray + WEB x265
             score: 2000
+
+      # Favour HDR + Atmos on the x265 profile. The "HD Bluray + WEB" profile scores
+      # these 0 (TRaSH only rewards HDR/Atmos at UHD), so add them here. No explicit
+      # score => recyclarr applies each CF's guide default: HDR +500, DV +1000,
+      # HDR10+ +100, DD+ Atmos +3000, TrueHD Atmos +5000. An HDR/Atmos x265 (e.g.
+      # SM737) now beats a plain SDR x265 (Chivaman) — that's a bigger file, and HDR
+      # only helps on HDR-capable playback.
+      - trash_ids:
+          - 493b6d1dbec3c3364c59d7607f7e3405 # HDR
+          - b337d6812e06c200ec9a2d3cfa9d20a7 # DV Boost (Dolby Vision)
+          - caa37d0df9c348912df1fb1d88f9273a # HDR10+ Boost
+          - 1af239278386be2919e1bcee0bde047e # DD+ ATMOS
+          - 496f355514737f7d83bf7aa4d24f8169 # TrueHD ATMOS
+        assign_scores_to:
+          - name: HD Bluray + WEB x265
+      # Safety: reject Dolby-Vision-only (no HDR10 fallback) — washed-out on non-DoVi
+      # screens. Guide default -10000.
+      - trash_ids:
+          - 923b6abef9b17f937fab56cfcf89e1f1 # DV (w/o HDR fallback)
+        assign_scores_to:
+          - name: HD Bluray + WEB x265
