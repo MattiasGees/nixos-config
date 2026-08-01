@@ -328,14 +328,15 @@ criteria.
 a **declarative config** at `/etc/recyclarr/recyclarr.yml` (managed by
 `modules/media/recyclarr.nix`). There's **no timer** — you run it by hand.
 
-Profiles it installs:
-- **WEB-1080p** — the size-first default. TRaSH's WEB-1080p profile, but with the
-  `x265 (HD)` custom format flipped from TRaSH's default `-10000` to **`+150`**, so
-  a small HEVC release (e.g. `x265-ELiTE`) wins over the big h264 WEB-DL among
+Both profiles are imported straight from TRaSH by `trash_id` (recyclarr pulls the
+full profile — qualities, score set, and its custom formats + scores):
+- **WEB-1080p** (`72dae194…`) — the size-first default. Imported as-is, then the
+  `x265 (HD)` custom format is flipped from TRaSH's default `-10000` to **`+150`**,
+  so a small HEVC release (e.g. `x265-ELiTE`) wins over the big h264 WEB-DL among
   reputable groups.
-- **WEB-2160p** — "Combined": prefers 4K, falls back to 1080p. Left at TRaSH
-  defaults. **Use sparingly** — 4K files are large and will dominate the seedbox
-  disk (and its eviction), so assign it only to select series, not the whole library.
+- **WEB-2160p (Combined)** (`c4cadd6b…`) — prefers 4K, falls back to 1080p. Left at
+  TRaSH defaults. **Use sparingly** — 4K files are large and will dominate the
+  seedbox disk (and its eviction), so assign it only to select series.
 
 ### Run it
 
@@ -350,8 +351,8 @@ SONARR_API_KEY=<key> recyclarr sync --config /etc/recyclarr/recyclarr.yml
 ```
 
 Then in Sonarr, set each series' **Quality Profile**: `WEB-1080p` for most,
-`WEB-2160p` for the ones you want in 4K. Re-run `recyclarr sync` after editing the
-config (or to pull TRaSH updates) — it's idempotent.
+`WEB-2160p (Combined)` for the ones you want in 4K. Re-run `recyclarr sync` after
+editing the config (or to pull TRaSH updates) — it's idempotent.
 
 Notes:
 - **Tune the x265 bias:** if a top-tier h264 still beats x265 in `--preview`, bump
