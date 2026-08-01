@@ -81,3 +81,15 @@ radarr:
         assign_scores_to:
           - name: HD Bluray + WEB x265
             score: 2000
+
+      # Downrate HDR at 1080p — HDR is really a 4K feature (a "1080p HDR" release is
+      # just a UHD downscale). Penalise it here (-500 each) so a clean SDR x265
+      # beats a 1080p HDR downscale; get HDR at 4K via "UHD Bluray + WEB". It's a
+      # deprioritise, not a reject — an HDR-only 1080p release still nets +500.
+      - trash_ids:
+          - 493b6d1dbec3c3364c59d7607f7e3405 # HDR
+          - b337d6812e06c200ec9a2d3cfa9d20a7 # DV Boost (Dolby Vision)
+          - caa37d0df9c348912df1fb1d88f9273a # HDR10+ Boost
+        assign_scores_to:
+          - name: HD Bluray + WEB x265
+            score: -500
