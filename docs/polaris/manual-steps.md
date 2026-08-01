@@ -366,6 +366,33 @@ Notes:
 - **Instance names are global:** Sonarr is `main`, Radarr is `movies` — recyclarr
   rejects the whole config if two instances share a name.
 
+### 9a. Propers & Repacks — let the CF scores actually decide (manual, per app)
+
+**This is required for the x265/size scoring above to win — without it a Repack
+overrides everything.** Radarr/Sonarr compare a release's *revision*
+(Proper/Repack) as part of **quality**, which ranks **above** custom-format
+score. So with the default **Prefer and Upgrade**, a Repack wins the quality
+comparison *before* CF scores are ever consulted — e.g. a Repack **x264** release
+(+2005) is grabbed over a plain **x265** one (+2200), silently defeating the whole
+x265 bias.
+
+Fix it once, in **both** apps — **Settings → Media Management → File Management →
+Propers and Repacks** → set to **`Do not Prefer`**:
+
+| App | Setting | Value |
+|---|---|---|
+| Radarr | Media Management → Propers and Repacks | `Do not Prefer` |
+| Sonarr | Media Management → Propers and Repacks | `Do not Prefer` |
+
+Now the revision no longer short-circuits the decision; ranking falls through to
+CF score, so the recyclarr scores above are authoritative (x265 +2200 beats the
+Repack +2005). You don't lose repacks entirely: the TRaSH profiles imported by
+`trash_id` already score the **Repack/Proper** custom formats a few points, so a
+genuine fix still edges out a broken original — it just can't beat a real
+codec/quality lead anymore. This is a Radarr/Sonarr **media-management** setting,
+**not** managed by recyclarr, so it must be set by hand (and re-checked if you
+ever reset an app's DB).
+
 ---
 
 ## Quick reference
