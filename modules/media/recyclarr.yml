@@ -93,3 +93,19 @@ radarr:
         assign_scores_to:
           - name: HD Bluray + WEB x265
             score: -500
+
+      # Audio tiebreakers among otherwise-equal x265 releases:
+      # prefer 7.1 over 5.1 (these were all +2000 because audio scored 0 here).
+      - trash_ids:
+          - e77382bcfeba57cb83744c9c5449b401 # 7.1 Surround
+        assign_scores_to:
+          - name: HD Bluray + WEB x265
+            score: 200
+      # Downrate Atmos at 1080p (same "belongs at 4K" logic as HDR), so a plain
+      # 7.1 (Chivaman) beats a 7.1 Atmos (Ralphy). UHD keeps Atmos rewarded.
+      - trash_ids:
+          - 1af239278386be2919e1bcee0bde047e # DD+ ATMOS
+          - 496f355514737f7d83bf7aa4d24f8169 # TrueHD ATMOS
+        assign_scores_to:
+          - name: HD Bluray + WEB x265
+            score: -100
