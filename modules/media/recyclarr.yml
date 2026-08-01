@@ -1,0 +1,52 @@
+# Declarative Recyclarr config — installed to /etc/recyclarr/recyclarr.yml by
+# modules/media/recyclarr.nix. API keys stay OUT of the Nix store via !env_var
+# (provide SONARR_API_KEY at sync time). No timer, by choice — run manually:
+#   SONARR_API_KEY=<key> recyclarr sync --config /etc/recyclarr/recyclarr.yml --preview
+#   SONARR_API_KEY=<key> recyclarr sync --config /etc/recyclarr/recyclarr.yml
+#
+# Profiles pushed into Sonarr:
+#   WEB-1080p — size-first default; x265 (HD) flipped from TRaSH's -10000 to +150
+#               so the small HEVC release wins among reputable groups.
+#   WEB-2160p — "Combined": prefers 4K, falls back to 1080p (TRaSH default scoring).
+sonarr:
+  main:
+    base_url: http://localhost:8989
+    api_key: !env_var SONARR_API_KEY
+
+    include:
+      - template: sonarr-quality-definition-series
+      # Default profile: the standard TRaSH WEB-1080p profile + its custom formats.
+      - template: sonarr-v4-quality-profile-web-1080p
+      - template: sonarr-v4-custom-formats-web-1080p
+      # 2160p custom formats (the profile itself is hand-defined below as Combined).
+      - template: sonarr-v4-custom-formats-web-2160p
+
+    quality_profiles:
+      # "WEB-2160p (Combined)" — prefer 4K, fall back to 1080p. Recyclarr ships no
+      # include for the Combined variant, so define it here (mirrors TRaSH trash_id
+      # c4cadd6b35b95f62c3d47a408e53e2f7). Named "WEB-2160p" so the 2160p custom-
+      # format scores from the include above attach to it.
+      - name: WEB-2160p
+        reset_unmatched_scores:
+          enabled: true
+        upgrade:
+          allowed: true
+          until_quality: WEB 2160p
+          until_score: 10000
+        min_format_score: 0
+        quality_sort: top
+        qualities:
+          - name: WEB 2160p
+            qualities: [WEBDL-2160p, WEBRip-2160p]
+          - name: WEB 1080p
+            qualities: [WEBDL-1080p, WEBRip-1080p]
+
+    custom_formats:
+      # Prefer x265 on WEB-1080p: flip TRaSH's default -10000 for x265 (HD) to +150,
+      # so the small HEVC release beats the h264 WEB-DL among reputable groups.
+      # (WEB-2160p is left at TRaSH defaults; its 1080p fallback stays h264-first.)
+      - trash_ids:
+          - 47435ece6b99a0b477caf360e79ba0bb # x265 (HD)
+        assign_scores_to:
+          - name: WEB-1080p
+            score: 150
