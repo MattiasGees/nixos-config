@@ -1,0 +1,31 @@
+# Declarative Recyclarr config — installed to /etc/recyclarr/recyclarr.yml by
+# modules/media/recyclarr.nix. API keys stay OUT of the Nix store via !env_var
+# (provide SONARR_API_KEY at sync time). No timer, by choice — run manually:
+#   SONARR_API_KEY=<key> recyclarr sync --config /etc/recyclarr/recyclarr.yml --preview
+#   SONARR_API_KEY=<key> recyclarr sync --config /etc/recyclarr/recyclarr.yml
+#
+# Both profiles are imported straight from TRaSH by trash_id — recyclarr pulls the
+# full profile (qualities, quality groups, score set, and its custom formats +
+# scores). We then override just one score to make WEB-1080p size-first.
+sonarr:
+  main:
+    base_url: http://localhost:8989
+    api_key: !env_var SONARR_API_KEY
+
+    include:
+      # Quality definitions (per-quality size limits) — recommended by TRaSH.
+      - template: sonarr-quality-definition-series
+
+    quality_profiles:
+      - trash_id: 72dae194fc92bf828f32cde7744e51a1 # WEB-1080p (size-first default)
+      - trash_id: c4cadd6b35b95f62c3d47a408e53e2f7 # WEB-2160p (Combined): prefer 4K, fall back to 1080p
+
+    custom_formats:
+      # Prefer x265 on WEB-1080p: the profile import brings x265 (HD) in at TRaSH's
+      # default -10000 (reject); flip it to +150 so the small HEVC release beats the
+      # h264 WEB-DL among reputable groups. (WEB-2160p is left at TRaSH defaults.)
+      - trash_ids:
+          - 47435ece6b99a0b477caf360e79ba0bb # x265 (HD)
+        assign_scores_to:
+          - name: WEB-1080p
+            score: 150
