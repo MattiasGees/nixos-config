@@ -328,12 +328,15 @@ criteria.
 a **declarative config** at `/etc/recyclarr/recyclarr.yml` (managed by
 `modules/media/recyclarr.nix`). There's **no timer** — you run it by hand.
 
-Both profiles are imported straight from TRaSH by `trash_id` (recyclarr pulls the
-full profile — qualities, score set, and its custom formats + scores):
-- **WEB-1080p** (`72dae194…`) — the size-first default. Imported as-is, then the
-  `x265 (HD)` custom format is flipped from TRaSH's default `-10000` to **`+150`**,
-  so a small HEVC release (e.g. `x265-ELiTE`) wins over the big h264 WEB-DL among
-  reputable groups.
+Profiles are imported straight from TRaSH by `trash_id` (recyclarr pulls the full
+profile — qualities, score set, and its custom formats + scores). **Three** are
+installed so you can choose per series:
+- **WEB-1080p** (`72dae194…`) — the **default**, untweaked TRaSH profile → h264-first
+  (x265 stays at TRaSH's `-10000`).
+- **WEB-1080p x265** (same `72dae194…`, renamed) — **size-first**: `x265 (HD)` flipped
+  from `-10000` to **`+2000`**, high enough to beat even a top-tier h264 group (e.g.
+  `NTb ~+1775`), so any non-junk x265 wins. (Both 1080p profiles reuse one trash_id,
+  so each needs an explicit `name:` in `recyclarr.yml`.)
 - **WEB-2160p (Combined)** (`c4cadd6b…`) — prefers 4K, falls back to 1080p. Left at
   TRaSH defaults. **Use sparingly** — 4K files are large and will dominate the
   seedbox disk (and its eviction), so assign it only to select series.
@@ -350,8 +353,8 @@ SONARR_API_KEY=<key> recyclarr sync --config /etc/recyclarr/recyclarr.yml --prev
 SONARR_API_KEY=<key> recyclarr sync --config /etc/recyclarr/recyclarr.yml
 ```
 
-Then in Sonarr, set each series' **Quality Profile**: `WEB-1080p` for most,
-`WEB-2160p (Combined)` for the ones you want in 4K. Re-run `recyclarr sync` after
+Then in Sonarr, set each series' **Quality Profile**: `WEB-1080p x265` for size-first,
+`WEB-1080p` for h264, `WEB-2160p (Combined)` for the ones you want in 4K. Re-run `recyclarr sync` after
 editing the config (or to pull TRaSH updates) — it's idempotent.
 
 Notes:

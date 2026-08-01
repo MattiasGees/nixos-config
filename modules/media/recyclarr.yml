@@ -4,9 +4,11 @@
 #   SONARR_API_KEY=<key> recyclarr sync --config /etc/recyclarr/recyclarr.yml --preview
 #   SONARR_API_KEY=<key> recyclarr sync --config /etc/recyclarr/recyclarr.yml
 #
-# Both profiles are imported straight from TRaSH by trash_id — recyclarr pulls the
-# full profile (qualities, quality groups, score set, and its custom formats +
-# scores). We then override just one score to make WEB-1080p size-first.
+# Profiles are imported straight from TRaSH by trash_id — recyclarr pulls the full
+# profile (qualities, quality groups, score set, and its custom formats + scores).
+# The two 1080p profiles share one trash_id (both need an explicit `name:`, or
+# recyclarr silently skips the instance), so you can pick per series between
+# h264-first (WEB-1080p) and size-first x265 (WEB-1080p x265).
 sonarr:
   main:
     base_url: http://localhost:8989
@@ -20,15 +22,23 @@ sonarr:
       type: series
 
     quality_profiles:
-      - trash_id: 72dae194fc92bf828f32cde7744e51a1 # WEB-1080p (size-first default)
-      - trash_id: c4cadd6b35b95f62c3d47a408e53e2f7 # WEB-2160p (Combined): prefer 4K, fall back to 1080p
+      # Default WEB-1080p — untweaked TRaSH profile (h264-first). Explicit name is
+      # required because the next profile reuses the same trash_id.
+      - trash_id: 72dae194fc92bf828f32cde7744e51a1
+        name: WEB-1080p
+      # Same TRaSH base, size-first — the x265 (HD) boost below applies to THIS one.
+      - trash_id: 72dae194fc92bf828f32cde7744e51a1
+        name: WEB-1080p x265
+      # WEB-2160p (Combined): prefer 4K, fall back to 1080p.
+      - trash_id: c4cadd6b35b95f62c3d47a408e53e2f7
 
     custom_formats:
-      # Prefer x265 on WEB-1080p: the profile import brings x265 (HD) in at TRaSH's
-      # default -10000 (reject); flip it to +150 so the small HEVC release beats the
-      # h264 WEB-DL among reputable groups. (WEB-2160p is left at TRaSH defaults.)
+      # Size-first x265 on the "WEB-1080p x265" profile ONLY: flip x265 (HD) from
+      # TRaSH's default -10000 to +2000 so any non-junk x265 beats even a top-tier
+      # h264 group (e.g. NTb ~+1775). The plain "WEB-1080p" keeps TRaSH defaults
+      # (x265 stays -10000 => h264-first), so you choose per series.
       - trash_ids:
           - 47435ece6b99a0b477caf360e79ba0bb # x265 (HD)
         assign_scores_to:
-          - name: WEB-1080p
-            score: 150
+          - name: WEB-1080p x265
+            score: 2000
