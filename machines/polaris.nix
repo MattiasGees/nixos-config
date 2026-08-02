@@ -11,6 +11,7 @@
     ../modules/media/sonarr.nix
     ../modules/media/radarr.nix
     ../modules/media/prowlarr.nix
+    ../modules/media/bazarr.nix
     ../modules/media/caddy.nix
     ../modules/media/seedbox-downloads.nix
     ../modules/media/recyclarr.nix
