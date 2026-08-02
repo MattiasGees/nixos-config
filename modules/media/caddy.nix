@@ -46,6 +46,7 @@ in
     virtualHosts."sonarr.polaris.mattiasgees.be".extraConfig = proxy 8989;
     virtualHosts."radarr.polaris.mattiasgees.be".extraConfig = proxy 7878;
     virtualHosts."prowlarr.polaris.mattiasgees.be".extraConfig = proxy 9696;
+    virtualHosts."bazarr.polaris.mattiasgees.be".extraConfig = proxy 6767;
   };
 
   # AWS creds for Route53 (AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY / AWS_REGION),

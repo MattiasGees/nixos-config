@@ -395,6 +395,41 @@ ever reset an app's DB).
 
 ---
 
+## 10. Subtitles (Bazarr)
+
+Sonarr and Radarr **don't do subtitles** — they only fetch the video. `bazarr`
+(`modules/media/bazarr.nix`, `https://bazarr.polaris.mattiasgees.be`, port 6767)
+reads their libraries and downloads subtitles from online providers, writing
+**sidecar files** (`Movie.en.srt`, `Movie.nl.srt`, `Movie.pt-BR.srt`) next to each
+video. Plex's **Local Media Assets** agent (on by default, no Plex Pass needed)
+picks them up automatically — nothing to configure on the Plex side.
+
+Nix handles the service, TLS, and permissions; the rest lives in Bazarr's own
+SQLite DB (nixpkgs has no declarative config for it), so configure it once in the
+web UI:
+
+1. **Connect the apps** — Settings → **Sonarr**: address `localhost`, port `8989`,
+   its API key. Settings → **Radarr**: `localhost`, port `7878`, its API key.
+   (Same API keys as recyclarr — Settings → General → API Key in each app.) No
+   path mapping: Bazarr sees the same `/srv/media/{Series,Movies}` the *arr do.
+2. **Languages Profile** — Settings → Languages → create a profile with **English**,
+   **Dutch (nl)**, and **Brazilian Portuguese (pt-BR)** — pick *Brazilian*
+   Portuguese specifically, Bazarr lists it separately from `pt`. Set it as the
+   **default** for both Sonarr and Radarr (Settings → Sonarr/Radarr → Default
+   Language Profile), and optionally enable **Series/Movies → Edit → mass-assign**
+   for the existing library.
+3. **Providers** — Settings → Providers → add at least one (e.g. **OpenSubtitles.com**,
+   free account; Podnapisi needs no account). Credentials are entered in the UI,
+   so **no secrets in git**.
+4. **(optional) Subtitle sync** — Settings → Subtitles → enable "Automatic
+   Subtitles Synchronization" so subs are re-timed to the actual video.
+
+Config/DB lives on the fast mirror at `/srv/fast/appdata/bazarr` (created
+automatically by the module). Bazarr runs as user `bazarr` in the `media` group,
+which is what lets it drop sidecars alongside the media.
+
+---
+
 ## Quick reference
 
 | Thing | Value |
@@ -403,7 +438,8 @@ ever reset an app's DB).
 | Tailnet IP | `100.93.157.59` |
 | Seedbox public IP | `85.17.236.99` |
 | Route53 zone | `mattiasgees.be` (`Z2570BL3CYXE68`) |
-| App URLs | `https://{sonarr,radarr,prowlarr}.polaris.mattiasgees.be` |
+| App URLs | `https://{sonarr,radarr,prowlarr,bazarr}.polaris.mattiasgees.be` |
+| Bazarr (subtitles) | `:6767`, DB `/srv/fast/appdata/bazarr`, langs en+nl+pt-BR |
 | App config | `/srv/fast/appdata/<app>` (fast NVMe mirror) |
 | Media roots | `/srv/media/{Series,Movies,Downloads}` (`media` group, setgid) |
 | ZFS key | `/etc/zfs/keys/polaris.key` (**back up offline**) |
