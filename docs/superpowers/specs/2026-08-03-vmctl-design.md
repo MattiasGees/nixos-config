@@ -226,22 +226,84 @@ overriding the input against a local checkout:
 
 ## Testing / verification
 
-No test suite exists in this repo — verification is a successful build plus an
-on-host smoke test (per `CLAUDE.md`).
+Testing is a first-class requirement. The strategy is a test pyramid whose
+foundation is a **testability seam in the Go code** (see below); tiers 1–3 run
+automatically in CI, tier 5 is an on-host runbook on polaris, and tier 4
+(`nixosTest`) is **deferred to a later pass** (see future phases). Per the TDD
+skill, tier 1–2 tests are written **before** the implementation they cover.
 
-1. **`vmctl` repo:** `go test` (unit tests for pure logic — arg/flag parsing,
-   cloud-init YAML rendering, metadata encode/decode) in CI; `nix build
-   .#vmctl` and `.#nixos-base` succeed.
-2. **`nixos-config`:** `nix build` the polaris toplevel with the vmctl input
-   wired in — must succeed.
-3. On-host smoke test:
-   - Apply the bridge change; confirm polaris keeps `192.168.1.50` + route + SSH.
-   - `vmctl create t-ubuntu --os ubuntu --ip 192.168.1.201`; confirm it boots,
-     has exactly that IP, and accepts the SSH key (`vmctl ssh t-ubuntu`).
-   - Re-run the same `create` → confirm no-op.
-   - `vmctl create t-nixos --os nixos --ip 192.168.1.202`; same checks.
-   - `list`/`info` show correct data; `stop`/`start` preserve disk + IP;
-     `destroy` removes domain + overlay + seed.
+### Design constraint: the testability seam
+
+The tool is structured so that everything except the actual external process
+calls is pure and unit-testable:
+
+- **Pure functions** for input validation, cloud-init artifact rendering
+  (user-data / meta-data / network-config), `<metadata>` XML marshal/unmarshal,
+  config resolution (env-var defaults ← flag overrides), and VMROOT path
+  derivation.
+- A single **`Runner` interface** — `Run(ctx, name string, args ...string)
+  (stdout, stderr string, err error)` — through which *all* calls to
+  `virt-install`/`virsh`/`qemu-img`/`cloud-localds` go. Production uses an
+  `os/exec` implementation; tests inject a **fake runner** that records the argv
+  it was asked to run and returns canned stdout/stderr/exit codes. Without this
+  seam almost nothing is testable; with it, the orchestration logic is.
+
+### Tier 1 — Unit tests (CI, `go test`) — the bulk
+
+- Input validation: name rules; `--ip` a valid in-range IPv4; `--cpu` > 0;
+  `--mem`/`--disk` size parsing; `--os ∈ {ubuntu, nixos}`.
+- **Golden-file** cloud-init rendering for both OSes across a couple of IPs
+  (user-data, meta-data, network-config) — fixtures under `testdata/`.
+- `<metadata>` XML round-trip (encode → decode → equal).
+- Config precedence: `VMCTL_*` env defaults overridden by explicit flags.
+- VMROOT path derivation (overlay/seed/base paths from a name).
+
+### Tier 2 — Command construction & output parsing (CI, `go test`)
+
+- Assert the **exact argv** built for `virt-install`, `qemu-img create`, and
+  `virsh metadata` from given inputs (via the fake runner, nothing executed).
+- **Fixture-driven parsers:** feed captured real outputs (`virsh list --all`,
+  `virsh dumpxml <dom>`, `qemu-img info --output=json`) into the parsing code
+  and assert the resulting structs — this backs `list`/`info`.
+- Orchestration with the fake runner: idempotent `create` (domain exists →
+  no-op success), **cleanup-on-failure** (define fails → overlay + seed removed),
+  and `destroy` step ordering.
+
+### Tier 3 — libvirt `test://` driver integration (CI, gated)
+
+Behind a build tag / env gate, run real `virsh` against libvirt's built-in
+**mock driver** (`LIBVIRT_DEFAULT_URI=test:///default`): exercises the actual
+define → list → metadata → start → stop → undefine lifecycle wiring without any
+KVM. Catches real `virsh` CLI incompatibilities the fakes cannot. (Does not
+boot guests or run cloud-init — that is tier 5.)
+
+### Tier 4 — `nixosTest` — DEFERRED
+
+Not built in this phase (see future phases). When added: a flake check booting
+libvirtd + vmctl and driving it against `test://`, plus a `nixos-config` check
+asserting the `br0` result. Until then, the `br0` cutover is verified **by hand
+on polaris** (tier 5).
+
+### Tier 5 — On-host end-to-end (manual runbook on polaris, with KVM)
+
+The irreplaceable real-world check; also where the NixOS+cloud-init static-IP
+risk is retired.
+
+- Apply the bridge change; confirm polaris **keeps `192.168.1.50` + default
+  route + SSH** (do this with console access available).
+- `vmctl create t-ubuntu --os ubuntu --ip 192.168.1.201`; confirm it boots, has
+  exactly that IP, and accepts the SSH key (`vmctl ssh t-ubuntu`).
+- **Reboot the guest** → confirm the IP is unchanged (consistency guarantee).
+- Re-run the same `create` → confirm no-op.
+- `vmctl create t-nixos --os nixos --ip 192.168.1.202`; same checks.
+- `list`/`info` show correct data; `stop`/`start` preserve disk + IP;
+  `destroy` removes domain + overlay + seed.
+
+### CI hygiene (vmctl repo)
+
+`gofmt`/`go vet`/`golangci-lint` plus `nix build .#vmctl` and `.#nixos-base` in
+the vmctl repo's GitHub Actions; `nix build` of the polaris toplevel in
+`nixos-config` once the input is wired in.
 
 ## Known risks / open validation points
 
@@ -261,6 +323,8 @@ on-host smoke test (per `CLAUDE.md`).
 
 ## Out-of-scope future phases (noted, not built)
 
+- **Tier 4 `nixosTest` checks** (deferred, see Testing): a vmctl-lifecycle
+  check against `test://` and a `br0` bridge-config assertion for `nixos-config`.
 - GPU passthrough (IOMMU already prepared on polaris).
 - A declarative `apply` mode if imperative use ever proves insufficient.
 - Additional base OSes (Debian, Fedora) — the base-image mechanism generalises.
