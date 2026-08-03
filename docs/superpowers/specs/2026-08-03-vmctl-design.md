@@ -205,6 +205,47 @@ overriding the input against a local checkout:
 `nixos-rebuild … --override-input vmctl path:/home/mattias/git/vmctl`
 (or a temporary `path:` input). Pin to the pushed ref once stable.
 
+## Component 7 — CI/CD (GitHub Actions, `vmctl` repo)
+
+All CI lives in the `vmctl` repo (this `nixos-config` repo stays CI-less, per
+`CLAUDE.md`).
+
+### PR / push CI — `.github/workflows/ci.yml`
+
+Triggers: `pull_request` and push to `main`. **Every PR must go green before
+merge.** Jobs:
+
+- **Lint:** `gofmt -l` (fail on diff), `go vet ./...`, `golangci-lint run`.
+- **Unit + argv/parse (tiers 1–2):** `go test ./...` — pure logic, golden
+  files, and the fake-runner orchestration tests. No system deps.
+- **libvirt `test://` (tier 3):** `apt-get install -y libvirt-clients`, then run
+  the gated integration tests against `test:///default` (no KVM required, so it
+  runs on a stock `ubuntu-latest` runner).
+- **Nix build:** Nix installer action + binary cache, then `nix build .#vmctl`
+  to prove the package + wrapper build. (`.#nixos-base` is heavy — built on
+  release / on demand, not on every PR.)
+
+### Release CI — `.github/workflows/release.yml`
+
+Trigger: pushing a semver tag `v*`. Uses **GoReleaser** to build, archive, and
+publish to the GitHub Release in one step:
+
+- **Build matrix:** `linux/amd64`, `linux/arm64`, `darwin/amd64`,
+  `darwin/arm64`. (Windows excluded.) `CGO_ENABLED=0`, version/commit/date
+  stamped via `-ldflags`.
+- **Artifacts:** per-platform `.tar.gz` archives, a `checksums.txt`
+  (sha256), and optional `.deb`/`.rpm` (nfpm) for the Linux targets. All
+  uploaded to the GitHub Release; GoReleaser generates the changelog.
+- **Runtime caveat, documented in the release notes:** the `darwin/*` binaries
+  compile and run but cannot drive libvirt locally (no `virsh`/`virt-install`
+  on macOS) — the tool is functional only on a Linux libvirt host. They are
+  provided for convenience/future remote-libvirt use.
+- **Not a release artifact:** `nixos-base.qcow2` is large and consumed via the
+  flake by store path, so it is *not* attached to GitHub Releases.
+
+Nix consumers keep pinning the flake input to a tag/commit; the archives are a
+bonus for non-Nix use.
+
 ## Data / metadata model
 
 - **Source of truth:** libvirt domain definitions on polaris.
@@ -299,11 +340,11 @@ risk is retired.
 - `list`/`info` show correct data; `stop`/`start` preserve disk + IP;
   `destroy` removes domain + overlay + seed.
 
-### CI hygiene (vmctl repo)
+### Where these run
 
-`gofmt`/`go vet`/`golangci-lint` plus `nix build .#vmctl` and `.#nixos-base` in
-the vmctl repo's GitHub Actions; `nix build` of the polaris toplevel in
-`nixos-config` once the input is wired in.
+Tiers 1–3 + lint execute on **every PR** via GitHub Actions; releases build
+cross-platform artifacts. See **Component 7 — CI/CD** for the workflow details.
+Tier 5 is the manual on-host runbook on polaris.
 
 ## Known risks / open validation points
 
