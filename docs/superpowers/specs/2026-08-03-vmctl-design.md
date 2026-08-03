@@ -3,8 +3,11 @@
 **Date:** 2026-08-03
 **Status:** Design approved, pending spec review
 **Target host:** `polaris` (x86_64 NixOS server, `192.168.1.50/24`)
-**Repos:** new `github.com/mattiasgees/vmctl` (the Go/Cobra CLI + NixOS base
-image, own CI/releases) consumed by this `nixos-config` repo as a flake input.
+**Repos:** `github.com/MattiasGees/vmctl` (the Go/Cobra CLI + NixOS base image,
+own CI/releases) consumed by this `nixos-config` repo as a flake input. The
+vmctl repo already exists — scaffolded with Apache-2.0 LICENSE, README, and a
+Go `.gitignore`, one initial commit on `main`; local checkout at
+`/Users/mattias/Documents/git/vmctl`. Phase 1 builds on that scaffold.
 
 ## Goal
 
@@ -169,10 +172,11 @@ Required: `<name>`, `--ip`. Defaults: `--os ubuntu`, `--cpu 2`, `--mem 2G`,
 
 ## Component 6 — Packaging & wiring (two repos)
 
-### `github.com/mattiasgees/vmctl` (new repo)
+### `github.com/MattiasGees/vmctl` (existing scaffold)
 
-- **Go module:** the Cobra CLI. Own `go.mod`, `go test`, CI (GitHub Actions:
-  build + test + lint), tagged releases.
+- **Go module:** the Cobra CLI. Add `go.mod`, `go test`, CI (GitHub Actions:
+  build + test + lint), tagged releases. (Apache-2.0 + README + Go `.gitignore`
+  already present.)
 - **`flake.nix`** exposing:
   - `packages.<sys>.vmctl` — the CLI built with `buildGoModule`
     (`vendorHash` maintained). Runtime deps (`libvirt`/`virsh`, `virt-install`,
