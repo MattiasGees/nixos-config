@@ -35,7 +35,10 @@
   # fight the declarative static interface config below.
   networking.networkmanager.enable = lib.mkForce false;
   networking.useDHCP = lib.mkDefault false;
-  networking.interfaces.enp6s0.ipv4.addresses = [
+  # Bridge enp6s0 so KVM guests (vmctl) get first-class LAN addresses. The
+  # host's static IP moves onto br0; enp6s0 becomes a bridge port with no IP.
+  networking.bridges.br0.interfaces = [ "enp6s0" ];
+  networking.interfaces.br0.ipv4.addresses = [
     { address = "192.168.1.50"; prefixLength = 24; }
   ];
   networking.defaultGateway = "192.168.1.1";
