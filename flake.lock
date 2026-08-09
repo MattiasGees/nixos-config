@@ -740,11 +740,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1786265805,
-        "narHash": "sha256-dSX9nDuOaViSU1zUUkLTbPV2tM086OjFu2ZTzbUQqJI=",
+        "lastModified": 1786277042,
+        "narHash": "sha256-OqeknGp0GcpCAUNFPMnnLyJDXjmWcqfyr75a2935OYA=",
         "ref": "main",
-        "rev": "09ac33f51d0d5371ce52b706d57dbbdea1fe2c2b",
-        "revCount": 3,
+        "rev": "27f13ba4b7dc262ffc1b05a08d99ca8301aa45df",
+        "revCount": 5,
         "type": "git",
         "url": "ssh://git@github.com/MattiasGees/vmctl"
       },
