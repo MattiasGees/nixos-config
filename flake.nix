@@ -24,6 +24,14 @@
 
       xremap-flake.url = "github:xremap/nix-flake";
 
+      vmctl = {
+        # vmctl is a PRIVATE repo — use git+ssh (SSH-key auth) rather than
+        # github: (whose API fetcher needs a token for private repos). If vmctl
+        # is ever made public, this can revert to "github:MattiasGees/vmctl".
+        url = "git+ssh://git@github.com/MattiasGees/vmctl?ref=main";
+        inputs.nixpkgs.follows = "nixpkgs-unstable";
+      };
+
       nixpkgs-wayland.inputs.nixpkgs.follows = "nixpkgs";
     };
 
@@ -82,7 +90,11 @@
          # Hand-maintained hardware extras (GPU + ZFS/swap) kept separate so
          # hardware/polaris.nix can be overwritten wholesale from
          # nixos-generate-config, and so the aarch64 VM doesn't inherit them.
-         extraModules = [ ./hardware/polaris-extra.nix ];
+         extraModules = [
+           ./hardware/polaris-extra.nix
+           ./modules/server/vmctl.nix
+           { _module.args.vmctlPackages = inputs.vmctl.packages.${system}; }
+         ];
       };
 
       nixosConfigurations.polaris-vm = mkServer "polaris-vm" rec {

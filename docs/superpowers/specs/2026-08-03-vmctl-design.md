@@ -9,6 +9,21 @@ vmctl repo already exists — scaffolded with Apache-2.0 LICENSE, README, and a
 Go `.gitignore`, one initial commit on `main`; local checkout at
 `/Users/mattias/Documents/git/vmctl`. Phase 1 builds on that scaffold.
 
+> **Authoritative vmctl design lives in the vmctl repo.** The `vmctl` CLI's
+> design and decisions are maintained in `github.com/MattiasGees/vmctl`
+> (`AGENTS.md` + `docs/DESIGN.md`). This document is retained as the historical
+> spec that produced it; for the CLI's current design, refer to that repo. What
+> stays *specific to this repo* is the **polaris integration**:
+> `modules/server/vmctl.nix`, the `br0` bridge (`machines/polaris.nix`), the
+> flake-input wiring, and `docs/polaris/vmctl-runbook.md`.
+
+## Branching / PR targets
+
+- **nixos-config:** work on branch `feat/vmctl` (off `mattias`); the PR merges
+  into **`mattias`**, not `master`.
+- **vmctl:** work on branch `feat/initial-implementation` (off `main`); the PR
+  merges into **`main`**.
+
 ## Goal
 
 An easy, imperative CLI for spinning up throwaway experimentation VMs on
