@@ -3,6 +3,11 @@
 **Date:** 2026-08-03
 **Status:** Design approved, pending spec review
 **Target host:** `polaris` (x86_64 NixOS server, `192.168.1.50/24`)
+**Repos:** `github.com/MattiasGees/vmctl` (the Go/Cobra CLI + NixOS base image,
+own CI/releases) consumed by this `nixos-config` repo as a flake input. The
+vmctl repo already exists — scaffolded with Apache-2.0 LICENSE, README, and a
+Go `.gitignore`, one initial commit on `main`; local checkout at
+`/Users/mattias/Documents/git/vmctl`. Phase 1 builds on that scaffold.
 
 ## Goal
 
@@ -41,6 +46,13 @@ LAN and receive their static IP + SSH key + hostname at first boot via
 **cloud-init** (NoCloud seed ISO). libvirt is the single source of truth;
 OS and IP (which libvirt does not natively track for bridged/static guests)
 are stored in the domain XML `<metadata>` block.
+
+The Go tool is **generic** — it hardcodes no polaris specifics. Environment
+details (bridge name, `$VMROOT`, gateway/DNS, SSH-key source, NixOS base image
+path, Ubuntu image URL+sha) are injected by the `nixos-config` module wrapper
+as environment variables / defaults, overridable per-invocation by flags. This
+keeps the CLI reusable on any libvirt host and confines polaris-specifics to
+`modules/server/vmctl.nix`.
 
 ```
 SSH to polaris ─► vmctl (Go/Cobra)
@@ -88,7 +100,7 @@ referred to here as `$VMROOT`, default target `scratch/vms`):
 $VMROOT/
   base/
     ubuntu-24.04-server-cloudimg-amd64.qcow2   # downloaded, pinned URL + sha256
-    nixos-base.qcow2                            # built from this flake (see §Comp 3)
+    nixos-base.qcow2                            # from vmctl repo's flake (see §Comp 3)
   disks/
     <name>.qcow2                                # per-VM qcow2 OVERLAY, backing = base
   seeds/
@@ -105,13 +117,16 @@ $VMROOT/
 
 - **Ubuntu LTS:** official cloud image, downloaded on first use to `base/`,
   pinned by URL + sha256 checksum, verified before use.
-- **NixOS:** `nixos-base.qcow2` built from this flake via **nixos-generators**
-  (`format = qcow`), defined under `pkgs/vm-images/nixos-base.nix`, with:
+- **NixOS:** `nixos-base.qcow2` built via **nixos-generators** (`format = qcow`)
+  and exposed as a flake package **from the `vmctl` repo** (so the tool ships
+  its own NixOS image recipe, pinned to that repo's nixpkgs), with:
   - `services.cloud-init.enable = true;` (so it consumes the same NoCloud seed),
   - serial console enabled (for `vmctl console`),
   - minimal base (SSH server; user/keys come from cloud-init at boot).
-  Referenced by store path so it is pinned to the repo's nixpkgs. `vmctl`
-  copies it into `base/` on first NixOS create if absent.
+  The `nixos-config` module builds `inputs.vmctl.packages.<sys>.nixos-base` and
+  passes its **store path** to the CLI via `VMCTL_NIXOS_BASE`; on first NixOS
+  create `vmctl` copies it into `base/` if absent. This keeps the image
+  declarative and pinned while leaving the Go tool image-agnostic.
 
 ## Component 4 — Provisioning flow (`vmctl create`)
 
@@ -155,18 +170,85 @@ Required: `<name>`, `--ip`. Defaults: `--os ubuntu`, `--cpu 2`, `--mem 2G`,
 | `stop <name>` | `virsh shutdown` (graceful; `--force` → `destroy`). |
 | `console <name>` | `exec virsh console <name>` (serial). |
 
-## Component 6 — Packaging & wiring
+## Component 6 — Packaging & wiring (two repos)
 
-- **Package:** `pkgs/vmctl/` — a Go module built with `buildGoModule`
-  (Cobra dependency; `vendorHash` maintained). Runtime dependencies
-  (`libvirt`/`virsh`, `virt-install`, `qemu-img`, `cloud-utils`/`cloud-localds`,
-  `openssh`, `coreutils`) wrapped onto `PATH` via `makeWrapper` so the binary
-  finds them regardless of system profile.
-- **Wiring:** new `modules/server/vmctl.nix` adds the package to
-  `environment.systemPackages` and is imported by `machines/polaris.nix`
-  (alongside the existing `modules/server/*`). It also declares/creates the
-  `$VMROOT` directory (ZFS dataset management stays with the existing pool;
-  the module ensures the path + ownership).
+### `github.com/MattiasGees/vmctl` (existing scaffold)
+
+- **Go module:** the Cobra CLI. Add `go.mod`, `go test`, CI (GitHub Actions:
+  build + test + lint), tagged releases. (Apache-2.0 + README + Go `.gitignore`
+  already present.)
+- **`flake.nix`** exposing:
+  - `packages.<sys>.vmctl` — the CLI built with `buildGoModule`
+    (`vendorHash` maintained). Runtime deps (`libvirt`/`virsh`, `virt-install`,
+    `qemu-img`, `cloud-utils`/`cloud-localds`, `openssh`, `coreutils`) wrapped
+    onto `PATH` via `makeWrapper` so the binary finds them regardless of the
+    consuming system's profile.
+    - `packages.<sys>.nixos-base` — the NixOS base qcow2 (nixos-generators).
+  - (optional) `packages.<sys>.default = vmctl`, plus a dev shell.
+- **No polaris specifics** in the Go code — see Architecture overview.
+
+### `nixos-config` (this repo)
+
+- **Flake input:** `inputs.vmctl.url = "github:mattiasgees/vmctl";`
+  (with `inputs.nixpkgs.follows = "nixpkgs";` where compatible).
+- **`modules/server/vmctl.nix`** (imported by `machines/polaris.nix`):
+  - adds `inputs.vmctl.packages.<sys>.vmctl` to `environment.systemPackages`,
+    wrapped with polaris defaults as env vars: `VMCTL_BRIDGE=br0`,
+    `VMCTL_VMROOT=<scratch path>`, `VMCTL_GATEWAY=192.168.1.1`,
+    `VMCTL_DNS=192.168.1.1`, `VMCTL_SSH_KEYS_URL=https://github.com/mattiasgees.keys`,
+    `VMCTL_NIXOS_BASE=${inputs.vmctl.packages.<sys>.nixos-base}/…qcow2`,
+    `VMCTL_UBUNTU_URL` + `VMCTL_UBUNTU_SHA256`.
+  - ensures the `$VMROOT` directory + ownership (ZFS pool itself stays managed
+    by the existing `scratch` import).
+- **`machines/polaris.nix`:** the `br0` bridge change (Component 1).
+
+### Dev-iteration workflow (mitigates cross-repo friction)
+
+While actively developing, avoid the push→`flake update`→rebuild loop by
+overriding the input against a local checkout:
+`nixos-rebuild … --override-input vmctl path:/home/mattias/git/vmctl`
+(or a temporary `path:` input). Pin to the pushed ref once stable.
+
+## Component 7 — CI/CD (GitHub Actions, `vmctl` repo)
+
+All CI lives in the `vmctl` repo (this `nixos-config` repo stays CI-less, per
+`CLAUDE.md`).
+
+### PR / push CI — `.github/workflows/ci.yml`
+
+Triggers: `pull_request` and push to `main`. **Every PR must go green before
+merge.** Jobs:
+
+- **Lint:** `gofmt -l` (fail on diff), `go vet ./...`, `golangci-lint run`.
+- **Unit + argv/parse (tiers 1–2):** `go test ./...` — pure logic, golden
+  files, and the fake-runner orchestration tests. No system deps.
+- **libvirt `test://` (tier 3):** `apt-get install -y libvirt-clients`, then run
+  the gated integration tests against `test:///default` (no KVM required, so it
+  runs on a stock `ubuntu-latest` runner).
+- **Nix build:** Nix installer action + binary cache, then `nix build .#vmctl`
+  to prove the package + wrapper build. (`.#nixos-base` is heavy — built on
+  release / on demand, not on every PR.)
+
+### Release CI — `.github/workflows/release.yml`
+
+Trigger: pushing a semver tag `v*`. Uses **GoReleaser** to build, archive, and
+publish to the GitHub Release in one step:
+
+- **Build matrix:** `linux/amd64`, `linux/arm64`, `darwin/amd64`,
+  `darwin/arm64`. (Windows excluded.) `CGO_ENABLED=0`, version/commit/date
+  stamped via `-ldflags`.
+- **Artifacts:** per-platform `.tar.gz` archives, a `checksums.txt`
+  (sha256), and optional `.deb`/`.rpm` (nfpm) for the Linux targets. All
+  uploaded to the GitHub Release; GoReleaser generates the changelog.
+- **Runtime caveat, documented in the release notes:** the `darwin/*` binaries
+  compile and run but cannot drive libvirt locally (no `virsh`/`virt-install`
+  on macOS) — the tool is functional only on a Linux libvirt host. They are
+  provided for convenience/future remote-libvirt use.
+- **Not a release artifact:** `nixos-base.qcow2` is large and consumed via the
+  flake by store path, so it is *not* attached to GitHub Releases.
+
+Nix consumers keep pinning the flake input to a tag/commit; the archives are a
+bonus for non-Nix use.
 
 ## Data / metadata model
 
@@ -189,20 +271,84 @@ Required: `<name>`, `--ip`. Defaults: `--os ubuntu`, `--cpu 2`, `--mem 2G`,
 
 ## Testing / verification
 
-No test suite exists in this repo — verification is a successful build plus an
-on-host smoke test (per `CLAUDE.md`).
+Testing is a first-class requirement. The strategy is a test pyramid whose
+foundation is a **testability seam in the Go code** (see below); tiers 1–3 run
+automatically in CI, tier 5 is an on-host runbook on polaris, and tier 4
+(`nixosTest`) is **deferred to a later pass** (see future phases). Per the TDD
+skill, tier 1–2 tests are written **before** the implementation they cover.
 
-1. `nix build` the polaris toplevel (and the `vmctl` package) — must succeed.
-2. Go unit tests for the pure logic (arg/flag parsing, cloud-init YAML
-   rendering, metadata encode/decode) via `go test`, run in the package build.
-3. On-host smoke test:
-   - Apply the bridge change; confirm polaris keeps `192.168.1.50` + route + SSH.
-   - `vmctl create t-ubuntu --os ubuntu --ip 192.168.1.201`; confirm it boots,
-     has exactly that IP, and accepts the SSH key (`vmctl ssh t-ubuntu`).
-   - Re-run the same `create` → confirm no-op.
-   - `vmctl create t-nixos --os nixos --ip 192.168.1.202`; same checks.
-   - `list`/`info` show correct data; `stop`/`start` preserve disk + IP;
-     `destroy` removes domain + overlay + seed.
+### Design constraint: the testability seam
+
+The tool is structured so that everything except the actual external process
+calls is pure and unit-testable:
+
+- **Pure functions** for input validation, cloud-init artifact rendering
+  (user-data / meta-data / network-config), `<metadata>` XML marshal/unmarshal,
+  config resolution (env-var defaults ← flag overrides), and VMROOT path
+  derivation.
+- A single **`Runner` interface** — `Run(ctx, name string, args ...string)
+  (stdout, stderr string, err error)` — through which *all* calls to
+  `virt-install`/`virsh`/`qemu-img`/`cloud-localds` go. Production uses an
+  `os/exec` implementation; tests inject a **fake runner** that records the argv
+  it was asked to run and returns canned stdout/stderr/exit codes. Without this
+  seam almost nothing is testable; with it, the orchestration logic is.
+
+### Tier 1 — Unit tests (CI, `go test`) — the bulk
+
+- Input validation: name rules; `--ip` a valid in-range IPv4; `--cpu` > 0;
+  `--mem`/`--disk` size parsing; `--os ∈ {ubuntu, nixos}`.
+- **Golden-file** cloud-init rendering for both OSes across a couple of IPs
+  (user-data, meta-data, network-config) — fixtures under `testdata/`.
+- `<metadata>` XML round-trip (encode → decode → equal).
+- Config precedence: `VMCTL_*` env defaults overridden by explicit flags.
+- VMROOT path derivation (overlay/seed/base paths from a name).
+
+### Tier 2 — Command construction & output parsing (CI, `go test`)
+
+- Assert the **exact argv** built for `virt-install`, `qemu-img create`, and
+  `virsh metadata` from given inputs (via the fake runner, nothing executed).
+- **Fixture-driven parsers:** feed captured real outputs (`virsh list --all`,
+  `virsh dumpxml <dom>`, `qemu-img info --output=json`) into the parsing code
+  and assert the resulting structs — this backs `list`/`info`.
+- Orchestration with the fake runner: idempotent `create` (domain exists →
+  no-op success), **cleanup-on-failure** (define fails → overlay + seed removed),
+  and `destroy` step ordering.
+
+### Tier 3 — libvirt `test://` driver integration (CI, gated)
+
+Behind a build tag / env gate, run real `virsh` against libvirt's built-in
+**mock driver** (`LIBVIRT_DEFAULT_URI=test:///default`): exercises the actual
+define → list → metadata → start → stop → undefine lifecycle wiring without any
+KVM. Catches real `virsh` CLI incompatibilities the fakes cannot. (Does not
+boot guests or run cloud-init — that is tier 5.)
+
+### Tier 4 — `nixosTest` — DEFERRED
+
+Not built in this phase (see future phases). When added: a flake check booting
+libvirtd + vmctl and driving it against `test://`, plus a `nixos-config` check
+asserting the `br0` result. Until then, the `br0` cutover is verified **by hand
+on polaris** (tier 5).
+
+### Tier 5 — On-host end-to-end (manual runbook on polaris, with KVM)
+
+The irreplaceable real-world check; also where the NixOS+cloud-init static-IP
+risk is retired.
+
+- Apply the bridge change; confirm polaris **keeps `192.168.1.50` + default
+  route + SSH** (do this with console access available).
+- `vmctl create t-ubuntu --os ubuntu --ip 192.168.1.201`; confirm it boots, has
+  exactly that IP, and accepts the SSH key (`vmctl ssh t-ubuntu`).
+- **Reboot the guest** → confirm the IP is unchanged (consistency guarantee).
+- Re-run the same `create` → confirm no-op.
+- `vmctl create t-nixos --os nixos --ip 192.168.1.202`; same checks.
+- `list`/`info` show correct data; `stop`/`start` preserve disk + IP;
+  `destroy` removes domain + overlay + seed.
+
+### Where these run
+
+Tiers 1–3 + lint execute on **every PR** via GitHub Actions; releases build
+cross-platform artifacts. See **Component 7 — CI/CD** for the workflow details.
+Tier 5 is the manual on-host runbook on polaris.
 
 ## Known risks / open validation points
 
@@ -215,10 +361,15 @@ on-host smoke test (per `CLAUDE.md`).
 2. **Bridge cutover on a live host** — mitigated by applying with console
    access and verifying connectivity post-switch (see Component 1).
 3. **`$VMROOT` mountpoint** — confirm the exact scratch dataset/mountpoint on
-   polaris during implementation before hardcoding a path.
+   polaris during implementation before setting the module default.
+4. **Cross-repo iteration friction** — mitigated by `--override-input
+   vmctl path:…` during development (see Component 6); only pin to a pushed
+   ref once the tool stabilises.
 
 ## Out-of-scope future phases (noted, not built)
 
+- **Tier 4 `nixosTest` checks** (deferred, see Testing): a vmctl-lifecycle
+  check against `test://` and a `br0` bridge-config assertion for `nixos-config`.
 - GPU passthrough (IOMMU already prepared on polaris).
 - A declarative `apply` mode if imperative use ever proves insufficient.
 - Additional base OSes (Debian, Fedora) — the base-image mechanism generalises.
