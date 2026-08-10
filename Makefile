@@ -44,7 +44,16 @@ ifeq ($(UNAME), Darwin)
 	sudo ./result/sw/bin/darwin-rebuild switch --flake "$$(pwd)#${NIXNAME}" --impure
 else
 	@echo "Building and switching NixOS configuration: $(NIXNAME)"
-	sudo NIX_CONFIG="$(NIX_CONFIG)" NIXPKGS_ALLOW_UNSUPPORTED_SYSTEM=1 nixos-rebuild switch --flake ".#${NIXNAME}" --impure
+# Build UNPRIVILEGED (as the invoking user), then activate with sudo. Running the
+# whole nixos-rebuild under sudo evaluates the flake AS ROOT, which cannot fetch
+# private SSH flake inputs (e.g. vmctl at git+ssh://git@github.com/...) — root has
+# no GitHub key, so the fetch dies with "Permission denied (publickey)". Building
+# as the user uses that user's GitHub SSH access; sudo is only needed to activate
+# the already-built closure (no re-evaluation, no re-fetch). Mirrors the Darwin
+# path above: build as user, sudo only to switch.
+	NIX_CONFIG="$(NIX_CONFIG)" NIXPKGS_ALLOW_UNSUPPORTED_SYSTEM=1 nix build ".#nixosConfigurations.${NIXNAME}.config.system.build.toplevel" --impure
+	sudo nix-env -p /nix/var/nix/profiles/system --set ./result
+	sudo ./result/bin/switch-to-configuration switch
 endif
 
 build-server:
