@@ -14,6 +14,7 @@
     ../modules/media/prowlarr.nix
     ../modules/media/bazarr.nix
     ../modules/media/seerr.nix
+    ../modules/media/immich.nix
     ../modules/media/caddy.nix
     ../modules/media/seedbox-downloads.nix
     ../modules/media/recyclarr.nix
