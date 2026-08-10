@@ -117,8 +117,9 @@ This runbook is part of the implementation, not a follow-up.
   03:00 run.
 - ⚠️ **Region gotcha (bounded iteration):** if restic errors on bucket
   location/region against Hetzner, ensure `AWS_DEFAULT_REGION=nbg1` is in the env
-  file (already specified above) or add an `-o s3.region=nbg1` extra option. Not a
-  redesign.
+  file (already specified above) or set
+  `extraOptions = [ "s3.region=nbg1" ]` (bare value, no leading `-o` — NixOS
+  prepends `-o` per element). Not a redesign.
 
 ## 8. Deferred / future
 

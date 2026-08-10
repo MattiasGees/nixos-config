@@ -173,7 +173,9 @@ endpoint), double-check:
 - `AWS_DEFAULT_REGION=nbg1` is present in `/etc/restic/hetzner.env` (already
   specified in B.3 above).
 
-If both already match and restic still complains, add an explicit
-`-o s3.region=nbg1` to `extraOptions` in
-`services.restic.backups.polaris` (`modules/server/restic.nix`). This is a
-one-line config fix, not a reason to redesign the backup.
+If both already match and restic still complains, set
+`services.restic.backups.polaris.extraOptions = [ "s3.region=nbg1" ]` in
+`modules/server/restic.nix`. Note the bare value with **no** leading `-o` —
+NixOS prepends `-o` to each `extraOptions` element itself, so writing
+`-o s3.region=nbg1` would produce a doubled `-o -o s3.region=nbg1` and fail.
+This is a one-line config fix, not a reason to redesign the backup.
