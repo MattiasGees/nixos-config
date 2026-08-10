@@ -39,4 +39,14 @@
     mediaLocation = "/srv/data/immich";
     accelerationDevices = [ "/dev/nvidia0" "/dev/nvidiactl" "/dev/nvidia-uvm" ];
   };
+
+  # The module only *adjusts ownership* of an existing mediaLocation (a tmpfiles
+  # `e` rule) — for a non-default path it does not create the directory ("the
+  # directory has to be created manually such that the immich user can read and
+  # write to it"). /srv/data/immich is a subdir of the root-owned tank/data ZFS
+  # mount and won't exist at first boot, so we create it here owned by immich —
+  # same non-default-path pattern as postgresql.nix's datadir under fast/db.
+  systemd.tmpfiles.rules = [
+    "d /srv/data/immich 0700 immich immich - -"
+  ];
 }
