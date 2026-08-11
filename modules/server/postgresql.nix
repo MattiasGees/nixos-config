@@ -27,12 +27,32 @@
 # already exists as the ZFS mount; these rules just create the `postgres/`
 # grouping dir and the `18/` datadir with the postgres:postgres 0700
 # ownership initdb requires.
+#
+# Backup: `services.postgresqlBackup` is the cluster's whole backup story — a
+# nightly `pg_dumpall` (`backupAll = true`) of *every* database plus the
+# cluster globals (roles, grants, passwords), not a per-DB list. That keeps
+# it tenant-agnostic: a new tenant's database is captured the moment it
+# exists, with nothing to add here. The dump lands under `tank/data` at
+# /srv/data/postgres-backup — deliberately *not* the fast pool holding the
+# live data dir — so it rides the restic sweep of /srv/data (see
+# modules/server/restic.nix) offsite. It runs at 02:30, ahead of restic's
+# 03:00, so restic always finds a fresh dump. The module's own tmpfiles rule
+# creates the location (postgres:postgres 0700), so — unlike the dataDir
+# above — we add no rule for it here. On disk it keeps only the latest dump
+# (plus one `.prev`); the restic snapshots are what provide the history.
 { pkgs, ... }:
 {
   services.postgresql = {
     enable = true;
     package = pkgs.postgresql_18;
     dataDir = "/srv/fast/db/postgres/18";
+  };
+
+  services.postgresqlBackup = {
+    enable = true;
+    backupAll = true;
+    location = "/srv/data/postgres-backup";
+    startAt = "02:30";
   };
 
   systemd.tmpfiles.rules = [

@@ -76,27 +76,37 @@ manager, not just on polaris.
 
 ---
 
-## C. Confirm Immich's built-in DB backup is still on
+## C. Confirm the database dumps land before restic runs
 
-The restic module backs up whatever is on disk under `/srv/data/immich` —
-including `/srv/data/immich/backups/`, where Immich writes its own database
-dumps. restic does not dump the database itself; it depends on Immich doing
-that first.
+restic sweeps the whole `/srv/data` dataset — it does not dump any database
+itself, it just backs up whatever dump files are on disk when it runs. Two
+producers write those dumps under `/srv/data`, and both must finish *before*
+the 03:00 restic timer:
 
-**C.5 — Check the setting.**
+- **Immich's built-in DB backup** writes to `/srv/data/immich/backups/`
+  (nightly, ~02:00). restic depends on Immich doing this first.
+- **The cluster `pg_dumpall`** (`services.postgresqlBackup` in
+  `modules/server/postgresql.nix`) writes
+  `/srv/data/postgres-backup/all.sql.gz` (plus one `all.prev.sql.gz`) nightly
+  at 02:30. It captures every database plus cluster globals (roles, grants,
+  passwords), so it needs no per-tenant setup — a new database is picked up
+  automatically. It runs unattended; there's nothing to enable by hand.
+
+**C.5 — Check the Immich setting.**
 Immich web UI → **Administration → Settings → Backup**. Confirm the built-in
 backup is **enabled**, and note its schedule (default is a nightly dump
 around 02:00).
 
 **C.6 — Confirm the ordering still holds.**
-`modules/server/restic.nix` fires the restic timer at `OnCalendar = "03:00"`
-— an hour after Immich's ~02:00 dump — so restic always sweeps a fresh
-database backup rather than racing it. If the Immich backup schedule is ever
-changed away from ~02:00, the restic timer should move with it (stay at
-least a comfortable margin after whatever time Immich now runs).
+The nightly chain is `~02:00 Immich dump → 02:30 pg_dumpall → 03:00 restic`
+(`startAt = "02:30"` for `postgresqlBackup`; `OnCalendar = "03:00"` in
+`modules/server/restic.nix`) — so restic always sweeps fresh dumps rather
+than racing them. If Immich's backup schedule ever moves away from ~02:00,
+keep this chain intact: both dumps must finish a comfortable margin before
+whatever time restic now runs.
 
-*Good:* Immich's Backup setting is enabled, and its scheduled time is
-meaningfully earlier than 03:00.
+*Good:* Immich's Backup setting is enabled, its scheduled time is meaningfully
+earlier than 02:30, and the pg_dumpall's 02:30 timer sits before 03:00.
 
 ---
 
@@ -129,27 +139,30 @@ a completed snapshot, with no error exit.
 sudo restic-polaris snapshots
 ```
 
-*Good:* at least one snapshot is listed, with a size roughly matching
-`/srv/data/immich` minus `thumbs/` and `encoded-video/`.
+*Good:* at least one snapshot is listed, with a path of `/srv/data` and a
+size roughly matching that dataset minus `/srv/data/immich/thumbs` and
+`/srv/data/immich/encoded-video`.
 
 **E.9 — Restore drill.**
-Prove the backup is actually restorable, not just uploaded:
+Prove the backup is actually restorable, not just uploaded — pull the cluster
+dump directory back out:
 
 ```bash
 sudo restic-polaris restore latest --target /tmp/restore-test \
-  --include /srv/data/immich/backups
+  --include /srv/data/postgres-backup
 ```
 
-Confirm a DB dump file comes back under `/tmp/restore-test/srv/data/immich/backups/`
-and diff it against what's currently in `/srv/data/immich/backups/` (it
-should be an earlier or matching dump, not empty or corrupt). Then clean up:
+Confirm `all.sql.gz` comes back under
+`/tmp/restore-test/srv/data/postgres-backup/` and that it decompresses
+cleanly:
 
 ```bash
+gunzip -t /tmp/restore-test/srv/data/postgres-backup/all.sql.gz
 sudo rm -rf /tmp/restore-test
 ```
 
-*Good:* the restored DB dump is present and readable; `/tmp/restore-test` is
-removed afterward.
+*Good:* the restored dump is present and passes `gunzip -t`;
+`/tmp/restore-test` is removed afterward.
 
 **E.10 — Timer armed.**
 
@@ -162,7 +175,36 @@ missed run) the next 03:00.
 
 ---
 
-## F. Gotcha: region mismatches
+## F. Restoring for real
+
+Two different databases live in these backups, restored two different ways.
+
+**F.11 — Restore the cluster from the `pg_dumpall`.**
+For a full cluster rebuild (all databases + globals), restore the dump
+directory from restic as in E.9, then replay it:
+
+```bash
+gunzip -c /srv/data/postgres-backup/all.sql.gz | sudo -u postgres psql
+```
+
+`pg_dumpall` output is a plain SQL script that recreates every role and
+database, so it's fed straight into `psql` as the `postgres` superuser — no
+`-d <db>`, it targets the whole cluster. This is the path for disaster
+recovery or resurrecting a non-Immich tenant.
+
+**F.12 — Restore Immich from Immich's own dump, not the `pg_dumpall`.**
+Immich's database uses pgvector/vectorchord, which `pg_dumpall` restores less
+reliably. Restore Immich from *its own* built-in dump under
+`/srv/data/immich/backups/`, following Immich's documented restore procedure
+— the `pg_dumpall` is the safety net for the rest of the cluster and the
+globals, not the blessed path for Immich itself.
+
+*Good:* you know which dump to reach for — cluster or non-Immich tenant →
+`all.sql.gz` piped into `psql`; Immich → Immich's own dump via Immich's docs.
+
+---
+
+## G. Gotcha: region mismatches
 
 ⚠️ **Region (bounded iteration).** If restic errors on bucket location/region
 against Hetzner (e.g. a `BadRequest`/region-mismatch error from the S3

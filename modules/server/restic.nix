@@ -1,14 +1,15 @@
-# Offsite backup of the one irreplaceable dataset on polaris: the Immich
-# photo/video library at /srv/data/immich. That path also holds Immich's own
-# built-in DB dumps (written to /srv/data/immich/backups/), so a single restic
-# sweep captures both the originals and the database — no separate
-# `pg_dumpall` needed here (see the design doc for why that's deferred).
+# Offsite backup of the irreplaceable data on polaris: the whole /srv/data
+# dataset, swept in one pass. That covers the Immich photo/video library and
+# its own built-in DB dumps (/srv/data/immich/backups/), the cluster-wide
+# pg_dumpall (/srv/data/postgres-backup/, see modules/server/postgresql.nix),
+# and any future tenant that stores its data under /srv/data — each rides this
+# same sweep offsite for free, with no per-service wiring here.
 #
-# Ordering: Immich's built-in backup runs nightly around 02:00; the timer
-# below fires at 03:00 so restic always sweeps a fresh DB dump rather than
-# racing it. Confirm in Immich → Admin → Settings → Backup that it stays
-# enabled — restic has no opinion on the DB itself, it just backs up whatever
-# dump is on disk when it runs.
+# Ordering: the nightly dumps land before restic runs — ~02:00 Immich dump →
+# 02:30 pg_dumpall → 03:00 restic — so restic always sweeps fresh dumps rather
+# than racing them. Confirm in Immich → Admin → Settings → Backup that its
+# built-in dump stays enabled — restic has no opinion on the DB itself, it
+# just backs up whatever dump is on disk when it runs.
 #
 # Excludes: `thumbs/` and `encoded-video/` are derived from the originals —
 # Immich regenerates both on demand — so skipping them keeps the offsite copy
@@ -29,7 +30,7 @@
     repository = "s3:https://nbg1.your-objectstorage.com/backups-polaris";
     passwordFile = "/etc/restic/polaris.pass";
     environmentFile = "/etc/restic/hetzner.env";
-    paths = [ "/srv/data/immich" ];
+    paths = [ "/srv/data" ];
     exclude = [
       "/srv/data/immich/thumbs"
       "/srv/data/immich/encoded-video"
