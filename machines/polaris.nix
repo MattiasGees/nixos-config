@@ -60,4 +60,10 @@
   # SSHing in doesn't error with "can't find terminal definition for
   # xterm-kitty" and TUIs render correctly.
   environment.enableAllTerminfo = true;
+
+  # System CLI tools. openssl is only pulled in transitively as a library
+  # elsewhere; add the package so the `openssl` command is on PATH here.
+  environment.systemPackages = with pkgs; [
+    openssl
+  ];
 }
