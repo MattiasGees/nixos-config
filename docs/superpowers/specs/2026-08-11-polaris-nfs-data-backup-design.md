@@ -22,8 +22,10 @@ rsync mirror, by request).
 
 ## 2. Decisions (locked)
 
-- **Transport:** NFS, mounting the share **`192.168.1.88:/polaris`** directly (the
-  export itself is `/polaris`, not a subfolder we create).
+- **Transport:** NFS, mounting the share **`192.168.1.88:/volume1/polaris`**
+  directly (the export itself is the share, not a subfolder we create). The NAS is
+  a Synology, so its shared folders live under `/volume1` — the export path is
+  `/volume1/polaris`, corrected post-deploy from the initial `/polaris` assumption.
 - **NFS version:** **`nfsvers=4.0`**, pinned so the client does not negotiate up to
   4.1/4.2. (NFSv4 needs no rpcbind on the client.)
 - **Local mountpoint:** `/mnt/polaris-nfs`, **automounted on demand** — mounts on
@@ -69,7 +71,7 @@ and a pointer to the runbook).
   # On-demand NFS automount of the house NAS share. noauto + nofail so an
   # offline NAS never blocks boot; idle-timeout unmounts it between hourly runs.
   fileSystems."/mnt/polaris-nfs" = {
-    device = "192.168.1.88:/polaris";
+    device = "192.168.1.88:/volume1/polaris";
     fsType = "nfs";
     options = [
       "nfsvers=4.0"
@@ -120,7 +122,8 @@ Notes:
 
 Operator does these by hand on `192.168.1.88`; the config only references the path:
 
-- Create/confirm the NFS export **`/polaris`**, allowing the polaris host
+- Create/confirm the NFS export **`/volume1/polaris`** (Synology shared folder
+  `polaris`), allowing the polaris host
   (`192.168.1.50`) read-write, NFSv4.
 - Decide `root_squash` vs `no_root_squash` (see §3 ownership note).
 - Ensure the export has capacity for the full `/srv/data` mirror minus the two
