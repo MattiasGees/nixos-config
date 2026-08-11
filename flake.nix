@@ -66,12 +66,16 @@
         # stalling the job pipeline. Build onnxruntime WITHOUT OpenVINO so Immich
         # falls back to CPUExecutionProvider (the intended CPU inference on polaris,
         # which has no Intel GPU). Rebuilds onnxruntime from source.
+        #
+        # Override the TOP-LEVEL (C++) onnxruntime, NOT python3Packages.onnxruntime:
+        # the python module is a wheel built from `onnxruntime.dist` and only the C++
+        # package carries the `openvinoSupport` arg (the python one errors on it). It
+        # takes the C++ package as input via python-packages.nix
+        # (`onnxruntime = pkgs.onnxruntime.override { python3Packages = self;
+        # pythonSupport = true; }`, which doesn't set openvinoSupport), so this
+        # `.override` merges and openvinoSupport=false propagates into the wheel.
         (final: prev: {
-          pythonPackagesExtensions = prev.pythonPackagesExtensions ++ [
-            (pyFinal: pyPrev: {
-              onnxruntime = pyPrev.onnxruntime.override { openvinoSupport = false; };
-            })
-          ];
+          onnxruntime = prev.onnxruntime.override { openvinoSupport = false; };
         })
       ];
       };
