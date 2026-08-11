@@ -23,8 +23,10 @@
 # LAN, so the copy lands as plaintext on the NAS. Accepted — this is a
 # trusted-LAN mirror; the encrypted end-to-end tier stays restic→Hetzner.
 #
-# The `/polaris` export, its host allow-list, and the root_squash decision are
-# manual NAS-side steps out of git — see
+# The `/volume1/polaris` export (a Synology shared folder — shares live under
+# /volume1, so the NFS path is /volume1/polaris, not /polaris), its host
+# allow-list, and the root_squash decision are manual NAS-side steps out of
+# git — see
 # docs/polaris/nfs-data-backup-runbook.md for those and the verify checklist;
 # this module only ever references the mountpoint and share path.
 { pkgs, ... }:
@@ -32,7 +34,7 @@
   # On-demand NFS automount of the house NAS share. noauto + nofail so an
   # offline NAS never blocks boot; idle-timeout unmounts it between hourly runs.
   fileSystems."/mnt/polaris-nfs" = {
-    device = "192.168.1.88:/polaris";
+    device = "192.168.1.88:/volume1/polaris";
     fsType = "nfs";
     options = [
       "nfsvers=4.0"

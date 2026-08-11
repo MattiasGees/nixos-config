@@ -8,7 +8,8 @@ then **on polaris**, after `../modules/server/data-nfs-backup.nix` is merged
 and deployed.
 
 The module itself only references the mountpoint `/mnt/polaris-nfs` and the
-share `192.168.1.88:/polaris` — it creates no export and ships no NAS config.
+share `192.168.1.88:/volume1/polaris` — it creates no export and ships no NAS
+config.
 Everything in section A below is what makes that share real. This mirror is a
 plain `rsync -a --delete` copy on a trusted LAN; it lands as plaintext on the
 NAS (the encrypted end-to-end tier stays restic→Hetzner, see
@@ -16,18 +17,17 @@ NAS (the encrypted end-to-end tier stays restic→Hetzner, see
 
 ---
 
-## A. NAS side: create the `/polaris` NFS export
+## A. NAS side: create the `/volume1/polaris` NFS export
 
-Do these by hand on `192.168.1.88` (its web UI or `/etc/exports`, depending on
-the NAS). The polaris config references the export path only — it does not
-create it.
+Do these by hand on `192.168.1.88` (a Synology — its web UI or `/etc/exports`).
+The polaris config references the export path only — it does not create it.
 
-**A.1 — Create/confirm the `/polaris` export.**
-Create (or confirm) an NFS export whose path is **`/polaris`**. The client
-mounts `192.168.1.88:/polaris` directly, so the export must be `/polaris`
-itself, not a parent directory with a `polaris/` subfolder. Make sure it is
-served over **NFSv4** — the client pins `nfsvers=4.0` and will not fall back to
-v3.
+**A.1 — Create/confirm the `/volume1/polaris` export.**
+Create (or confirm) a shared folder named **`polaris`**. On Synology, shared
+folders live under `/volume1`, so its NFS export path is **`/volume1/polaris`**
+(not `/polaris`) — this is exactly the path the client mounts
+(`192.168.1.88:/volume1/polaris`). Make sure it is served over **NFSv4** — the
+client pins `nfsvers=4.0` and will not fall back to v3.
 
 **A.2 — Allow the polaris host, read-write.**
 Grant the polaris host **`192.168.1.50`** **read-write** access to the export
@@ -57,7 +57,7 @@ excluded Immich dirs (`immich/thumbs`, `immich/encoded-video`, which Immich
 regenerates on demand). It's a 1:1 mirror with `--delete`, so budget for the
 live size of `/srv/data` on polaris, not just the current delta.
 
-*Good:* `showmount -e 192.168.1.88` (or the NAS UI) lists `/polaris` allowing
+*Good:* `showmount -e 192.168.1.88` (or the NAS UI) lists `/volume1/polaris` allowing
 `192.168.1.50` RW; the `root_squash` choice is made deliberately; and the
 export has capacity for `du -sh --exclude=immich/thumbs
 --exclude=immich/encoded-video /srv/data` worth of data.
