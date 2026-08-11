@@ -49,4 +49,10 @@
   systemd.tmpfiles.rules = [
     "d /srv/data/immich 0700 immich immich - -"
   ];
+
+  # gunicorn's control server writes $HOME/.gunicorn; the immich-machine-learning
+  # service's default HOME is the read-only /var/empty, which logs a (non-fatal)
+  # "Operation not permitted" error on every start. Point HOME at the writable
+  # cache dir it already uses (XDG_CACHE_HOME=/var/cache/immich).
+  systemd.services.immich-machine-learning.environment.HOME = "/var/cache/immich";
 }
