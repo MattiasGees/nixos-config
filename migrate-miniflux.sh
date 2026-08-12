@@ -36,6 +36,8 @@ COUNTS_SQL="SELECT (SELECT count(*) FROM feeds) AS feeds, (SELECT count(*) FROM 
 say() { printf '\n\033[1;34m==> %s\033[0m\n' "$*"; }
 die() { printf '\n\033[1;31mERROR: %s\033[0m\n' "$*" >&2; exit 1; }
 
+trap 'printf "\n\033[1;31mAborted. If the restore was interrupted, roll back with:\n  kubectl scale deploy/%s -n %s --replicas=1\n(the k8s DB is never modified by this script)\033[0m\n" "$DEPLOY" "$NS" >&2' ERR
+
 # --- 1. Pre-flight -----------------------------------------------------------
 say "Pre-flight checks"
 kubectl get ns "$NS" >/dev/null 2>&1 || die "kubectl cannot see namespace '$NS' (wrong context?)"
@@ -72,7 +74,7 @@ dst_counts=$(ssh -t "$POLARIS_HOST" "
   $SUDO systemctl start miniflux
   printf 'COUNTS:'
   $SUDO -u postgres psql -d miniflux -At -F'|' -c \"$COUNTS_SQL\"
-" | tr -d '\r' | sed -n 's/^COUNTS://p')
+" | tee /dev/tty | tr -d '\r' | sed -n 's/^COUNTS://p')
 echo "polaris feeds|entries|users = $dst_counts"
 
 # --- 6. Cleanup + report -----------------------------------------------------
