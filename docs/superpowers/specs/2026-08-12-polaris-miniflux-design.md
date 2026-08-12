@@ -50,10 +50,12 @@ investigation.
   commands in §7 — it never passes through the assistant. After the data restore
   the `miniflux` user already exists, so `CREATE_ADMIN` is a harmless no-op; the
   file is the module's requirement and a working break-glass admin.
-- **Migration:** scale k8s to 0 → `pg_dump` the k8s DB → restore into a
-  freshly-recreated `miniflux` DB on polaris → start miniflux (runs forward
-  migrations). **The assistant executes the dump/restore/verify** (has kubectl +
-  polaris SSH). k8s deployment is left at **replicas = 0** as the rollback net.
+- **Migration:** a single **committed script the user runs from their
+  workstation** (which has both the kubectl context and SSH to polaris): scale k8s
+  to 0 → `pg_dump` the k8s DB → stream over SSH → restore into a freshly-recreated
+  `miniflux` DB on polaris → start miniflux (runs forward migrations) → print a
+  verification summary. k8s deployment is left at **replicas = 0** as the rollback
+  net. The assistant does **not** execute it.
 
 ## 4. Version safety
 
@@ -102,29 +104,67 @@ virtualHosts."miniflux.polaris.mattiasgees.be".extraConfig = proxy 8080;
 
 Add `../modules/media/miniflux.nix` to `imports`.
 
-## 6. Data migration (assistant executes)
+## 6. Data migration
 
-Ordering matters: the secret file (§7) must exist **before** the first
-`make switch`, or the miniflux unit fails to start.
+Ordering (manual steps the user does around the script):
 
-1. **User:** place `/etc/miniflux/admin.env` (§7 commands).
-2. **Deploy:** `make switch NIXNAME=polaris` on polaris → miniflux starts **empty**
-   at the new URL. This proves config + TLS + DB wiring before any prod data moves.
-3. **Freeze source:** `kubectl scale deploy/miniflux -n miniflux --replicas=0`.
-4. **Dump:** `kubectl exec -n miniflux miniflux-postgresql-1 -c postgres --
-   pg_dump -U postgres -Fc miniflux` streamed over SSH to polaris.
-5. **Restore (on polaris):**
-   `systemctl stop miniflux` →
-   `sudo -u postgres dropdb miniflux` →
-   `sudo -u postgres createdb -O miniflux miniflux` →
-   `sudo -u postgres pg_restore --no-owner --role=miniflux -d miniflux <dump>` →
-   `systemctl start miniflux` (runs forward migrations).
-6. **Verify:** `SELECT count(*)` on `feeds` / `entries` / `users` matches source;
-   log in at `https://miniflux.polaris.mattiasgees.be` as `mattias`; trigger a feed
-   refresh and confirm it succeeds.
+1. **Place secret** — `/etc/miniflux/admin.env` on polaris (§7 commands).
+2. **Deploy** — `make switch NIXNAME=polaris` on polaris → miniflux starts
+   **empty** at the new URL. Proves config + TLS + DB wiring before prod data moves.
+3. **Run the migration script** (below) from the workstation.
+4. **Verify** — script prints source-vs-polaris row counts; then log in at
+   `https://miniflux.polaris.mattiasgees.be` as `mattias` and trigger a feed
+   refresh to confirm it succeeds.
 
-Rollback: `kubectl scale deploy/miniflux -n miniflux --replicas=1` restores the
-old instance (its DB is untouched).
+### The script — `migrate-miniflux.sh` (new, committed at repo root)
+
+Run from the workstation (needs the hetzner kubectl context + SSH to polaris).
+Parameterised at the top (`POLARIS_HOST=mattias@192.168.1.50`, namespace, DB pod,
+`SUDO=/run/wrappers/bin/sudo`). `set -euo pipefail`; each destructive step is
+announced and the sudo/restore step asks for confirmation before running.
+
+**Sudo constraint (drives the two-step shape):** polaris requires a password for
+sudo, and only `/run/wrappers/bin/sudo` is setuid (a non-interactive SSH shell
+resolves the wrong, non-setuid `sudo`). So the dump transfer (no sudo) and the
+restore (needs sudo, hence a TTY for the password prompt) **must be separate SSH
+calls** — you can't prompt for a password while stdin is the dump stream.
+
+Flow:
+
+1. **Pre-flight:** confirm `kubectl` reaches the miniflux namespace, the CNPG pod
+   is running, and `ssh $POLARIS_HOST systemctl is-enabled miniflux` succeeds
+   (i.e. the deploy in step 2 happened). Abort otherwise.
+2. **Count source** — `SELECT count(*)` on `feeds`/`entries`/`users` via
+   `kubectl exec` (the CNPG DB pod stays up; only the app deployment is scaled).
+3. **Freeze source** — `kubectl scale deploy/miniflux -n miniflux --replicas=0`
+   and wait for the pod to terminate.
+4. **Transfer dump (no sudo)** — stream custom-format dump to a temp file on
+   polaris:
+   ```bash
+   kubectl exec -n miniflux miniflux-postgresql-1 -c postgres -- \
+     pg_dump -U postgres -Fc miniflux \
+   | ssh "$POLARIS_HOST" 'cat > /tmp/miniflux.dump'
+   ```
+5. **Restore + verify (interactive, one password prompt)** — a single `ssh -t`
+   session using the wrapper sudo, so the timestamp is cached across the calls:
+   ```bash
+   ssh -t "$POLARIS_HOST" "
+     $SUDO systemctl stop miniflux &&
+     $SUDO -u postgres dropdb --if-exists miniflux &&
+     $SUDO -u postgres createdb -O miniflux miniflux &&
+     $SUDO -u postgres pg_restore --no-owner --role=miniflux -d miniflux /tmp/miniflux.dump &&
+     $SUDO systemctl start miniflux &&
+     $SUDO -u postgres psql -d miniflux -c 'SELECT
+       (SELECT count(*) FROM feeds)   AS feeds,
+       (SELECT count(*) FROM entries) AS entries,
+       (SELECT count(*) FROM users)   AS users;'
+   "
+   ```
+6. **Report** — print the source counts (step 2) next to the polaris counts
+   (step 5) and a PASS/FAIL on equality; remove `/tmp/miniflux.dump`.
+
+Rollback (documented in the script header): `kubectl scale deploy/miniflux
+-n miniflux --replicas=1` restores the old instance — its DB is untouched.
 
 ## 7. User-run secret placement (documented commands)
 
