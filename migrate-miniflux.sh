@@ -45,16 +45,16 @@ kubectl get pod "$PG_POD" -n "$NS" >/dev/null 2>&1 || die "CNPG pod '$PG_POD' no
 ssh "$POLARIS_HOST" 'systemctl is-enabled miniflux' >/dev/null 2>&1 \
   || die "miniflux not enabled on $POLARIS_HOST — deploy 'make switch NIXNAME=polaris' first"
 
-# --- 2. Count source ---------------------------------------------------------
+# --- 2. Freeze source --------------------------------------------------------
+say "Scaling k8s deployment '$DEPLOY' to 0"
+kubectl scale deploy/"$DEPLOY" -n "$NS" --replicas=0
+kubectl wait --for=delete pod -l app="$DEPLOY" -n "$NS" --timeout=120s || true
+
+# --- 3. Count source (after freeze) ------------------------------------------
 say "Counting rows on the k8s source"
 src_counts=$(kubectl exec -n "$NS" "$PG_POD" -c postgres -- \
   psql -U postgres -d miniflux -At -F'|' -c "$COUNTS_SQL")
 echo "source feeds|entries|users = $src_counts"
-
-# --- 3. Freeze source --------------------------------------------------------
-say "Scaling k8s deployment '$DEPLOY' to 0"
-kubectl scale deploy/"$DEPLOY" -n "$NS" --replicas=0
-kubectl wait --for=delete pod -l app="$DEPLOY" -n "$NS" --timeout=120s || true
 
 # --- 4. Transfer dump (no sudo) ---------------------------------------------
 say "Dumping k8s DB -> $POLARIS_HOST:$DUMP_REMOTE"
@@ -71,9 +71,9 @@ dst_counts=$(ssh -t "$POLARIS_HOST" "
   $SUDO -u postgres dropdb --if-exists --force miniflux
   $SUDO -u postgres createdb -O miniflux miniflux
   $SUDO -u postgres pg_restore --no-owner --role=miniflux -d miniflux '$DUMP_REMOTE'
-  $SUDO systemctl start miniflux
   printf 'COUNTS:'
   $SUDO -u postgres psql -d miniflux -At -F'|' -c \"$COUNTS_SQL\"
+  $SUDO systemctl start miniflux
 " | tee /dev/tty | tr -d '\r' | sed -n 's/^COUNTS://p')
 echo "polaris feeds|entries|users = $dst_counts"
 
