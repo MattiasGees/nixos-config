@@ -17,10 +17,11 @@ covers the rest.
 |-------------------|--------------|-----------|---------|
 | `/etc/zfs/keys/polaris.key` | `0400 root` | ZFS encryption key for `fast` + `tank/data` | **Irreplaceable — back up offline** |
 | `/etc/caddy/route53.env` | `0600 root` | AWS creds for Caddy's Route53 DNS-01 | Reproducible from Terraform |
+| `/etc/miniflux/admin.env` | `0600 root` | Miniflux `ADMIN_USERNAME`/`ADMIN_PASSWORD` bootstrap (§11) | Reproducible from the old k8s Secret (AWS Secrets Manager) |
 
-Neither is in the repo, and neither should ever be pasted into a commit, issue,
-or chat. `/etc/caddy` and `/etc/zfs/keys` are created by hand (the latter during
-the [install guide](manual-install-guide.md), step 8/12).
+None of these are in the repo, and none should ever be pasted into a commit,
+issue, or chat. `/etc/caddy`, `/etc/miniflux`, and `/etc/zfs/keys` are created by
+hand (the last during the [install guide](manual-install-guide.md), step 8/12).
 
 ---
 
@@ -430,6 +431,40 @@ which is what lets it drop sidecars alongside the media.
 
 ---
 
+## 11. Miniflux admin credentials
+
+`modules/media/miniflux.nix` points `services.miniflux.adminCredentialsFile` at
+`/etc/miniflux/admin.env`. The module keeps `CREATE_ADMIN = 1` (a NixOS default),
+so this file **must exist before the first `make switch` that enables miniflux**
+or the unit fails to start. It is a systemd `EnvironmentFile` — plain `KEY=value`,
+no `export`, no quotes.
+
+Reuse the same password the old k8s deployment used (so nothing is invented by
+hand). Pull it from a workstation that still has the hetzner kubectl context:
+
+```bash
+# workstation (hetzner kubectl context):
+PW=$(kubectl get secret miniflux-secrets -n miniflux \
+      -o jsonpath='{.data.minifluxPassword}' | base64 -d)
+
+# on polaris (run there, or pipe the two commands over SSH):
+sudo install -d -m 0755 /etc/miniflux
+printf 'ADMIN_USERNAME=miniflux\nADMIN_PASSWORD=%s\n' "$PW" \
+  | sudo install -m 0600 /dev/stdin /etc/miniflux/admin.env
+```
+
+After the data migration (`migrate-miniflux.sh`) restores the k8s database, the
+`miniflux` admin (and your real `mattias` account) already exist in it, so
+`CREATE_ADMIN` is a no-op — you log in with your **existing** credentials. This
+file is then only a break-glass admin. Full cutover order lives in the migration
+runbook: `docs/superpowers/plans/2026-08-12-polaris-miniflux.md` (§6) and its
+design doc `docs/superpowers/specs/2026-08-12-polaris-miniflux-design.md`.
+
+> Moving this (and `/etc/caddy/route53.env`) into **sops-nix** is a queued
+> follow-up; until then it's hand-placed like the other secrets above.
+
+---
+
 ## Quick reference
 
 | Thing | Value |
@@ -440,6 +475,7 @@ which is what lets it drop sidecars alongside the media.
 | Route53 zone | `mattiasgees.be` (`Z2570BL3CYXE68`) |
 | App URLs | `https://{sonarr,radarr,prowlarr,bazarr}.polaris.mattiasgees.be` |
 | Bazarr (subtitles) | `:6767`, DB `/srv/fast/appdata/bazarr`, langs en+nl+pt-BR |
+| Miniflux (RSS) | `https://miniflux.polaris.mattiasgees.be` → `:8080`, DB `miniflux` on shared pg18, secret `/etc/miniflux/admin.env` (§11) |
 | App config | `/srv/fast/appdata/<app>` (fast NVMe mirror) |
 | Media roots | `/srv/media/{Series,Movies,Downloads}` (`media` group, setgid) |
 | ZFS key | `/etc/zfs/keys/polaris.key` (**back up offline**) |
