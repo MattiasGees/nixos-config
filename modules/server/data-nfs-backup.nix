@@ -1,5 +1,5 @@
 # On-LAN second copy of the whole tank/data dataset (/srv/data), mirrored
-# hourly to the house NAS over NFS. This complements — does not replace — the
+# every 12 hours to the house NAS over NFS. This complements — does not replace — the
 # encrypted restic→Hetzner tier in modules/server/restic.nix: restic is the
 # offsite, encrypted, deduplicated backup of the irreplaceable Immich subset;
 # this is a fast, browsable 1:1 rsync mirror of the entire data dir on the NAS
@@ -9,7 +9,7 @@
 # Automount: the share is mounted on demand at /mnt/polaris-nfs with
 # `noauto` + `nofail`, so an offline NAS never blocks boot or wedges other
 # units. `x-systemd.automount` mounts it on first access and the
-# idle-timeout unmounts it 10 min after the hourly run finishes, so the mount
+# idle-timeout unmounts it 10 min after each run finishes, so the mount
 # only exists while it's actually being written to. `nfsvers=4.0` is pinned so
 # the client does not negotiate up to 4.1/4.2 (NFSv4 needs no rpcbind here).
 #
@@ -32,7 +32,7 @@
 { pkgs, ... }:
 {
   # On-demand NFS automount of the house NAS share. noauto + nofail so an
-  # offline NAS never blocks boot; idle-timeout unmounts it between hourly runs.
+  # offline NAS never blocks boot; idle-timeout unmounts it between runs.
   fileSystems."/mnt/polaris-nfs" = {
     device = "192.168.1.88:/volume1/polaris";
     fsType = "nfs";
@@ -66,7 +66,8 @@
   systemd.timers.polaris-data-nfs-sync = {
     wantedBy = [ "timers.target" ];
     timerConfig = {
-      OnCalendar = "hourly";
+      # Every 12 hours, at 00:00 and 12:00.
+      OnCalendar = "0/12:00:00";
       Persistent = true;
     };
   };
