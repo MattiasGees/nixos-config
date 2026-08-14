@@ -16,6 +16,18 @@
   services.zfs.autoScrub.enable = true;
   services.zfs.trim.enable = true;
 
+  # Quiet the spinning-rust pool (tank). ZFS commits a transaction group every
+  # zfs_txg_timeout seconds whenever there is dirty async data; on a mostly-idle
+  # HDD pool this turns sparse trickle writes into an audible seek every 5 s (the
+  # default). Batching those into one flush every 30 s means far fewer, larger
+  # seeks — it's the seek chatter, not the constant spin, that's audible.
+  # Safe here: this only defers *async* writes (buffered up to 30 s in RAM, lost
+  # on a hard power-cut). The sync-critical databases (postgres, redis, the *arr
+  # apps, plex) all live on the ext4 NVMe root — NOT on ZFS — and issue their own
+  # fsync, so they are unaffected. tank/fast/scratch hold media, photos, and
+  # scratch data where a 30 s async window is fine. Module param is pool-global.
+  boot.extraModprobeConfig = "options zfs zfs_txg_timeout=30";
+
   # Load file-based encryption keys after import, before ZFS mounts.
   # `zfs load-key -a` loads keys for every encrypted dataset whose keylocation
   # is a readable file (set at dataset creation).
