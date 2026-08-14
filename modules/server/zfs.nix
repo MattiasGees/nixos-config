@@ -21,11 +21,16 @@
   # HDD pool this turns sparse trickle writes into an audible seek every 5 s (the
   # default). Batching those into one flush every 30 s means far fewer, larger
   # seeks — it's the seek chatter, not the constant spin, that's audible.
-  # Safe here: this only defers *async* writes (buffered up to 30 s in RAM, lost
-  # on a hard power-cut). The sync-critical databases (postgres, redis, the *arr
-  # apps, plex) all live on the ext4 NVMe root — NOT on ZFS — and issue their own
-  # fsync, so they are unaffected. tank/fast/scratch hold media, photos, and
-  # scratch data where a 30 s async window is fine. Module param is pool-global.
+  #
+  # This is a kernel-module parameter, so it is GLOBAL to every pool (tank, fast,
+  # scratch) — there is no per-pool equivalent. Safe for all of them because it
+  # only defers *async* writes (buffered up to 30 s in RAM, lost on a hard
+  # power-cut); it does NOT affect synchronous (fsync) writes. PostgreSQL lives
+  # on fast/db (ZFS, sync=standard), so on COMMIT its WAL fsync is written
+  # immediately via the ZIL regardless of this timer — committed rows are
+  # recovered by ZIL+WAL replay on power loss. ZFS is copy-on-write, so each txg
+  # is atomic: 30 s is exactly as crash-consistent as 5 s, just a wider rollback
+  # window for un-fsync'd async data, which no committed DB write is ever in.
   boot.extraModprobeConfig = "options zfs zfs_txg_timeout=30";
 
   # Load file-based encryption keys after import, before ZFS mounts.
