@@ -50,6 +50,7 @@ in
     virtualHosts."seerr.polaris.mattiasgees.be".extraConfig = proxy 5055;
     virtualHosts."immich.polaris.mattiasgees.be".extraConfig = proxy 2283;
     virtualHosts."miniflux.polaris.mattiasgees.be".extraConfig = proxy 8080;
+    virtualHosts."karakeep.polaris.mattiasgees.be".extraConfig = proxy 3000;
   };
 
   # AWS creds for Route53 (AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY / AWS_REGION),
