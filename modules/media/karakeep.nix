@@ -44,6 +44,10 @@
     };
   };
 
+  # sqlite3 CLI for ops: the consistency-dump unit below, the migration script
+  # (migrate-karakeep.sh), and the runbook's verify steps all shell out to it.
+  environment.systemPackages = [ pkgs.sqlite ];
+
   # Data on the fast pool. DATA_DIR is pinned to /var/lib/karakeep by the module,
   # so bind the dataset there rather than repointing DATA_DIR.
   #
@@ -63,9 +67,8 @@
   systemd.services.karakeep-workers.unitConfig.RequiresMountsFor = "/var/lib/karakeep";
   systemd.services.karakeep-web.unitConfig.RequiresMountsFor = "/var/lib/karakeep";
 
-  # Outside /srv/data → add to restic explicitly. `paths` is a list option, so
-  # this concatenates with restic.nix's ["/srv/data"] rather than replacing it.
-  services.restic.backups.polaris.paths = [ "/srv/fast/appdata/karakeep" ];
+  # Backup: /srv/fast/appdata (which contains this data) is swept offsite by
+  # modules/server/restic.nix — no per-app restic path needed here.
 
   # Consistency exports before the 03:00 restic run: a WAL-aware binary .backup
   # (exact, fast restore) and a portable gzipped .dump (format-independent,
