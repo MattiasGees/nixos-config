@@ -110,7 +110,7 @@ dst_count=$(ssh -t "$POLARIS_HOST" "
   printf 'COUNT:'
   $SUDO sqlite3 '$DATA_DIR/db.db' '$COUNT_SQL'
   $SUDO systemctl restart karakeep-init          # drizzle migrate: no-op, schema already current
-  $SUDO systemctl start karakeep-workers karakeep-web
+  $SUDO systemctl start karakeep-browser karakeep-workers karakeep-web
 " | tee /dev/tty | tr -d '\r' | sed -n 's/^COUNT://p')
 echo "polaris bookmarks = $dst_count"
 
