@@ -23,7 +23,7 @@
   # home-manager packages which only land in mattias' profile).
   environment.systemPackages = with pkgs; [
     htop
-  ] ++ lib.optionals stdenv.isLinux [
+  ] ++ lib.optionals stdenv.hostPlatform.isLinux [
     nettools   # provides `ifconfig` (+ route/netstat); macOS ships its own
   ];
 }
