@@ -55,34 +55,41 @@ no-op). **No `nix flake update` or overlay pin required.** (Optionally moves to
 
 ## 4. Decisions (locked)
 
-### 4.1 `DATA_DIR` stays `/var/lib/karakeep`
-The module hardcodes `DATA_DIR=/var/lib/karakeep` for the runtime services while
-`karakeep-init`/migrate derives it from `StateDirectory` (also `/var/lib/karakeep`).
-Overriding only the runtime value desyncs migrate from runtime and collides in the
-env `lib.mkMerge`; docs call changing it "not supported". **So storage is mounted
-at `/var/lib/karakeep`, not repointed.**
+### 4.1 `DATA_DIR` can't be repointed — `/var/lib/karakeep` is unavoidable
+Overriding `DATA_DIR` does **not** work cleanly: (a) `karakeep-init`/migrate
+ignores the env value and does `export DATA_DIR="$STATE_DIRECTORY"`, and
+`StateDirectory` is always relative to `/var/lib` (→ `/var/lib/karakeep`), so the
+DB is always built there; (b) the units load the generated secrets from a
+hardcoded `EnvironmentFile=/var/lib/karakeep/settings.env`. Overriding only the
+runtime `DATA_DIR` would split the DB from the app. Truly moving it means
+replacing the module's init script — fragile across updates. **So we keep
+`/var/lib/karakeep` and back it with a bind mount.**
 
-### 4.2 Storage — dedicated `fast`-pool dataset, bind-mounted
+### 4.2 Storage — plain `fast/appdata` subdir, bind-mounted (no dataset)
 Data goes on the **fast** pool (mirrored, encrypted NVMe — better than the HDD
-`tank` for a busy SQLite DB, and the user's `appdata` convention):
+`tank` for a busy SQLite DB), as a plain subdir of the **existing** `fast/appdata`
+dataset — the same convention as bazarr/sonarr/… — so **no `zfs create`, no manual
+step**:
 
-- Dedicated child dataset **`fast/appdata/karakeep`** at **`/srv/fast/appdata/karakeep`**
-  (inherits `fast/appdata` encryption; manual `zfs create`, §7 — datasets are
-  out-of-band on this host).
-- **Bind-mount** `/srv/fast/appdata/karakeep → /var/lib/karakeep` in `karakeep.nix`,
-  so the module runs unchanged. Chosen over a **symlink**: the services use systemd
-  `StateDirectory=karakeep`, so systemd owns/creates/chowns `/var/lib/karakeep` each
-  start; a symlink there is fragile (systemd may recreate/replace it, version-
-  dependent), a bind mount presents a real directory it manages cleanly.
+- `systemd.tmpfiles` creates **`/srv/fast/appdata/karakeep`** owned `karakeep`
+  (inherits `fast/appdata` encryption).
+- A hand-rolled **`systemd.mounts`** bind unit binds it onto `/var/lib/karakeep`,
+  ordered **after `systemd-tmpfiles-setup`** so the source subdir exists first. A
+  plain `fileSystems` bind can't be used: it mounts at `local-fs.target`, *before*
+  tmpfiles runs, and would bind an empty dir. The karakeep units carry
+  `RequiresMountsFor=/var/lib/karakeep` so none start before the bind is up (never
+  writing to the empty underlying dir on the root disk).
 
-### 4.3 Backup — explicit restic path (not under `/srv/data`)
-`/srv/fast/appdata/karakeep` is outside the `/srv/data` sweep, so `karakeep.nix`
-adds it explicitly (list-merges with restic.nix's `/srv/data`):
-```nix
-services.restic.backups.polaris.paths = [ "/srv/fast/appdata/karakeep" ];
-```
-The hourly NFS mirror (tank/data only) is **not** extended — restic offsite is the
-backup tier for this app.
+(Rejected: a dedicated child dataset — cleaner boot story, but a manual `zfs
+create`; and mounting a dataset directly at `/var/lib/karakeep` — would fall
+outside `/srv/fast/appdata` and need its own restic path.)
+
+### 4.3 Backup — the whole `/srv/fast/appdata` (restic.nix)
+`/srv/fast/appdata` (every service's config/SQLite on the fast mirror) is added to
+restic's paths in `modules/server/restic.nix`, so karakeep and the rest of the app
+stack all ride the offsite sweep — no per-app restic path in `karakeep.nix`. Those
+app DBs are copied live; karakeep is the only one with a consistent export (§4.4).
+The hourly NFS mirror (tank/data only) is **not** extended.
 
 ### 4.4 SQLite consistency exports (reliability)
 restic copies live files; a live SQLite DB (WAL) can be captured torn. A
@@ -142,15 +149,22 @@ Beside `immich.nix`/`miniflux.nix`. Header documents SQLite-not-Postgres, the
     };
   };
 
-  # Data on the fast pool (redundant, encrypted); DATA_DIR is pinned to
-  # /var/lib/karakeep by the module, so bind the dataset there.
-  fileSystems."/var/lib/karakeep" = {
-    device = "/srv/fast/appdata/karakeep";
-    options = [ "bind" ];
-  };
-
-  # Outside /srv/data → add to restic explicitly (merges with the /srv/data path).
-  services.restic.backups.polaris.paths = [ "/srv/fast/appdata/karakeep" ];
+  # Data on the fast pool as a plain fast/appdata subdir (no dataset). DATA_DIR is
+  # pinned to /var/lib/karakeep, so bind the subdir there. The bind is a mount
+  # unit ordered after tmpfiles (which creates the subdir) — a fileSystems bind
+  # would mount at local-fs, before tmpfiles, and bind an empty dir.
+  systemd.tmpfiles.rules = [ "d /srv/fast/appdata/karakeep 0700 karakeep karakeep - -" ];
+  systemd.mounts = [{
+    what = "/srv/fast/appdata/karakeep";
+    where = "/var/lib/karakeep";
+    type = "none";
+    options = "bind";
+    requires = [ "systemd-tmpfiles-setup.service" ];
+    after = [ "systemd-tmpfiles-setup.service" ];
+    wantedBy = [ "multi-user.target" ];
+  }];
+  # Backup rides modules/server/restic.nix's /srv/fast/appdata sweep — no per-app
+  # restic path here.
 
   # Consistency exports before the 03:00 restic run: a WAL-aware binary .backup
   # and a portable gzipped .dump. Restic sweeps both via the path above.
@@ -193,10 +207,10 @@ Add `../modules/media/karakeep.nix` to `imports`.
 Run from the workstation (has the hetzner kubectl context + SSH to polaris,
 `mattias@192.168.1.50`; sudo needs a password and `/run/wrappers/bin/sudo`).
 
-1. **Create the dataset + place the secret** on polaris (§7), then
-   **`make switch NIXNAME=polaris`** — karakeep comes up **empty** at the new URL
-   over TLS; `karakeep-init` generates `settings.env` and an empty migrated DB.
-   Proves config/TLS/bind mount before real data moves.
+1. **Place the secret** on polaris (§7), then **`make switch NIXNAME=polaris`** —
+   the module auto-creates + binds the fast-pool data dir, and karakeep comes up
+   **empty** at the new URL over TLS; `karakeep-init` generates `settings.env` and
+   an empty migrated DB. Proves config/TLS/bind mount before real data moves.
 2. **Freeze source** — `kubectl scale deploy/web -n karakeep --replicas=0`
    (the only writer); wait for the pod to terminate.
 3. **Count source** — record bookmark/asset counts (temp pod reading `data-pvc`,
@@ -218,13 +232,13 @@ Run from the workstation (has the hetzner kubectl context + SSH to polaris,
 Rollback: `kubectl scale deploy/web -n karakeep --replicas=1` — the k8s PVC is
 untouched.
 
-## 7. Manual steps (runbook — `docs/polaris/karakeep-runbook.md`)
+## 7. Manual steps (runbook — `docs/polaris/karakeep-migration-runbook.md`)
+
+Storage needs no provisioning (§4.2 — the module auto-creates the subdir). The one
+hand-placed item is the OpenAI key:
 
 ```bash
-# 1. Dataset on the fast pool (inherits fast/appdata encryption):
-sudo zfs create -o mountpoint=/srv/fast/appdata/karakeep fast/appdata/karakeep
-
-# 2. OpenAI key (pulled from the k8s secret; never enters the repo):
+# OpenAI key (pulled from the k8s secret; never enters the repo):
 KEY=$(kubectl get secret karakeep-secrets -n karakeep \
         -o jsonpath='{.data.OPENAI_API_KEY}' | base64 -d)
 sudo install -d -m 0755 /etc/karakeep

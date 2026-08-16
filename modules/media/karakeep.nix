@@ -9,17 +9,15 @@
 # localhost instance) and a sandboxed headless Chromium (screenshots, :9222).
 #
 # Storage: the SQLite DB + the irreplaceable assets/ live on the **fast** pool
-# (mirrored, encrypted NVMe) at /srv/fast/appdata/karakeep. The module hardcodes
-# DATA_DIR=/var/lib/karakeep and derives the migrate step's dir from
-# StateDirectory (also /var/lib/karakeep), so overriding DATA_DIR desyncs the two
-# and is unsupported — instead we **bind-mount** the dataset onto /var/lib/karakeep
-# and leave the module untouched.
+# (mirrored, encrypted NVMe) at /srv/fast/appdata/karakeep — a plain subdir of the
+# existing fast/appdata dataset, created by tmpfiles and bind-mounted onto
+# /var/lib/karakeep. DATA_DIR is hardcoded there and can't be repointed cleanly
+# (see the storage block below), so we back the path instead of moving it.
 #
-# Backup: /srv/fast/appdata/karakeep is outside the /srv/data restic sweep, so it
-# is added to the restic path explicitly below. A 02:45 timer writes a consistent
-# .backup (binary) + .dump (portable SQL) into backups/ before the 03:00 restic
-# run, so the offsite copy always has a clean DB even though restic also sweeps
-# the live (WAL) db.db.
+# Backup: /srv/fast/appdata is swept offsite by modules/server/restic.nix. A 02:45
+# timer additionally writes a consistent .backup (binary) + .dump (portable SQL)
+# into backups/ before the 03:00 restic run, so the offsite copy always has a
+# clean DB even though restic also sweeps the live (WAL) db.db.
 #
 # Secret: OPENAI_API_KEY (AI auto-tagging + LLM OCR) is hand-placed at
 # /etc/karakeep/karakeep.env (0600, out of git) — see manual-steps.md §12.
@@ -48,18 +46,34 @@
   # (migrate-karakeep.sh), and the runbook's verify steps all shell out to it.
   environment.systemPackages = [ pkgs.sqlite ];
 
-  # Data on the fast pool. DATA_DIR is pinned to /var/lib/karakeep by the module,
-  # so bind the dataset there rather than repointing DATA_DIR.
+  # Put the data on the fast pool. DATA_DIR can't be repointed cleanly — the
+  # module derives the migrate step's dir from StateDirectory (always
+  # /var/lib/karakeep) and hardcodes the secrets file at
+  # /var/lib/karakeep/settings.env — so /var/lib/karakeep is unavoidable and we
+  # back it with a bind mount instead.
   #
-  # x-systemd.requires=zfs-mount.service (which implies After=) makes this bind
-  # wait until ZFS has loaded keys and mounted /srv/fast/appdata/karakeep — the
-  # ZFS datasets are bulk-mounted by that oneshot, not by per-dataset mount units,
-  # so without this the bind can race ahead and mount the empty underlying dir.
-  # (Same class of ordering care as modules/server/zfs.nix's load-zfs-keyfiles.)
-  fileSystems."/var/lib/karakeep" = {
-    device = "/srv/fast/appdata/karakeep";
-    options = [ "bind" "x-systemd.requires=zfs-mount.service" ];
-  };
+  # No dedicated dataset: /srv/fast/appdata/karakeep is a plain subdir of the
+  # existing fast/appdata dataset (same as bazarr/sonarr/…), created by tmpfiles
+  # and owned by the karakeep user. It stays under /srv/fast/appdata, so the
+  # restic sweep in modules/server/restic.nix already covers it.
+  #
+  # The bind is a hand-rolled mount unit (not a fileSystems entry) on purpose:
+  # tmpfiles creates the subdir *after* local-fs.target, but a fileSystems bind
+  # mounts *at* local-fs.target — it would race tmpfiles and bind an empty dir.
+  # Ordering this mount After systemd-tmpfiles-setup guarantees the source exists
+  # first; the karakeep units' RequiresMountsFor (below) then wait on this mount.
+  systemd.tmpfiles.rules = [
+    "d /srv/fast/appdata/karakeep 0700 karakeep karakeep - -"
+  ];
+  systemd.mounts = [{
+    what = "/srv/fast/appdata/karakeep";
+    where = "/var/lib/karakeep";
+    type = "none";
+    options = "bind";
+    requires = [ "systemd-tmpfiles-setup.service" ];
+    after = [ "systemd-tmpfiles-setup.service" ];
+    wantedBy = [ "multi-user.target" ];
+  }];
 
   # Belt-and-suspenders: never let a karakeep unit start (and write to the empty
   # underlying /var/lib/karakeep on the root disk) before the bind mount is up.
@@ -72,7 +86,7 @@
 
   # Consistency exports before the 03:00 restic run: a WAL-aware binary .backup
   # (exact, fast restore) and a portable gzipped .dump (format-independent,
-  # inspectable). Both land under the restic-swept dataset.
+  # inspectable). Both land under the restic-swept /srv/fast/appdata path.
   systemd.services.karakeep-sqlite-backup = {
     description = "Consistent SQLite exports of Karakeep DB for backup";
     after = [ "karakeep-web.service" ];

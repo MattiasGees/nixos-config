@@ -7,8 +7,9 @@ secret, and the one-shot data move (SQLite DB + assets). Design + rationale:
 
 **Data lives at** `/srv/fast/appdata/karakeep` (fast NVMe mirror, encrypted),
 bind-mounted onto `/var/lib/karakeep` (the module's pinned `DATA_DIR`).
-**Backup:** the dataset is on the explicit restic path; a 02:45 timer writes a
-consistent `.backup` + `.dump` into `backups/` before the 03:00 sweep.
+**Backup:** it lives under `/srv/fast/appdata`, which `restic.nix` sweeps offsite;
+a 02:45 timer writes a consistent `.backup` + `.dump` into `backups/` before the
+03:00 sweep.
 
 > **Version note (safe):** k8s runs app `0.33.1`; polaris nixpkgs ships `0.33.0`.
 > The drizzle schema is **identical** (94 migrations), so this is not a downgrade —
@@ -20,15 +21,14 @@ wrapper `/run/wrappers/bin/sudo`, so the sudo steps below use `ssh -t`.
 
 ---
 
-## 1. Create the dataset (polaris, before first deploy)
+## 1. Storage — nothing to provision
 
-```bash
-ssh -t mattias@192.168.1.50 \
-  '/run/wrappers/bin/sudo zfs create -o mountpoint=/srv/fast/appdata/karakeep fast/appdata/karakeep'
-```
-
-Inherits `fast/appdata`'s encryption. Verify:
-`zfs get -o value encryption,keystatus fast/appdata/karakeep` → encrypted / available.
+The data dir is a plain subdir of the existing `fast/appdata` dataset
+(`/srv/fast/appdata/karakeep`), created automatically by the karakeep module
+(tmpfiles, owned `karakeep`) and bind-mounted onto `/var/lib/karakeep` on the
+first `make switch`. No `zfs create`, no manual step — it inherits `fast/appdata`'s
+encryption and rides the `/srv/fast/appdata` restic sweep. (Verify after deploy
+with `findmnt /var/lib/karakeep` — step 3.)
 
 ## 2. Place the OpenAI key (polaris)
 
