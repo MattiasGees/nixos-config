@@ -26,6 +26,12 @@
 {
   services.karakeep = {
     enable = true;
+    # Build karakeep against Node 22. karakeep pins better-sqlite3 11.3.0, and
+    # better-sqlite3 < 12.0.0 has no Node 24 support — under nixpkgs' nodejs-24.19.0
+    # the workers process core-dumps at startup (native Statement::~Statement ->
+    # node::RemoveEnvironmentCleanupHook, (env) != nullptr), a known Node-24.19.0
+    # regression. Node 22 avoids it. Drop this once karakeep ships better-sqlite3 >= 12.
+    package = pkgs.karakeep.override { nodejs = pkgs.nodejs_22; };
     # OPENAI_API_KEY (hand-placed). The module feeds this to the web + workers
     # units; the workers do the inference.
     environmentFile = "/etc/karakeep/karakeep.env";
