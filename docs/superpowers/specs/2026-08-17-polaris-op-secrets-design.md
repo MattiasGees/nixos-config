@@ -122,7 +122,7 @@ file). `owner`/service user in parentheses.
 | Secret | Today (path) | Template | 1P references |
 |---|---|---|---|
 | restic repo password | `/etc/restic/polaris.pass` (root) | `restic.pass.tpl` | `op://polaris/restic/repo-password` |
-| restic S3 backend env | `/etc/restic/hetzner.env` (root) | `restic.backend.env.tpl` | `op://polaris/restic-backend/{AWS_ACCESS_KEY_ID,AWS_SECRET_ACCESS_KEY}` |
+| restic S3 backend env | `/etc/restic/hetzner.env` (root) | `restic.backend.env.tpl` | `op://polaris/restic-backend/{AWS_ACCESS_KEY_ID,AWS_SECRET_ACCESS_KEY}` (+ literal `AWS_DEFAULT_REGION=nbg1`) |
 | miniflux admin | `/etc/miniflux/admin.env` (miniflux) | `miniflux.admin.env.tpl` | `op://polaris/miniflux/{username,password}` |
 | caddy Route53 | `/etc/caddy/route53.env` (caddy) | `caddy.route53.env.tpl` | `op://polaris/caddy-route53/{AWS_ACCESS_KEY_ID,AWS_SECRET_ACCESS_KEY,AWS_REGION}` |
 
@@ -130,9 +130,16 @@ Notes:
 - The restic repo password is a single value; its template is one line with just
   the `{{ op://... }}` reference (no key=), matching `passwordFile` semantics.
 - `restic.repository` is S3 (`s3:https://nbg1.your-objectstorage.com/...`), so
-  the backend env holds the S3-compatible `AWS_*` keys restic reads. Confirm the
-  exact key names against the current `/etc/restic/hetzner.env` before creating
-  the 1P fields.
+  the backend env holds the S3-compatible `AWS_*` keys restic reads. Confirmed
+  contents of `/etc/restic/hetzner.env`: `AWS_ACCESS_KEY_ID`,
+  `AWS_SECRET_ACCESS_KEY`, `AWS_DEFAULT_REGION=nbg1`. `AWS_DEFAULT_REGION` is
+  non-secret and stays a literal in the template — only the two credential values
+  are `op://` references, so the template is:
+  ```
+  AWS_ACCESS_KEY_ID={{ op://polaris/restic-backend/AWS_ACCESS_KEY_ID }}
+  AWS_SECRET_ACCESS_KEY={{ op://polaris/restic-backend/AWS_SECRET_ACCESS_KEY }}
+  AWS_DEFAULT_REGION=nbg1
+  ```
 - Field names in the table are the intended 1P field names; create them to match
   the template references exactly.
 
