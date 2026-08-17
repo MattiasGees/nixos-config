@@ -19,6 +19,8 @@
     ../modules/media/immich.nix
     ../modules/media/miniflux.nix
     ../modules/media/karakeep.nix
+    ../modules/media/ollama.nix
+    ../modules/media/open-webui.nix
     ../modules/media/caddy.nix
     ../modules/media/seedbox-downloads.nix
     ../modules/media/recyclarr.nix
