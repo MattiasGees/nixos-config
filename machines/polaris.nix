@@ -7,6 +7,7 @@
     ../modules/server/postgresql.nix
     ../modules/server/restic.nix
     ../modules/server/data-nfs-backup.nix
+    ../modules/server/op-secrets.nix
     # NVIDIA lives in hardware/polaris-extra.nix (x86_64-only; the aarch64
     # polaris-vm variant inherits this file, so it must stay driver-free).
     ../modules/media/common.nix
