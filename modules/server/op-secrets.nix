@@ -19,7 +19,7 @@ let
 
   renderOne = name: s: ''
     if tmp="$(${pkgs.coreutils}/bin/mktemp -p "$(${pkgs.coreutils}/bin/dirname ${lib.escapeShellArg s.path})")" \
-       && ${pkgs.coreutils}/bin/timeout 15 ${op} inject -i ${s.template} -o "$tmp" \
+       && ${pkgs.coreutils}/bin/timeout 15 ${op} inject --force -i ${s.template} -o "$tmp" </dev/null \
        && ${pkgs.coreutils}/bin/chown ${s.owner}:${s.group} "$tmp" \
        && ${pkgs.coreutils}/bin/chmod ${s.mode} "$tmp" \
        && ${pkgs.coreutils}/bin/mv -f "$tmp" ${lib.escapeShellArg s.path}; then
