@@ -10,23 +10,22 @@
 # in caddy.nix); LISTEN_ADDR stays on localhost and no firewall port is opened.
 #
 # Secret: `adminCredentialsFile` is an EnvironmentFile with ADMIN_USERNAME and
-# ADMIN_PASSWORD, hand-placed at /etc/miniflux/admin.env (0600, out of git) —
-# same out-of-band pattern as caddy's route53.env. After the data migration the
-# `miniflux` admin already exists in the restored DB, so CREATE_ADMIN is a no-op;
-# the file is the module's requirement and a break-glass admin. Place it with:
+# ADMIN_PASSWORD. After the data migration the `miniflux` admin already exists
+# in the restored DB, so CREATE_ADMIN is a no-op; the file is the module's
+# requirement and a break-glass admin.
 #
-#   PW=$(kubectl get secret miniflux-secrets -n miniflux \
-#         -o jsonpath='{.data.minifluxPassword}' | base64 -d)
-#   sudo install -d -m 0755 /etc/miniflux
-#   printf 'ADMIN_USERNAME=miniflux\nADMIN_PASSWORD=%s\n' "$PW" \
-#     | sudo install -m 0600 /dev/stdin /etc/miniflux/admin.env
-#
-# (Moving this secret into sops-nix is a queued follow-up.)
+# The file is rendered from op://polaris/miniflux/* by op-secrets.
 { ... }:
 {
+  opSecrets.miniflux-admin = {
+    template = ./miniflux.admin.env.tpl;
+    path = "/var/lib/secrets/miniflux-admin.env";
+    owner = "miniflux";
+  };
+
   services.miniflux = {
     enable = true;
-    adminCredentialsFile = "/etc/miniflux/admin.env";
+    adminCredentialsFile = "/var/lib/secrets/miniflux-admin.env";
     config = {
       LISTEN_ADDR = "localhost:8080";
       BASE_URL = "https://miniflux.polaris.mattiasgees.be";
