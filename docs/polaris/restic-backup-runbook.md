@@ -11,8 +11,9 @@ The module itself only references two secret file paths
 it ships no credentials. Both are rendered at deploy time by the op-secrets
 engine (`modules/server/op-secrets.nix`) from 1Password
 (`op://polaris/restic/repo-password` and `op://polaris/restic-backend/*`); see
-[`op-secrets-manual.md`](op-secrets-manual.md) for the full bootstrap, deploy,
-and rotation flow. Section A below (creating the Hetzner bucket + access key)
+the **op-secrets** section of [`manual-steps.md`](manual-steps.md) for the full
+bootstrap, deploy, and rotation flow. Section A below (creating the Hetzner
+bucket + access key)
 still applies — only the *placement* of the resulting credentials has moved,
 which section B covers.
 
@@ -45,8 +46,8 @@ Both secrets are now managed through 1Password and rendered onto polaris by
 the op-secrets engine (`modules/server/op-secrets.nix`) — they are **no
 longer hand-placed** under `/etc/restic/`. Full bootstrap (vault/item/field
 layout, service-account token), the deploy flow, and rotation are documented
-once in [`op-secrets-manual.md`](op-secrets-manual.md); this section only
-covers what's specific to restic's two secrets.
+once in the **op-secrets** section of [`manual-steps.md`](manual-steps.md); this
+section only covers what's specific to restic's two secrets.
 
 **B.3 — restic repo password → `restic` item, field `repo-password`.**
 This is the restic **repository encryption password**, not a login password.
@@ -79,9 +80,10 @@ sudo ls -l /var/lib/secrets/restic-repo.pass /var/lib/secrets/restic-backend.env
 
 *Good:* both files exist, `-rw-------` owned by `root:root`; `journalctl -b |
 grep op-secrets` shows `rendered restic-repo` / `rendered restic-backend`
-with no `WARNING`. See `op-secrets-manual.md` for the token bootstrap, the
-per-secret render/rollback behavior, and how to rotate either value later
-(edit in 1Password → `make switch` → restart the consuming unit).
+with no `WARNING`. See the **op-secrets** section of
+[`manual-steps.md`](manual-steps.md) for the token bootstrap, the per-secret
+render/rollback behavior, and how to rotate either value later (edit in
+1Password → `make switch` → restart the consuming unit).
 
 ---
 

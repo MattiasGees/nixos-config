@@ -16,15 +16,121 @@ covers the rest.
 | File (on polaris) | Mode / owner | What it is | Backup? |
 |-------------------|--------------|-----------|---------|
 | `/etc/zfs/keys/polaris.key` | `0400 root` | ZFS encryption key for `fast` + `tank/data` | **Irreplaceable — back up offline** |
-| `/var/lib/secrets/caddy-route53.env` | `0600 caddy` | AWS creds for Caddy's Route53 DNS-01, rendered from 1Password by op-secrets (§3) | Reproducible from Terraform / 1Password |
-| `/var/lib/secrets/miniflux-admin.env` | `0600 root` | Miniflux `ADMIN_USERNAME`/`ADMIN_PASSWORD` bootstrap, rendered from 1Password by op-secrets (§11) | Reproducible from 1Password |
-| `/var/lib/secrets/karakeep.env` | `0600 karakeep` | Karakeep `OPENAI_API_KEY` for AI tagging/OCR, rendered from 1Password by op-secrets (§12) | Reproducible from 1Password |
+| `/etc/op/token` | `0600 root` | 1Password service-account token that unlocks the `polaris` vault for op-secrets (§ op-secrets) | Reproducible — re-issue from 1Password |
+| `/var/lib/secrets/caddy-route53.env` | `0600 caddy` | AWS creds for Caddy's Route53 DNS-01, rendered from 1Password by op-secrets (§ op-secrets, §3) | Reproducible from Terraform / 1Password |
+| `/var/lib/secrets/miniflux-admin.env` | `0600 root` | Miniflux `ADMIN_USERNAME`/`ADMIN_PASSWORD` bootstrap, rendered from 1Password by op-secrets (§ op-secrets, §11) | Reproducible from 1Password |
+| `/var/lib/secrets/restic-repo.pass` | `0600 root` | restic repository password, rendered from 1Password by op-secrets (§ op-secrets) | Reproducible from 1Password |
+| `/var/lib/secrets/restic-backend.env` | `0600 root` | Hetzner S3 creds for the restic offsite backup, rendered from 1Password by op-secrets (§ op-secrets) | Reproducible from 1Password |
+| `/var/lib/secrets/karakeep.env` | `0600 karakeep` | Karakeep `OPENAI_API_KEY` for AI tagging/OCR, rendered from 1Password by op-secrets (§ op-secrets, §12) | Reproducible from 1Password |
 
 None of these are in the repo, and none should ever be pasted into a commit,
 issue, or chat. `/etc/zfs/keys` is created by hand (during the
-[install guide](manual-install-guide.md), step 8/12); the caddy, miniflux and
-karakeep files are rendered automatically at deploy time — see
-[op-secrets-manual.md](op-secrets-manual.md).
+[install guide](manual-install-guide.md), step 8/12); the `/etc/op/token`
+bootstrap is placed once (see the **op-secrets** section below), after which the
+caddy, miniflux, restic, and karakeep files render automatically at every
+`make switch`.
+
+---
+
+## op-secrets — 1Password secret rendering (do this first)
+
+Most of polaris' service secrets are **not** hand-placed anymore — a single
+1Password service-account token unlocks the `polaris` vault, and `op inject`
+renders each secret into `/var/lib/secrets/` at every `make switch`
+(`modules/server/op-secrets.nix`). Rendering is atomic and
+**last-good-preserving**: if 1Password is unreachable (or the token is missing),
+the previously rendered file is kept and the switch still succeeds — a 1Password
+outage never blocks a deploy or a boot.
+
+The only bootstrap secret is the token itself at `/etc/op/token`. On a fresh
+reinstall, do this **before the first `make switch`** that enables caddy,
+miniflux, or restic.
+
+### Secrets rendered from the `polaris` vault
+
+Field names must match **exactly** — the templates reference them by name.
+
+| 1P item | Fields | Rendered to | Consumer |
+|---|---|---|---|
+| `caddy-route53` | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | `/var/lib/secrets/caddy-route53.env` | Caddy Route53 DNS-01 (§3) |
+| `miniflux` | `username`, `password` | `/var/lib/secrets/miniflux-admin.env` | Miniflux admin bootstrap (§11) |
+| `restic` | `repo-password` | `/var/lib/secrets/restic-repo.pass` | restic repo password |
+| `restic-backend` | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | `/var/lib/secrets/restic-backend.env` | restic → Hetzner offsite |
+| `karakeep` | `OPENAI_API_KEY` | `/var/lib/secrets/karakeep.env` | Karakeep AI tagging/OCR (§12) |
+
+> Regions are **not** secret and are **not** stored in 1Password — they're
+> literals in the templates: caddy uses `AWS_REGION=eu-west-1` (Route53 is
+> global; the region is just an SDK formality), restic uses
+> `AWS_DEFAULT_REGION=nbg1` (Hetzner object storage).
+
+### Bootstrap (once, on a fresh host)
+
+1. **Create the `polaris` vault** in 1Password with the five items/fields in the
+   table above.
+2. **Create a service account** with **read** access to **only** the `polaris`
+   vault; copy its token (starts with `ops_`).
+3. **Place the token** on polaris — the single bootstrap secret:
+
+   ```bash
+   sudo install -d -m 0700 /etc/op
+   printf '%s' 'ops_PASTE_YOUR_TOKEN' | sudo install -m 0600 /dev/stdin /etc/op/token
+   ```
+
+4. **Verify the token reads every reference** before deploying. The 1Password CLI
+   is unfree, so an ad-hoc `nix run` needs `NIXPKGS_ALLOW_UNFREE=1` **and**
+   `--impure` (so `nix run` reads that env var):
+
+   ```bash
+   sudo sh -c 'export OP_SERVICE_ACCOUNT_TOKEN="$(cat /etc/op/token)"; \
+     export NIXPKGS_ALLOW_UNFREE=1; \
+     for r in \
+       op://polaris/caddy-route53/AWS_ACCESS_KEY_ID \
+       op://polaris/caddy-route53/AWS_SECRET_ACCESS_KEY \
+       op://polaris/miniflux/username \
+       op://polaris/miniflux/password \
+       op://polaris/restic/repo-password \
+       op://polaris/restic-backend/AWS_ACCESS_KEY_ID \
+       op://polaris/restic-backend/AWS_SECRET_ACCESS_KEY \
+       op://polaris/karakeep/OPENAI_API_KEY; do \
+       printf "%s -> " "$r"; \
+       nix run --impure nixpkgs#_1password-cli -- read "$r" >/dev/null && echo OK || echo FAIL; \
+     done'
+   ```
+
+   All eight should print `OK`. Any `FAIL` is a vault/item/field-name mismatch or
+   a scope problem — fix it before `make switch`.
+
+5. **Deploy and confirm the render:**
+
+   ```bash
+   make switch NIXNAME=polaris
+   sudo journalctl -b | grep op-secrets     # "rendered ..." lines, no WARNING
+   sudo ls -l /var/lib/secrets/             # the rendered files, root-only dir
+   ```
+
+### Rotation
+
+1. Edit the value in 1Password (`polaris` vault).
+2. `cd /home/mattias/git/nixos-config && make switch NIXNAME=polaris` — re-renders.
+3. `sudo systemctl restart <service>` — an `EnvironmentFile`/`passwordFile` change
+   does **not** auto-restart the consuming unit.
+
+To rotate the **bootstrap token**: create a new service-account token in
+1Password, re-place `/etc/op/token` (bootstrap step 3), then `make switch`.
+
+### Troubleshooting
+
+- **`op-secrets: WARNING <name> render failed`** in `journalctl` → the template's
+  `{{ op://... }}` reference doesn't match a 1P item/field, or the token can't
+  read it. The last-good rendered file is kept. Fix the field/scope and
+  `make switch`.
+- **`op-secrets: no token` and a service won't start** → `/etc/op/token` is
+  missing/unreadable and there's no last-good file yet (fresh host). Place the
+  token (bootstrap step 3) and `make switch`.
+- **Debug a render without writing a file** — once op-secrets is deployed the
+  system `op` is on PATH: `op inject -i <template-path>` prints the rendered
+  result to stdout. Before the first deploy, via an ad-hoc unfree `nix run`:
+  `sudo sh -c 'OP_SERVICE_ACCOUNT_TOKEN="$(cat /etc/op/token)" NIXPKGS_ALLOW_UNFREE=1 nix run --impure nixpkgs#_1password-cli -- inject -i <template-path>'`.
 
 ---
 
@@ -96,12 +202,12 @@ terraform output -raw polaris_caddy_access_key_id
 terraform output -raw polaris_caddy_secret_access_key
 ```
 
-This secret is no longer hand-placed on the box. It's rendered from
-`op://polaris/caddy-route53/*` to `/var/lib/secrets/caddy-route53.env` by
-op-secrets (`modules/server/op-secrets.nix`) at `make switch` time — store the
-two key values as the `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` fields on the
-`caddy-route53` item in the `polaris` 1Password vault. For bootstrap and
-rotation steps, see [op-secrets-manual.md](op-secrets-manual.md).
+Caddy reads these creds from `/var/lib/secrets/caddy-route53.env`, which
+op-secrets (`modules/server/op-secrets.nix`) renders from
+`op://polaris/caddy-route53/*` at `make switch` time — store the two key values
+as the `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` fields on the `caddy-route53`
+item in the `polaris` 1Password vault. For the token bootstrap and rotation, see
+the **op-secrets** section above.
 
 ### 3c. DNS record (Route53)
 
@@ -429,26 +535,18 @@ which is what lets it drop sidecars alongside the media.
 NixOS default), so this file **must exist before the first `make switch` that
 enables miniflux** or the unit fails to start.
 
-This secret is no longer hand-placed on the box. It's rendered from
-`op://polaris/miniflux/*` to `/var/lib/secrets/miniflux-admin.env` by op-secrets
-(`modules/server/op-secrets.nix`) at `make switch` time — reuse the same
-password the old k8s deployment used (so nothing is invented by hand) and store
-it as the `username`/`password` fields on the `miniflux` item in the `polaris`
-1Password vault:
+This secret is rendered from `op://polaris/miniflux/*` to
+`/var/lib/secrets/miniflux-admin.env` by op-secrets
+(`modules/server/op-secrets.nix`) at `make switch` time — store the admin
+`username`/`password` as fields on the `miniflux` item in the `polaris` 1Password
+vault. For the token bootstrap and rotation, see the **op-secrets** section
+above.
 
-```bash
-# workstation (hetzner kubectl context):
-PW=$(kubectl get secret miniflux-secrets -n miniflux \
-      -o jsonpath='{.data.minifluxPassword}' | base64 -d)
-```
-
-After the data migration (`migrate-miniflux.sh`) restores the k8s database, the
+Because the Miniflux database was migrated from the old k8s deployment, the
 `miniflux` admin (and your real `mattias` account) already exist in it, so
-`CREATE_ADMIN` is a no-op — you log in with your **existing** credentials. This
-credential is then only a break-glass admin. Full cutover order lives in the
-migration runbook: `docs/superpowers/plans/2026-08-12-polaris-miniflux.md` (§6)
-and its design doc `docs/superpowers/specs/2026-08-12-polaris-miniflux-design.md`.
-For bootstrap and rotation steps, see [op-secrets-manual.md](op-secrets-manual.md).
+`CREATE_ADMIN` is a no-op — you log in with your **existing** credentials, and
+this rendered file is only a break-glass admin. (The original migration plan and
+design are archived in the wiki under **NixOS → Plans / Specs**.)
 
 ---
 
@@ -484,15 +582,14 @@ The service account (`/etc/op/token`) already has read access to the whole
 `polaris` vault, so no scope change is needed. On the next `make switch NIXNAME=polaris`
 op-secrets renders `/var/lib/secrets/karakeep.env` (`0600 karakeep`); rotation is
 the standard op-secrets flow (edit in 1Password → `make switch` → `sudo systemctl
-restart karakeep-web karakeep-workers`). See
-[op-secrets-manual.md](op-secrets-manual.md).
+restart karakeep-web karakeep-workers`). For the token bootstrap and rotation,
+see the **op-secrets** section above.
 
 Karakeep is **SQLite-only** (not a shared-Postgres tenant); its DB + assets live
 on the fast mirror at `/srv/fast/appdata/karakeep` (bind-mounted to
 `/var/lib/karakeep`) and ride an explicit restic path plus a 02:45 `.backup` +
-`.dump` export. The full k8s → polaris cutover (dataset, data copy, reindex,
-verify) is its own runbook:
-[karakeep-migration-runbook.md](karakeep-migration-runbook.md).
+`.dump` export. (The original k8s → polaris migration runbook and design are
+archived in the wiki under **NixOS → Plans / Specs**.)
 
 ---
 
@@ -507,10 +604,11 @@ verify) is its own runbook:
 | App URLs | `https://{sonarr,radarr,prowlarr,bazarr}.polaris.mattiasgees.be` |
 | Bazarr (subtitles) | `:6767`, DB `/srv/fast/appdata/bazarr`, langs en+nl+pt-BR |
 | Miniflux (RSS) | `https://miniflux.polaris.mattiasgees.be` → `:8080`, DB `miniflux` on shared pg18, secret `/var/lib/secrets/miniflux-admin.env` (§11) |
-| Karakeep (bookmarks) | `https://karakeep.polaris.mattiasgees.be` → `:3000`, SQLite `/srv/fast/appdata/karakeep`, secret `/var/lib/secrets/karakeep.env` (§12), migration runbook |
+| Karakeep (bookmarks) | `https://karakeep.polaris.mattiasgees.be` → `:3000`, SQLite `/srv/fast/appdata/karakeep`, secret `/var/lib/secrets/karakeep.env` (§12) |
 | App config | `/srv/fast/appdata/<app>` (fast NVMe mirror) |
 | Media roots | `/srv/media/{Series,Movies,Downloads}` (`media` group, setgid) |
 | ZFS key | `/etc/zfs/keys/polaris.key` (**back up offline**) |
+| op-secrets token | `/etc/op/token` (`0600 root`) — unlocks the `polaris` 1P vault; renders `/var/lib/secrets/*` at `make switch` (§ op-secrets) |
 | Caddy AWS creds | `/var/lib/secrets/caddy-route53.env` (`0600 caddy`) |
 | Terraform (IAM) | `infrastructure/stacks/kubernetes/polaris-caddy-iam.tf` |
 | Seedbox roles | `ansible/roles/{plex-proxy,seedbox-proxy}` |

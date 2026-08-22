@@ -1,7 +1,7 @@
 # Native Plex Media Server, with NVENC hardware transcoding on the RTX 3080
 # (driver from modules/server/nvidia.nix). Hardware acceleration itself and
-# the transcode temp dir are enabled/set in the Plex UI after deploy — see
-# docs/superpowers/specs/2026-07-30-plex-design.md §6, §9.
+# the transcode temp dir are enabled/set in the Plex UI after deploy — see the
+# Plex design archived in the Homecluster/NixOS wiki (Specs), §6, §9.
 { ... }:
 {
   services.plex = {

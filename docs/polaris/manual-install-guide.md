@@ -389,4 +389,7 @@ the whole machine.
 Once the OS is up, the per-service secrets, DNS records, third-party auth, and
 first-run app config that `nixos-rebuild` doesn't handle are in
 [manual-steps.md](manual-steps.md) (AWS/Caddy credentials, Tailscale, Plex,
-seedbox, *arr setup).
+seedbox, *arr setup). **Do the op-secrets bootstrap first** — place the
+1Password service-account token at `/etc/op/token` before the first
+`make switch`, or the caddy/miniflux/restic secrets won't render (see the
+op-secrets section of [manual-steps.md](manual-steps.md)).
