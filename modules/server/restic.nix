@@ -19,12 +19,10 @@
 # `Persistent = true`: if polaris is off at 03:00, the missed run fires at
 # next boot instead of silently being skipped until the following day.
 #
-# Secrets: op-secrets renders the restic repo password and S3 backend env from
-# op://polaris/restic/* and op://polaris/restic-backend/* (in 1Password) to
-# /var/lib/secrets/restic-{repo.pass,backend.env} at deploy time — see
-# modules/server/op-secrets.nix. `passwordFile`/`environmentFile` are flipped to
-# those rendered paths in the consumer follow-up PR; until then restic reads the
-# hand-placed /etc/restic/{polaris.pass,hetzner.env} (diff the two first).
+# Secrets: `passwordFile` and `environmentFile` below are rendered at deploy
+# time by op-secrets from op://polaris/restic/* and op://polaris/restic-backend/*
+# in 1Password — see modules/server/op-secrets.nix; this module only ever
+# references their rendered paths.
 { ... }:
 {
   opSecrets.restic-repo = {
@@ -40,8 +38,8 @@
 
   services.restic.backups.polaris = {
     repository = "s3:https://nbg1.your-objectstorage.com/backups-polaris";
-    passwordFile = "/etc/restic/polaris.pass";
-    environmentFile = "/etc/restic/hetzner.env";
+    passwordFile = "/var/lib/secrets/restic-repo.pass";
+    environmentFile = "/var/lib/secrets/restic-backend.env";
     # /srv/data = the irreplaceable data dataset (Immich + DB dumps + any tenant
     # storing under it). /srv/fast/appdata = every service's config/SQLite DB on
     # the fast mirror (the *arr stack, bazarr, plex, karakeep, …) — small, awkward

@@ -14,10 +14,7 @@
 # in the restored DB, so CREATE_ADMIN is a no-op; the file is the module's
 # requirement and a break-glass admin.
 #
-# op-secrets renders this from op://polaris/miniflux/* to
-# /var/lib/secrets/miniflux-admin.env at deploy time. `adminCredentialsFile` is
-# flipped to that rendered path in the consumer follow-up PR; until then miniflux
-# reads the hand-placed /etc/miniflux/admin.env (diff the two files first).
+# The file is rendered from op://polaris/miniflux/* by op-secrets.
 { ... }:
 {
   opSecrets.miniflux-admin = {
@@ -28,7 +25,7 @@
 
   services.miniflux = {
     enable = true;
-    adminCredentialsFile = "/etc/miniflux/admin.env";
+    adminCredentialsFile = "/var/lib/secrets/miniflux-admin.env";
     config = {
       LISTEN_ADDR = "localhost:8080";
       BASE_URL = "https://miniflux.polaris.mattiasgees.be";
