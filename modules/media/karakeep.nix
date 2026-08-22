@@ -1,6 +1,6 @@
 # Karakeep (self-hostable bookmark-everything app), migrated off the Hetzner
 # Kubernetes cluster. Design archived in the Homecluster/NixOS wiki (Specs);
-# operator steps live in docs/polaris/setup.md (Karakeep section, Part 2 §12).
+# operator steps live in docs/polaris/setup.md (Karakeep section, Part 2 §5).
 #
 # Unlike Immich/Miniflux, Karakeep is **SQLite-only** — there is no PostgreSQL
 # support (upstream: the DB lives in DATA_DIR; the module bundles better-sqlite3),
