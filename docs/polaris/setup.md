@@ -9,8 +9,7 @@ imported, never recreated. Use this when:
 
 **Part 1** rebuilds the OS and re-imports the pools. **Part 2** is the host-side
 out-of-band setup (secrets, third-party auth, DNS) that `nixos-rebuild` doesn't
-capture; per-service **application** config lives in the wiki (**NixOS →
-Documentation**). For a **first-ever** build, or if the data
+capture. For a **first-ever** build, or if the data
 pools are genuinely gone (all disks new/wiped), the [Appendix](#appendix--first-time-build-or-total-pool-loss)
 creates the pools from scratch instead of importing them.
 
@@ -181,8 +180,6 @@ up — but secrets and per-service setup are **not** done yet. Continue with Par
 Everything on polaris that is **not** captured by `nixos-rebuild` and must be done
 by hand: secrets that live off git, third-party authentication, and DNS records.
 `make switch` builds the OS and services; this section covers the host-side rest.
-(Per-service **application** config — Plex, the *arr apps, seedbox roles,
-Recyclarr, Bazarr, mostly web-UI — lives in the wiki: **NixOS → Documentation**.)
 
 > **Golden rule — secrets never go in git.** The Nix config references secret
 > *paths* (e.g. `/var/lib/secrets/caddy-route53.env`), never secret *values*.
@@ -296,39 +293,17 @@ challenge — it writes a temporary TXT record into Route53. That needs AWS
 credentials, provided to the Caddy systemd unit via
 `EnvironmentFile=/var/lib/secrets/caddy-route53.env`.
 
-### 3a. Create the IAM user (Terraform)
+### 3a. AWS credentials (1Password)
 
-The IAM user + least-privilege policy is defined in the **infrastructure** repo:
-`stacks/kubernetes/polaris-caddy-iam.tf`. It is a plain IAM *user* (not an
-OIDC role) because polaris is bare-metal, not in the cluster.
+Caddy reads the creds from `/var/lib/secrets/caddy-route53.env`, which op-secrets
+(`modules/server/op-secrets.nix`) renders from `op://polaris/caddy-route53/*` at
+`make switch` — store the access key as the `AWS_ACCESS_KEY_ID`/
+`AWS_SECRET_ACCESS_KEY` fields on the `caddy-route53` item in the `polaris` vault.
+The key belongs to the `polaris-caddy` IAM user defined in the infrastructure
+repo (see the Quick reference); on a rebuild it already exists and the creds are
+already in 1Password.
 
-```bash
-cd ~/Documents/git/infrastructure/stacks/kubernetes
-terraform apply                 # creates user `polaris-caddy` + access key
-```
-
-The policy is scoped to the `mattiasgees.be` hosted zone and grants exactly:
-`route53:ListHostedZonesByName`, `route53:ListResourceRecordSets`,
-`route53:ChangeResourceRecordSets`, `route53:GetChange`.
-
-### 3b. Store the credentials in 1Password
-
-Pull the generated key straight from Terraform state (the secret is marked
-`sensitive`, so it only prints with `-raw`):
-
-```bash
-terraform output -raw polaris_caddy_access_key_id
-terraform output -raw polaris_caddy_secret_access_key
-```
-
-Caddy reads these creds from `/var/lib/secrets/caddy-route53.env`, which
-op-secrets (`modules/server/op-secrets.nix`) renders from
-`op://polaris/caddy-route53/*` at `make switch` time — store the two key values
-as the `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` fields on the `caddy-route53`
-item in the `polaris` 1Password vault. For the token bootstrap and rotation, see
-the **op-secrets** section above.
-
-### 3c. DNS record (Route53)
+### 3b. DNS record (Route53)
 
 One wildcard record covers all current and future apps:
 
@@ -340,7 +315,7 @@ This is what makes `https://sonarr|radarr|prowlarr.polaris.mattiasgees.be`
 resolve to polaris over the tailnet. (The DNS-01 *challenge* records are created
 and deleted automatically by Caddy — you don't manage those.)
 
-### 3d. Verify
+### 3c. Verify
 
 ```bash
 journalctl -u caddy -f | grep -iE "obtain|certificate obtained|error"
@@ -359,15 +334,6 @@ Expect `certificate obtained successfully` for each host. Then load
 
 ---
 
-## Media-app configuration → wiki
-
-The first-run application setup (mostly in each app’s web UI) for **Plex, the
-*arr apps, the seedbox roles, Recyclarr, and Bazarr** lives in the wiki, not here —
-this guide covers only host / infrastructure setup. See **Homecluster → NixOS →
-Documentation** (<https://wiki.gees.dev/doc/documentation-8KkPCu11W7>).
-
----
-
 ## 4. Miniflux admin credentials
 
 `modules/media/miniflux.nix` points `services.miniflux.adminCredentialsFile` at
@@ -379,57 +345,19 @@ This secret is rendered from `op://polaris/miniflux/*` to
 `/var/lib/secrets/miniflux-admin.env` by op-secrets
 (`modules/server/op-secrets.nix`) at `make switch` time — store the admin
 `username`/`password` as fields on the `miniflux` item in the `polaris` 1Password
-vault. For the token bootstrap and rotation, see the **op-secrets** section
-above.
-
-Because the Miniflux database was migrated from the old k8s deployment, the
-`miniflux` admin (and your real `mattias` account) already exist in it, so
-`CREATE_ADMIN` is a no-op — you log in with your **existing** credentials, and
-this rendered file is only a break-glass admin. (The original migration plan and
-design are archived in the wiki under **NixOS → Plans / Specs**.)
+vault. For the token bootstrap, see the **op-secrets** section above.
 
 ---
 
 ## 5. Karakeep OpenAI key
 
-`modules/media/karakeep.nix` points `services.karakeep.environmentFile` at
-`/var/lib/secrets/karakeep.env`, which supplies **`OPENAI_API_KEY`** to the
-Karakeep `web` + `workers` units (the workers do the AI auto-tagging and LLM OCR —
-`INFERENCE_TEXT_MODEL`/`INFERENCE_IMAGE_MODEL = gpt-4o-mini`, `OCR_USE_LLM = true`,
-all set in git). The file is **rendered by op-secrets** from
-`op://polaris/karakeep/OPENAI_API_KEY` (template `modules/media/karakeep.env.tpl`)
-during `make switch` — same mechanism as caddy and miniflux. It **must render
-before the first `make switch` that enables karakeep** or the units fail to start,
-so create the 1Password item first.
-
-Everything else Karakeep needs (`NEXTAUTH_SECRET`, `MEILI_MASTER_KEY`) is
-**auto-generated** by the module into `/var/lib/karakeep/settings.env` — only the
-OpenAI key comes from 1Password.
-
-**Bootstrap the 1Password item** (once). Reuse the same key the old k8s deployment
-used; pull it from a workstation that still has the hetzner kubectl context so the
-value never lands in the repo, then create item `karakeep` (field `OPENAI_API_KEY`)
-in the `polaris` vault:
-
-```bash
-# workstation (hetzner kubectl context):
-KEY=$(kubectl get secret karakeep-secrets -n karakeep \
-      -o jsonpath='{.data.OPENAI_API_KEY}' | base64 -d)
-# put $KEY into 1Password: polaris vault, item "karakeep", field "OPENAI_API_KEY"
-```
-
-The service account (`/etc/op/token`) already has read access to the whole
-`polaris` vault, so no scope change is needed. On the next `make switch NIXNAME=polaris`
-op-secrets renders `/var/lib/secrets/karakeep.env` (`0600 karakeep`); rotation is
-the standard op-secrets flow (edit in 1Password → `make switch` → `sudo systemctl
-restart karakeep-web karakeep-workers`). For the token bootstrap and rotation,
-see the **op-secrets** section above.
-
-Karakeep is **SQLite-only** (not a shared-Postgres tenant); its DB + assets live
-on the fast mirror at `/srv/fast/appdata/karakeep` (bind-mounted to
-`/var/lib/karakeep`) and ride an explicit restic path plus a 02:45 `.backup` +
-`.dump` export. (The original k8s → polaris migration runbook and design are
-archived in the wiki under **NixOS → Plans / Specs**.)
+`modules/media/karakeep.nix` supplies **`OPENAI_API_KEY`** to Karakeep from
+`/var/lib/secrets/karakeep.env`, which op-secrets renders from
+`op://polaris/karakeep/OPENAI_API_KEY` at `make switch` — store it as the
+`OPENAI_API_KEY` field on the `karakeep` item in the `polaris` vault. It **must
+render before the first `make switch` that enables karakeep** or the units fail to
+start. (`NEXTAUTH_SECRET`/`MEILI_MASTER_KEY` are auto-generated by the module.)
+For the token bootstrap, see the **op-secrets** section above.
 
 ---
 
@@ -448,9 +376,6 @@ archived in the wiki under **NixOS → Plans / Specs**.)
 | Karakeep (bookmarks) | `https://karakeep.polaris.mattiasgees.be` → `:3000`, secret `/var/lib/secrets/karakeep.env` (§5) |
 | App config | `/srv/fast/appdata/<app>` (fast NVMe mirror) |
 | Media roots | `/srv/media/{Series,Movies,Downloads}` (`media` group, setgid) |
-
-Media-app facts (seedbox, *arr, Plex, Bazarr) live with their setup in the wiki:
-**NixOS → Documentation**.
 
 See also: [updating.md](updating.md) (flake/Caddy/kernel updates) and
 [bios-checklist.md](bios-checklist.md) (BIOS/UEFI settings for the rebuild). The
