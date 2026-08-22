@@ -52,9 +52,15 @@ in
     virtualHosts."miniflux.polaris.mattiasgees.be".extraConfig = proxy 8080;
   };
 
-  # AWS creds for Route53 (AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY / AWS_REGION),
-  # placed by hand at /etc/caddy/route53.env (0600), kept out of git.
-  systemd.services.caddy.serviceConfig.EnvironmentFile = "/etc/caddy/route53.env";
+  # AWS creds for Route53 (AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY / AWS_DEFAULT_REGION),
+  # rendered from op://polaris/caddy-route53/* by op-secrets (modules/server/op-secrets.nix)
+  # at deploy time, kept out of git.
+  opSecrets.caddy-route53 = {
+    template = ./caddy.route53.env.tpl;
+    path = "/var/lib/secrets/caddy-route53.env";
+    owner = "caddy";
+  };
+  systemd.services.caddy.serviceConfig.EnvironmentFile = "/var/lib/secrets/caddy-route53.env";
 
   networking.firewall.allowedTCPPorts = [ 80 443 ];
 }
