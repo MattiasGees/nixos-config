@@ -50,9 +50,9 @@ match **exactly** — the templates reference them):
 | `restic-backend` | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | `/etc/restic/hetzner.env` |
 
 > Regions are **not** secret and are **not** stored in 1Password — they're
-> literals in the templates: caddy uses `AWS_DEFAULT_REGION=us-east-1` (AWS
-> Route53 is global; us-east-1 is the conventional value), restic uses
-> `AWS_DEFAULT_REGION=nbg1` (Hetzner object storage).
+> literals in the templates: caddy uses `AWS_REGION=eu-west-1` (matching the
+> live `/etc/caddy/route53.env`; Route53 is global, the region is just an SDK
+> formality), restic uses `AWS_DEFAULT_REGION=nbg1` (Hetzner object storage).
 
 ### 0.3 Create a service account and place its token
 
@@ -121,12 +121,11 @@ sudo diff /var/lib/secrets/restic-repo.pass   /etc/restic/polaris.pass && echo "
 ```
 
 Notes:
-- `caddy-route53.env` will differ **only** if your live file used
-  `AWS_REGION=` while the template emits `AWS_DEFAULT_REGION=` (both are honored
-  by the AWS SDK, same value `us-east-1`) — confirm the credential values match
-  and the region value is `us-east-1`.
-- Any *other* difference means a value in 1Password doesn't match what's live —
-  fix the 1Password field and re-run `make switch` until the diffs are clean.
+- All four diffs should be **fully clean** (no output). The templates carry the
+  region as a literal matching the live files (`caddy` → `AWS_REGION=eu-west-1`,
+  `restic` → `AWS_DEFAULT_REGION=nbg1`), and the credential values come from 1Password.
+- Any difference means a value in 1Password doesn't match what's live (or a
+  region literal drifted) — fix it and re-run `make switch` until the diffs are clean.
 - Do **not** proceed to Phase 2 until every diff is clean.
 
 ---
