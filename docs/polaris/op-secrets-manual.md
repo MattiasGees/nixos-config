@@ -109,7 +109,7 @@ failed`, fix that 1P field and re-run `make switch` before proceeding.
 ## Phase 2 — Verify miniflux, then remove its old file
 
 ```bash
-sudo ls -l /var/lib/secrets/miniflux-admin.env   # -rw------- miniflux miniflux
+sudo ls -l /var/lib/secrets/miniflux-admin.env   # -rw------- root root
 systemctl status miniflux                         # active (running)
 ```
 

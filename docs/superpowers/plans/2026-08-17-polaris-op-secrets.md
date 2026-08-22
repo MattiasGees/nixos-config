@@ -278,7 +278,7 @@ Operator runs on polaris:
 
 ```bash
 make switch NIXNAME=polaris
-sudo ls -l /var/lib/secrets/miniflux-admin.env    # -rw------- miniflux miniflux
+sudo ls -l /var/lib/secrets/miniflux-admin.env    # -rw------- root root
 sudo journalctl -b | grep 'op-secrets: rendered miniflux-admin'
 systemctl status miniflux                          # active (running)
 ```
@@ -323,7 +323,7 @@ Create `modules/media/caddy.route53.env.tpl` (note the literal region — `op in
 ```
 AWS_ACCESS_KEY_ID={{ op://polaris/caddy-route53/AWS_ACCESS_KEY_ID }}
 AWS_SECRET_ACCESS_KEY={{ op://polaris/caddy-route53/AWS_SECRET_ACCESS_KEY }}
-AWS_DEFAULT_REGION=nbg1
+AWS_DEFAULT_REGION=us-east-1
 ```
 
 - [ ] **Step 2: Declare the secret and repoint the EnvironmentFile**

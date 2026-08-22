@@ -20,7 +20,7 @@
   opSecrets.miniflux-admin = {
     template = ./miniflux.admin.env.tpl;
     path = "/var/lib/secrets/miniflux-admin.env";
-    owner = "miniflux";
+    owner = "root";
   };
 
   services.miniflux = {

@@ -18,15 +18,15 @@ let
   tokenFile = "/etc/op/token";
 
   renderOne = name: s: ''
-    tmp="$(${pkgs.coreutils}/bin/mktemp -p "$(${pkgs.coreutils}/bin/dirname ${lib.escapeShellArg s.path})")"
-    if ${pkgs.coreutils}/bin/timeout 15 ${op} inject -i ${s.template} -o "$tmp" \
+    if tmp="$(${pkgs.coreutils}/bin/mktemp -p "$(${pkgs.coreutils}/bin/dirname ${lib.escapeShellArg s.path})")" \
+       && ${pkgs.coreutils}/bin/timeout 15 ${op} inject -i ${s.template} -o "$tmp" \
        && ${pkgs.coreutils}/bin/chown ${s.owner}:${s.group} "$tmp" \
        && ${pkgs.coreutils}/bin/chmod ${s.mode} "$tmp" \
        && ${pkgs.coreutils}/bin/mv -f "$tmp" ${lib.escapeShellArg s.path}; then
       echo "op-secrets: rendered ${name} -> ${s.path}"
     else
       echo "op-secrets: WARNING ${name} render failed; keeping last-good ${s.path}" >&2
-      ${pkgs.coreutils}/bin/rm -f "$tmp"
+      [ -n "''${tmp:-}" ] && ${pkgs.coreutils}/bin/rm -f "$tmp"
     fi
   '';
 in
@@ -63,6 +63,11 @@ in
   };
 
   config = {
+    assertions = lib.mapAttrsToList (name: s: {
+      assertion = lib.hasPrefix "${secretsDir}/" s.path;
+      message = "opSecrets.${name}.path (${s.path}) must live under ${secretsDir}/.";
+    }) cfg;
+
     environment.systemPackages = [ pkgs._1password-cli ];
 
     # Runs during nixos-rebuild switch (and boot activation). deps = [ "users" ]
