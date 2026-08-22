@@ -184,27 +184,25 @@ covers the rest.
 
 > **Golden rule — secrets never go in git.** The Nix config references secret
 > *paths* (e.g. `/var/lib/secrets/caddy-route53.env`), never secret *values*.
-> Everything in the table below is either placed on the box by hand or rendered
-> by op-secrets from 1Password, and, where noted, backed up off-box. Losing an
-> item marked **irreplaceable** means data loss, not just reconfiguration.
+> Losing an item marked **irreplaceable** means data loss, not just
+> reconfiguration.
 
-## Secrets & files that live outside git
+Only **two** secrets are managed by hand — the roots of trust. Everything the
+services actually consume under `/var/lib/secrets/` is *derived* from the second
+one: op-secrets renders each file from the `polaris` 1Password vault at every
+`make switch` (see the **op-secrets** section for the full list).
 
 | File (on polaris) | Mode / owner | What it is | Backup? |
 |-------------------|--------------|-----------|---------|
 | `/etc/zfs/keys/polaris.key` | `0400 root` | ZFS encryption key for `fast` + `tank/data` | **Irreplaceable — back up offline** |
 | `/etc/op/token` | `0600 root` | 1Password service-account token that unlocks the `polaris` vault for op-secrets (§ op-secrets) | Reproducible — re-issue from 1Password |
-| `/var/lib/secrets/caddy-route53.env` | `0600 caddy` | AWS creds for Caddy's Route53 DNS-01, rendered from 1Password by op-secrets (§ op-secrets, §3) | Reproducible from Terraform / 1Password |
-| `/var/lib/secrets/miniflux-admin.env` | `0600 root` | Miniflux `ADMIN_USERNAME`/`ADMIN_PASSWORD` bootstrap, rendered from 1Password by op-secrets (§ op-secrets, §11) | Reproducible from 1Password |
-| `/var/lib/secrets/restic-repo.pass` | `0600 root` | restic repository password, rendered from 1Password by op-secrets (§ op-secrets) | Reproducible from 1Password |
-| `/var/lib/secrets/restic-backend.env` | `0600 root` | Hetzner S3 creds for the restic offsite backup, rendered from 1Password by op-secrets (§ op-secrets) | Reproducible from 1Password |
-| `/var/lib/secrets/karakeep.env` | `0600 karakeep` | Karakeep `OPENAI_API_KEY` for AI tagging/OCR, rendered from 1Password by op-secrets (§ op-secrets, §12) | Reproducible from 1Password |
+| `/var/lib/secrets/*` | `0600` (per-service) | Per-service secrets (caddy, miniflux, restic, karakeep) **rendered automatically** by op-secrets — not hand-placed. See the **op-secrets** section for the item→file map | Reproducible — re-renders from 1Password |
 
 None of these are in the repo, and none should ever be pasted into a commit,
-issue, or chat. `/etc/zfs/keys/polaris.key` is restored/created during the OS
-rebuild (Part 1 §4, or the Appendix); the `/etc/op/token` bootstrap is placed
-once (see the **op-secrets** section below), after which the caddy, miniflux,
-restic, and karakeep files render automatically at every `make switch`.
+issue, or chat. Only the two roots need a human: `/etc/zfs/keys/polaris.key` is
+restored/created during the OS rebuild (Part 1 §4, or the Appendix), and
+`/etc/op/token` is placed once (see the **op-secrets** section below). After that,
+the `/var/lib/secrets/*` files render themselves on every `make switch`.
 
 ---
 
