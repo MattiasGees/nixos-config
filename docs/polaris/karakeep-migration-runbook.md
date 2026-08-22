@@ -30,23 +30,23 @@ first `make switch`. No `zfs create`, no manual step — it inherits `fast/appda
 encryption and rides the `/srv/fast/appdata` restic sweep. (Verify after deploy
 with `findmnt /var/lib/karakeep` — step 3.)
 
-## 2. Place the OpenAI key (polaris)
+## 2. Bootstrap the OpenAI key in 1Password
 
 See [manual-steps.md §12](manual-steps.md#12-karakeep-openai-key) — the key is
-pulled from the old k8s Secret so it never enters the repo:
+rendered by op-secrets from `op://polaris/karakeep/OPENAI_API_KEY`, so it never
+enters the repo. Pull the value from the old k8s Secret and create the 1Password
+item **before** the deploy in step 3 (op-secrets renders it on `make switch`):
 
 ```bash
 # workstation (hetzner kubectl context):
 KEY=$(kubectl get secret karakeep-secrets -n karakeep \
         -o jsonpath='{.data.OPENAI_API_KEY}' | base64 -d)
-
-# on polaris:
-ssh -t mattias@192.168.1.50 "
-  /run/wrappers/bin/sudo install -d -m 0755 /etc/karakeep &&
-  printf 'OPENAI_API_KEY=%s\n' '$KEY' \
-    | /run/wrappers/bin/sudo install -m 0600 /dev/stdin /etc/karakeep/karakeep.env
-"
+# put $KEY into 1Password: polaris vault, item "karakeep", field "OPENAI_API_KEY"
 ```
+
+The service account at `/etc/op/token` already reads the whole `polaris` vault, so
+no scope change is needed — the next `make switch` (step 3) renders
+`/var/lib/secrets/karakeep.env`.
 
 ## 3. Deploy (polaris) — empty instance first
 
