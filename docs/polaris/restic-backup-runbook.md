@@ -7,9 +7,14 @@ copy-pasteable checklist to run **on polaris** (or in the Hetzner console)
 after `../modules/server/restic.nix` is merged and deployed.
 
 The module itself only references two secret file paths
-(`/etc/restic/hetzner.env`, `/etc/restic/polaris.pass`) — it ships no
-credentials. Everything in section A and B below is what makes those paths
-real.
+(`/var/lib/secrets/restic-backend.env`, `/var/lib/secrets/restic-repo.pass`) —
+it ships no credentials. Both are rendered at deploy time by the op-secrets
+engine (`modules/server/op-secrets.nix`) from 1Password
+(`op://polaris/restic/repo-password` and `op://polaris/restic-backend/*`); see
+[`op-secrets-manual.md`](op-secrets-manual.md) for the full bootstrap, deploy,
+and rotation flow. Section A below (creating the Hetzner bucket + access key)
+still applies — only the *placement* of the resulting credentials has moved,
+which section B covers.
 
 ---
 
@@ -26,53 +31,57 @@ in a different region will not match.
 Still in Object Storage, generate an S3-compatible access key/secret pair
 scoped to this project (or the `backups-polaris` bucket, if Hetzner's console
 supports per-bucket scoping). Copy both values somewhere temporary — they go
-into `/etc/restic/hetzner.env` in the next section and are not stored
-anywhere else.
+into the `restic-backend` item in 1Password in the next section, and are not
+stored anywhere else.
 
 *Good:* the bucket `backups-polaris` exists in `nbg1`, and you're holding an
 access key ID + secret key.
 
 ---
 
-## B. Place the secrets on polaris
+## B. Place the secrets
 
-Both files are hand-placed, `0600`, owned by `root` — the same convention as
-`/etc/caddy/route53.env` (see `modules/media/caddy.nix`). Nothing under
-`/etc/restic/` is tracked in git.
+Both secrets are now managed through 1Password and rendered onto polaris by
+the op-secrets engine (`modules/server/op-secrets.nix`) — they are **no
+longer hand-placed** under `/etc/restic/`. Full bootstrap (vault/item/field
+layout, service-account token), the deploy flow, and rotation are documented
+once in [`op-secrets-manual.md`](op-secrets-manual.md); this section only
+covers what's specific to restic's two secrets.
 
-**B.3 — `/etc/restic/hetzner.env`.**
-
-```bash
-sudo install -d -m 0700 /etc/restic
-sudo tee /etc/restic/hetzner.env >/dev/null <<'EOF'
-AWS_ACCESS_KEY_ID=<hetzner access key from A.2>
-AWS_SECRET_ACCESS_KEY=<hetzner secret key from A.2>
-AWS_DEFAULT_REGION=nbg1
-EOF
-sudo chown root:root /etc/restic/hetzner.env
-sudo chmod 0600 /etc/restic/hetzner.env
-```
-
-**B.4 — `/etc/restic/polaris.pass`.**
-This is the restic **repository encryption password**, not a login password —
-generate a strong random one:
+**B.3 — restic repo password → `restic` item, field `repo-password`.**
+This is the restic **repository encryption password**, not a login password.
+If you're bootstrapping fresh (no existing repo), generate a strong random one
+and store it as the `repo-password` field of the `polaris/restic` item in
+1Password:
 
 ```bash
-openssl rand -base64 32 | sudo tee /etc/restic/polaris.pass >/dev/null
-sudo chown root:root /etc/restic/polaris.pass
-sudo chmod 0600 /etc/restic/polaris.pass
+openssl rand -base64 32   # paste the output into the 1Password field
 ```
 
-**⚠️ Before doing anything else, copy this password into a password manager,
-off-box.** restic repositories are encrypted client-side — there is no
-recovery mechanism. If `/etc/restic/polaris.pass` is lost and no copy exists
-elsewhere, every snapshot in `backups-polaris` becomes permanently
-unreadable, forever, even though the data is still sitting in the bucket.
+**⚠️ Before doing anything else, make sure this value is durably stored in
+1Password (with your normal 1Password backup/sync).** restic repositories are
+encrypted client-side — there is no recovery mechanism. If this password is
+lost, every snapshot in `backups-polaris` becomes permanently unreadable,
+forever, even though the data is still sitting in the bucket.
 
-*Good:* `sudo cat /etc/restic/hetzner.env` shows the three `AWS_*` lines;
-`sudo cat /etc/restic/polaris.pass` shows a random password; both files are
-`-rw-------` owned by `root:root`; the password also lives in a password
-manager, not just on polaris.
+**B.4 — Hetzner S3 credentials → `restic-backend` item.**
+Store the access key ID and secret from A.2 as the `AWS_ACCESS_KEY_ID` and
+`AWS_SECRET_ACCESS_KEY` fields of the `polaris/restic-backend` item. The
+region (`AWS_DEFAULT_REGION=nbg1`) is **not** secret and is not stored in
+1Password — it's a literal in the render template.
+
+**B.5 — Deploy and verify the render.**
+
+```bash
+make switch NIXNAME=polaris
+sudo ls -l /var/lib/secrets/restic-repo.pass /var/lib/secrets/restic-backend.env
+```
+
+*Good:* both files exist, `-rw-------` owned by `root:root`; `journalctl -b |
+grep op-secrets` shows `rendered restic-repo` / `rendered restic-backend`
+with no `WARNING`. See `op-secrets-manual.md` for the token bootstrap, the
+per-secret render/rollback behavior, and how to rotate either value later
+(edit in 1Password → `make switch` → restart the consuming unit).
 
 ---
 
@@ -212,8 +221,9 @@ endpoint), double-check:
 
 - The bucket in A.1 was actually created in `nbg1`, matching the
   `nbg1.your-objectstorage.com` host in the `repository` URL.
-- `AWS_DEFAULT_REGION=nbg1` is present in `/etc/restic/hetzner.env` (already
-  specified in B.3 above).
+- `AWS_DEFAULT_REGION=nbg1` is present in the rendered
+  `/var/lib/secrets/restic-backend.env` (it's a literal in the render
+  template, not a 1Password field — see B.4 above).
 
 If both already match and restic still complains, set
 `services.restic.backups.polaris.extraOptions = [ "s3.region=nbg1" ]` in
