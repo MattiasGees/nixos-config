@@ -67,8 +67,14 @@ printf '%s' 'ops_PASTE_YOUR_TOKEN' | sudo install -m 0600 /dev/stdin /etc/op/tok
 
 ### 0.4 Verify the token reads **every** reference
 
+The 1Password CLI is unfree, so an ad-hoc `nix run` needs
+`NIXPKGS_ALLOW_UNFREE=1` **and** `--impure` (so `nix run` reads that env var);
+without them every line fails with an "unfree license" error before any lookup
+happens.
+
 ```bash
 sudo sh -c 'export OP_SERVICE_ACCOUNT_TOKEN="$(cat /etc/op/token)"; \
+  export NIXPKGS_ALLOW_UNFREE=1; \
   for r in \
     op://polaris/miniflux/username \
     op://polaris/miniflux/password \
@@ -78,7 +84,7 @@ sudo sh -c 'export OP_SERVICE_ACCOUNT_TOKEN="$(cat /etc/op/token)"; \
     op://polaris/restic-backend/AWS_ACCESS_KEY_ID \
     op://polaris/restic-backend/AWS_SECRET_ACCESS_KEY; do \
     printf "%s -> " "$r"; \
-    nix run nixpkgs#_1password-cli -- read "$r" >/dev/null && echo OK || echo FAIL; \
+    nix run --impure nixpkgs#_1password-cli -- read "$r" >/dev/null && echo OK || echo FAIL; \
   done'
 ```
 
@@ -202,6 +208,8 @@ To rotate the **bootstrap token**: create a new service-account token in
 - **`op-secrets: no token` and a service won't start** → `/etc/op/token` is
   missing/unreadable and there's no last-good file yet (fresh host). Place the
   token (step 0.3) and `make switch`.
-- **Debug a render without writing a file:**
-  `sudo sh -c 'OP_SERVICE_ACCOUNT_TOKEN="$(cat /etc/op/token)" nix run nixpkgs#_1password-cli -- inject -i <template-path>'`
+- **Debug a render without writing a file** (once op-secrets is deployed, the
+  system `op` is on PATH — `op inject -i <template-path>`). Before that, via an
+  ad-hoc unfree `nix run`:
+  `sudo sh -c 'OP_SERVICE_ACCOUNT_TOKEN="$(cat /etc/op/token)" NIXPKGS_ALLOW_UNFREE=1 nix run --impure nixpkgs#_1password-cli -- inject -i <template-path>'`
   prints the rendered result to stdout.
