@@ -55,4 +55,12 @@
   # "Operation not permitted" error on every start. Point HOME at the writable
   # cache dir it already uses (XDG_CACHE_HOME=/var/cache/immich).
   systemd.services.immich-machine-learning.environment.HOME = "/var/cache/immich";
+
+  # CUDA ML: onnxruntime's CUDAExecutionProvider needs the NVIDIA *driver* lib
+  # (libcuda.so.1), which is NOT in the nix store — it lives at
+  # /run/opengl-driver/lib (provided by hardware.graphics/nvidia). The in-store
+  # CUDA toolkit + cuDNN come via the wheel, but the driver stub must be exposed
+  # to the sandboxed ML unit or the CUDA provider fails to initialise. Device
+  # access (/dev/nvidia*) is granted by services.immich.accelerationDevices.
+  systemd.services.immich-machine-learning.environment.LD_LIBRARY_PATH = "/run/opengl-driver/lib";
 }
