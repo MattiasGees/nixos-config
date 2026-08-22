@@ -18,11 +18,11 @@ let
   tokenFile = "/etc/op/token";
 
   renderOne = name: s: ''
-    tmp="$(${pkgs.coreutils}/bin/mktemp)"
-    if ${pkgs.coreutils}/bin/timeout 15 ${op} inject -i ${s.template} -o "$tmp"; then
-      ${pkgs.coreutils}/bin/chown ${s.owner}:${s.group} "$tmp"
-      ${pkgs.coreutils}/bin/chmod ${s.mode} "$tmp"
-      ${pkgs.coreutils}/bin/mv -f "$tmp" ${lib.escapeShellArg s.path}
+    tmp="$(${pkgs.coreutils}/bin/mktemp -p "$(${pkgs.coreutils}/bin/dirname ${lib.escapeShellArg s.path})")"
+    if ${pkgs.coreutils}/bin/timeout 15 ${op} inject -i ${s.template} -o "$tmp" \
+       && ${pkgs.coreutils}/bin/chown ${s.owner}:${s.group} "$tmp" \
+       && ${pkgs.coreutils}/bin/chmod ${s.mode} "$tmp" \
+       && ${pkgs.coreutils}/bin/mv -f "$tmp" ${lib.escapeShellArg s.path}; then
       echo "op-secrets: rendered ${name} -> ${s.path}"
     else
       echo "op-secrets: WARNING ${name} render failed; keeping last-good ${s.path}" >&2
