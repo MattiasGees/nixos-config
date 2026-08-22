@@ -51,7 +51,7 @@ else
 # as the user uses that user's GitHub SSH access; sudo is only needed to activate
 # the already-built closure (no re-evaluation, no re-fetch). Mirrors the Darwin
 # path above: build as user, sudo only to switch.
-	NIX_CONFIG="$(NIX_CONFIG)" NIXPKGS_ALLOW_UNSUPPORTED_SYSTEM=1 nix build ".#nixosConfigurations.${NIXNAME}.config.system.build.toplevel" --impure
+	NIX_CONFIG="$(NIX_CONFIG)" nix build ".#nixosConfigurations.${NIXNAME}.config.system.build.toplevel" --impure
 	sudo nix-env -p /nix/var/nix/profiles/system --set ./result
 	sudo ./result/bin/switch-to-configuration switch
 endif

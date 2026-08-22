@@ -1,8 +1,8 @@
 { lib, pkgs, ... }:
 
 let
-  isDarwin = pkgs.stdenv.isDarwin;
-  isLinux = pkgs.stdenv.isLinux;
+  isDarwin = pkgs.stdenv.hostPlatform.isDarwin;
+  isLinux = pkgs.stdenv.hostPlatform.isLinux;
 
 in {
 
@@ -14,13 +14,13 @@ in {
         ../../pkgs/default.nix
         ../../darwin/modules/kitty/kitty.nix
         ../../darwin/modules/ghostty/ghostty.nix
-        ] ++ (lib.optionals pkgs.stdenv.isDarwin [
+        ] ++ (lib.optionals pkgs.stdenv.hostPlatform.isDarwin [
         ../../darwin/modules/sketchybar/sketchybar.nix
         ../../darwin/modules/yabai/yabai.nix
         ../../darwin/modules/skhd/skhd.nix
         # ../../darwin/modules/syncthing/syncthing.nix
         ../../pkgs/macos.nix
-        ]) ++ (lib.optionals pkgs.stdenv.isLinux [
+        ]) ++ (lib.optionals pkgs.stdenv.hostPlatform.isLinux [
         ../../modules/desktop/hyprland/home.nix
         ../../pkgs/nixos.nix
         ../../modules/desktop/hyprland/extras.nix

@@ -18,11 +18,12 @@ covers the rest.
 | `/etc/zfs/keys/polaris.key` | `0400 root` | ZFS encryption key for `fast` + `tank/data` | **Irreplaceable — back up offline** |
 | `/var/lib/secrets/caddy-route53.env` | `0600 caddy` | AWS creds for Caddy's Route53 DNS-01, rendered from 1Password by op-secrets (§3) | Reproducible from Terraform / 1Password |
 | `/var/lib/secrets/miniflux-admin.env` | `0600 root` | Miniflux `ADMIN_USERNAME`/`ADMIN_PASSWORD` bootstrap, rendered from 1Password by op-secrets (§11) | Reproducible from 1Password |
+| `/etc/karakeep/karakeep.env` | `0600 root` | Karakeep `OPENAI_API_KEY` for AI tagging/OCR (§12) | Reproducible from the old k8s Secret (AWS Secrets Manager) |
 
 None of these are in the repo, and none should ever be pasted into a commit,
-issue, or chat. `/etc/zfs/keys` is created by hand (during the
-[install guide](manual-install-guide.md), step 8/12); the caddy and miniflux
-files are rendered automatically at deploy time — see
+issue, or chat. `/etc/karakeep` and `/etc/zfs/keys` are created by hand (the
+latter during the [install guide](manual-install-guide.md), step 8/12); the
+caddy and miniflux files are rendered automatically at deploy time — see
 [op-secrets-manual.md](op-secrets-manual.md).
 
 ---
@@ -451,6 +452,45 @@ For bootstrap and rotation steps, see [op-secrets-manual.md](op-secrets-manual.m
 
 ---
 
+## 12. Karakeep OpenAI key
+
+`modules/media/karakeep.nix` points `services.karakeep.environmentFile` at
+`/etc/karakeep/karakeep.env`, which supplies **`OPENAI_API_KEY`** to the Karakeep
+`web` + `workers` units (the workers do the AI auto-tagging and LLM OCR —
+`INFERENCE_TEXT_MODEL`/`INFERENCE_IMAGE_MODEL = gpt-4o-mini`, `OCR_USE_LLM = true`,
+all set in git). It is a systemd `EnvironmentFile` — plain `KEY=value`, no
+`export`, no quotes. The file **must exist before the first `make switch` that
+enables karakeep** or the units fail to start.
+
+Everything else Karakeep needs (`NEXTAUTH_SECRET`, `MEILI_MASTER_KEY`) is
+**auto-generated** by the module into `/var/lib/karakeep/settings.env` — only the
+OpenAI key is hand-placed. Reuse the same key the old k8s deployment used; pull it
+from a workstation that still has the hetzner kubectl context so the value never
+lands in the repo:
+
+```bash
+# workstation (hetzner kubectl context):
+KEY=$(kubectl get secret karakeep-secrets -n karakeep \
+      -o jsonpath='{.data.OPENAI_API_KEY}' | base64 -d)
+
+# on polaris (run there, or pipe over SSH):
+sudo install -d -m 0755 /etc/karakeep
+printf 'OPENAI_API_KEY=%s\n' "$KEY" \
+  | sudo install -m 0600 /dev/stdin /etc/karakeep/karakeep.env
+```
+
+Karakeep is **SQLite-only** (not a shared-Postgres tenant); its DB + assets live
+on the fast mirror at `/srv/fast/appdata/karakeep` (bind-mounted to
+`/var/lib/karakeep`) and ride an explicit restic path plus a 02:45 `.backup` +
+`.dump` export. The full k8s → polaris cutover (dataset, data copy, reindex,
+verify) is its own runbook:
+[karakeep-migration-runbook.md](karakeep-migration-runbook.md).
+
+> Moving this key into **sops-nix** is a queued follow-up (with the miniflux and
+> caddy secrets above); until then it's hand-placed.
+
+---
+
 ## Quick reference
 
 | Thing | Value |
@@ -462,6 +502,7 @@ For bootstrap and rotation steps, see [op-secrets-manual.md](op-secrets-manual.m
 | App URLs | `https://{sonarr,radarr,prowlarr,bazarr}.polaris.mattiasgees.be` |
 | Bazarr (subtitles) | `:6767`, DB `/srv/fast/appdata/bazarr`, langs en+nl+pt-BR |
 | Miniflux (RSS) | `https://miniflux.polaris.mattiasgees.be` → `:8080`, DB `miniflux` on shared pg18, secret `/var/lib/secrets/miniflux-admin.env` (§11) |
+| Karakeep (bookmarks) | `https://karakeep.polaris.mattiasgees.be` → `:3000`, SQLite `/srv/fast/appdata/karakeep`, secret `/etc/karakeep/karakeep.env` (§12), migration runbook |
 | App config | `/srv/fast/appdata/<app>` (fast NVMe mirror) |
 | Media roots | `/srv/media/{Series,Movies,Downloads}` (`media` group, setgid) |
 | ZFS key | `/etc/zfs/keys/polaris.key` (**back up offline**) |

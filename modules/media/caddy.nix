@@ -50,6 +50,10 @@ in
     virtualHosts."seerr.polaris.mattiasgees.be".extraConfig = proxy 5055;
     virtualHosts."immich.polaris.mattiasgees.be".extraConfig = proxy 2283;
     virtualHosts."miniflux.polaris.mattiasgees.be".extraConfig = proxy 8080;
+    virtualHosts."karakeep.polaris.mattiasgees.be".extraConfig = proxy 3000;
+    # Open WebUI (open-webui.nix) — chat frontend for local Ollama. Port 3001,
+    # not 8080, to avoid the miniflux collision above.
+    virtualHosts."chat.polaris.mattiasgees.be".extraConfig = proxy 3001;
   };
 
   # AWS creds for Route53 (AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY / AWS_DEFAULT_REGION),

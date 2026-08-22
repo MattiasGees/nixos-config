@@ -3,8 +3,8 @@
 let
   nixConfigDir = "${config.home.homeDirectory}/Documents/git/nixos-config";
   archiveScript = "${nixConfigDir}/scripts/archive-downloads.sh";
-  isDarwin = pkgs.stdenv.isDarwin;
-  isLinux = pkgs.stdenv.isLinux;
+  isDarwin = pkgs.stdenv.hostPlatform.isDarwin;
+  isLinux = pkgs.stdenv.hostPlatform.isLinux;
 in
 
 {

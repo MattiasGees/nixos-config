@@ -44,7 +44,14 @@
       system = "x86_64-linux";
       pkgs  = import nixpkgs {
       inherit system; 
-      config = { allowUnfree = true; allowInsecure = true; };
+      # allowUnsupportedSystem stays false: NIXPKGS_ALLOW_UNSUPPORTED_SYSTEM=1
+      # (formerly exported by the Makefile) forces meta.available = true for every
+      # package, which makes Nix try to BUILD aarch64/Jetson-only redistributables
+      # like cudaPackages.cuda_compat on x86_64 — they have no x86_64 src and die
+      # with "variable $src or $srcs should point to the source" (nixpkgs#458799).
+      # Pinning it here prunes them from the closure regardless of how the build is
+      # invoked; without this, ollama-cuda fails to build on polaris.
+      config = { allowUnfree = true; allowInsecure = true; allowUnsupportedSystem = false; };
       overlays = [
         (final: prev: {
           waybar = inputs.nixpkgs-unstable.legacyPackages.${system}.waybar;

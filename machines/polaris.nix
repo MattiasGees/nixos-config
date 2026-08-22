@@ -19,6 +19,9 @@
     ../modules/media/seerr.nix
     ../modules/media/immich.nix
     ../modules/media/miniflux.nix
+    ../modules/media/karakeep.nix
+    ../modules/media/ollama.nix
+    ../modules/media/open-webui.nix
     ../modules/media/caddy.nix
     ../modules/media/seedbox-downloads.nix
     ../modules/media/recyclarr.nix
@@ -48,7 +51,11 @@
     { address = "192.168.1.50"; prefixLength = 24; }
   ];
   networking.defaultGateway = "192.168.1.1";
-  networking.nameservers = [ "192.168.1.1" ];
+  # Resolve via 192.168.1.86 with Google DNS (8.8.8.8) as fallback. The router
+  # (192.168.1.1) was returning SERVFAIL for some public domains, which silently
+  # broke Karakeep's crawler (ESERVFAIL -> "Failed to resolve hostname").
+  # resolv.conf tries these in order.
+  networking.nameservers = [ "192.168.1.86" "8.8.8.8" ];
 
   # SSH: key-only. Keys from github.com/mattiasgees.keys (2x ecdsa, 2x ed25519).
   users.users.mattias.openssh.authorizedKeys.keys = [
