@@ -135,5 +135,5 @@ supports.
 - **AWS IAM / Terraform** (Caddy's Route53 user): the **infrastructure** repo.
   Provider updates via `terraform init -upgrade` then `plan` / `apply`.
 
-See also: [manual-steps.md](manual-steps.md) (secrets, DNS, first-run setup) and
-[manual-install-guide.md](manual-install-guide.md) (from-ISO OS + ZFS).
+See also: [setup.md](setup.md) — Part 1 (from-ISO OS + ZFS rebuild) and Part 2
+(secrets, DNS, first-run setup).

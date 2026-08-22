@@ -10,7 +10,7 @@
 #
 # Chosen over sops-nix/agenix: no ciphertext in git, rotate in 1Password with no
 # commit, no age/host keys. Design archived in the Homecluster/NixOS wiki (Specs);
-# operator steps live in docs/polaris/manual-steps.md (op-secrets section).
+# operator steps live in docs/polaris/setup.md (op-secrets section).
 { pkgs, lib, config, ... }:
 let
   cfg = config.opSecrets;
