@@ -54,97 +54,95 @@ sudo install -d -m 0700 /etc/op
 printf '%s' 'ops_PASTE_YOUR_TOKEN' | sudo install -m 0600 /dev/stdin /etc/op/token
 ```
 
-### 0.4 Verify the token reads the vault
+### 0.4 Verify the token reads **every** reference
+
+This is the safety gate for the single combined deploy: prove all seven
+references resolve *before* switching, so no render can fail on deploy.
 
 ```bash
-sudo sh -c 'OP_SERVICE_ACCOUNT_TOKEN="$(cat /etc/op/token)" \
-  nix run nixpkgs#_1password-cli -- read "op://polaris/miniflux/username"'
+sudo sh -c 'export OP_SERVICE_ACCOUNT_TOKEN="$(cat /etc/op/token)"; \
+  for r in \
+    op://polaris/miniflux/username \
+    op://polaris/miniflux/password \
+    op://polaris/caddy-route53/AWS_ACCESS_KEY_ID \
+    op://polaris/caddy-route53/AWS_SECRET_ACCESS_KEY \
+    op://polaris/restic/repo-password \
+    op://polaris/restic-backend/AWS_ACCESS_KEY_ID \
+    op://polaris/restic-backend/AWS_SECRET_ACCESS_KEY; do \
+    printf "%s -> " "$r"; \
+    nix run nixpkgs#_1password-cli -- read "$r" >/dev/null && echo OK || echo FAIL; \
+  done'
 ```
 
-Expected: prints the miniflux admin username. If it errors, fix the vault/item/
-field names or the service-account scope before continuing.
+Expected: **all seven print `OK`**. Any `FAIL` means a vault/item/field name
+mismatch or a scope problem — fix it before deploying. (The command discards the
+values; it only reports resolvability.)
 
-**→ Tell Claude "Phase 0 done."** Claude runs **Task 2** (adds the op-secrets
-engine module) and reports back with a build result.
+**→ Tell Claude "Phase 0 done."** Claude implements Tasks 2–6 (engine + all
+templates/wiring + runbook) continuously and tells you when the branch is ready
+to deploy.
 
 ---
 
-## Phase 1 — Deploy the engine (Task 2)
+## Phase 1 — Single deploy (all tasks)
 
-After Claude reports the engine module builds, deploy it. It declares **no**
-secrets yet — this only proves the plumbing and the `/var/lib/secrets` dir.
+Once Claude reports the branch is ready and all commits are in, deploy
+everything in one switch. Because Phase 0.4 proved every reference resolves and
+the renderer is per-secret non-fatal, all four secrets render together and the
+old `/etc/*` files stay in place as rollback until you remove them below.
 
 ```bash
 cd /home/mattias/git/nixos-config
+git pull   # or fetch the branch Claude committed to
 make switch NIXNAME=polaris
-ls -ld /var/lib/secrets                       # expect: drwx------ root root
-sudo journalctl -b | grep op-secrets          # token found (no renders yet)
+ls -ld /var/lib/secrets                                  # drwx------ root root
+sudo journalctl -b | grep op-secrets                     # 4 "rendered ..." lines, no WARNING
+sudo ls -l /var/lib/secrets/                             # 4 files, correct owners/modes
 ```
 
-Expected: switch succeeds, `/var/lib/secrets` exists `0700 root:root`, no errors.
-
-**→ Tell Claude "engine deployed."** Claude runs **Task 3** (miniflux).
+Expected: switch succeeds; four `rendered` lines (miniflux-admin, caddy-route53,
+restic-repo, restic-backend); no `WARNING`. If you see a `WARNING <name> render
+failed`, fix that 1P field and re-run `make switch` before proceeding.
 
 ---
 
-## Phase 2 — Miniflux (Task 3)
-
-After Claude reports Task 3 builds:
+## Phase 2 — Verify miniflux, then remove its old file
 
 ```bash
-cd /home/mattias/git/nixos-config
-make switch NIXNAME=polaris
 sudo ls -l /var/lib/secrets/miniflux-admin.env   # -rw------- miniflux miniflux
-sudo journalctl -b | grep 'rendered miniflux-admin'
 systemctl status miniflux                         # active (running)
 ```
 
-Then log in at `https://miniflux.polaris.mattiasgees.be` with the migrated
-admin credentials to confirm they work.
-
-**Only after that passes**, remove the old file:
+Log in at `https://miniflux.polaris.mattiasgees.be` with the migrated admin
+credentials. **Only after that passes:**
 
 ```bash
 sudo rm /etc/miniflux/admin.env
 sudo rmdir /etc/miniflux 2>/dev/null || true
 ```
 
-**→ Tell Claude "miniflux verified."** Claude runs **Task 4** (caddy).
-
 ---
 
-## Phase 3 — Caddy Route53 (Task 4)
-
-After Claude reports Task 4 builds:
+## Phase 3 — Verify caddy, then remove its old file
 
 ```bash
-cd /home/mattias/git/nixos-config
-make switch NIXNAME=polaris
 sudo ls -l /var/lib/secrets/caddy-route53.env    # -rw------- caddy caddy
-sudo journalctl -b | grep 'rendered caddy-route53'
 systemctl status caddy                            # active (running)
 curl -I https://miniflux.polaris.mattiasgees.be   # still serving TLS
 ```
 
-**Only after that passes**, remove the old file:
+**Only after that passes:**
 
 ```bash
 sudo rm /etc/caddy/route53.env
 ```
 
-**→ Tell Claude "caddy verified."** Claude runs **Task 5** (restic).
-
 ---
 
-## Phase 4 — Restic (Task 5)
-
-After Claude reports Task 5 builds:
+## Phase 4 — Verify restic, then remove its old files
 
 ```bash
-cd /home/mattias/git/nixos-config
-make switch NIXNAME=polaris
 sudo ls -l /var/lib/secrets/restic-repo.pass /var/lib/secrets/restic-backend.env  # -rw------- root root
-sudo journalctl -b | grep -E 'rendered restic-(repo|backend)'
 
 # Functional check: restic authenticates with the rendered creds
 sudo systemctl start restic-backups-polaris.service
@@ -154,20 +152,16 @@ sudo sh -c 'set -a; . /var/lib/secrets/restic-backend.env; \
   --password-file /var/lib/secrets/restic-repo.pass snapshots' | tail
 ```
 
-Expected: `restic snapshots` lists existing snapshots.
-
-**Only after that passes**, remove the old files:
+Expected: `restic snapshots` lists existing snapshots. **Only after that passes:**
 
 ```bash
 sudo rm /etc/restic/polaris.pass /etc/restic/hetzner.env
 sudo rmdir /etc/restic 2>/dev/null || true
 ```
 
-**→ Tell Claude "restic verified."** Claude runs **Task 6** (outage check + runbook).
-
 ---
 
-## Phase 5 — Outage-independence check (Task 6)
+## Phase 5 — Outage-independence check
 
 Prove that a 1Password outage never breaks a deploy or boot — services fall back
 to the last rendered files:
