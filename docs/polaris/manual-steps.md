@@ -6,24 +6,25 @@ per-service first-run setup. `make switch` builds the OS and services; this file
 covers the rest.
 
 > **Golden rule — secrets never go in git.** The Nix config references secret
-> *paths* (e.g. `/etc/caddy/route53.env`), never secret *values*. Everything in
-> the table below is placed on the box by hand and, where noted, backed up
-> off-box. Losing an item marked **irreplaceable** means data loss, not just
-> reconfiguration.
+> *paths* (e.g. `/var/lib/secrets/caddy-route53.env`), never secret *values*.
+> Everything in the table below is either placed on the box by hand or rendered
+> by op-secrets from 1Password, and, where noted, backed up off-box. Losing an
+> item marked **irreplaceable** means data loss, not just reconfiguration.
 
 ## Secrets & files that live outside git
 
 | File (on polaris) | Mode / owner | What it is | Backup? |
 |-------------------|--------------|-----------|---------|
 | `/etc/zfs/keys/polaris.key` | `0400 root` | ZFS encryption key for `fast` + `tank/data` | **Irreplaceable — back up offline** |
-| `/etc/caddy/route53.env` | `0600 root` | AWS creds for Caddy's Route53 DNS-01 | Reproducible from Terraform |
-| `/etc/miniflux/admin.env` | `0600 root` | Miniflux `ADMIN_USERNAME`/`ADMIN_PASSWORD` bootstrap (§11) | Reproducible from the old k8s Secret (AWS Secrets Manager) |
+| `/var/lib/secrets/caddy-route53.env` | `0600 caddy` | AWS creds for Caddy's Route53 DNS-01, rendered from 1Password by op-secrets (§3) | Reproducible from Terraform / 1Password |
+| `/var/lib/secrets/miniflux-admin.env` | `0600 root` | Miniflux `ADMIN_USERNAME`/`ADMIN_PASSWORD` bootstrap, rendered from 1Password by op-secrets (§11) | Reproducible from 1Password |
 | `/etc/karakeep/karakeep.env` | `0600 root` | Karakeep `OPENAI_API_KEY` for AI tagging/OCR (§12) | Reproducible from the old k8s Secret (AWS Secrets Manager) |
 
 None of these are in the repo, and none should ever be pasted into a commit,
-issue, or chat. `/etc/caddy`, `/etc/miniflux`, `/etc/karakeep`, and `/etc/zfs/keys`
-are created by hand (the last during the [install guide](manual-install-guide.md),
-step 8/12).
+issue, or chat. `/etc/karakeep` and `/etc/zfs/keys` are created by hand (the
+latter during the [install guide](manual-install-guide.md), step 8/12); the
+caddy and miniflux files are rendered automatically at deploy time — see
+[op-secrets-manual.md](op-secrets-manual.md).
 
 ---
 
@@ -68,7 +69,7 @@ both.
 polaris is behind CGNAT, so Caddy proves domain ownership with the **DNS-01**
 challenge — it writes a temporary TXT record into Route53. That needs AWS
 credentials, provided to the Caddy systemd unit via
-`EnvironmentFile=/etc/caddy/route53.env`.
+`EnvironmentFile=/var/lib/secrets/caddy-route53.env`.
 
 ### 3a. Create the IAM user (Terraform)
 
@@ -85,7 +86,7 @@ The policy is scoped to the `mattiasgees.be` hosted zone and grants exactly:
 `route53:ListHostedZonesByName`, `route53:ListResourceRecordSets`,
 `route53:ChangeResourceRecordSets`, `route53:GetChange`.
 
-### 3b. Write the credentials onto polaris
+### 3b. Store the credentials in 1Password
 
 Pull the generated key straight from Terraform state (the secret is marked
 `sensitive`, so it only prints with `-raw`):
@@ -95,24 +96,12 @@ terraform output -raw polaris_caddy_access_key_id
 terraform output -raw polaris_caddy_secret_access_key
 ```
 
-Put them in `/etc/caddy/route53.env` on polaris — systemd `EnvironmentFile`
-format, so **plain `KEY=value`, no `export`, no quotes** (the secret contains
-`/` and `+`, which must stay literal):
-
-```bash
-sudo install -d -m 0755 /etc/caddy
-sudo install -m 0600 /dev/null /etc/caddy/route53.env
-sudo tee /etc/caddy/route53.env >/dev/null <<'EOF'
-AWS_ACCESS_KEY_ID=AKIA...
-AWS_SECRET_ACCESS_KEY=...
-AWS_REGION=us-east-1
-EOF
-sudo chmod 0600 /etc/caddy/route53.env      # root-only; systemd reads it as root
-sudo systemctl restart caddy
-```
-
-`AWS_REGION` is required by the AWS SDK even though Route53 is global;
-`us-east-1` is the conventional value.
+This secret is no longer hand-placed on the box. It's rendered from
+`op://polaris/caddy-route53/*` to `/var/lib/secrets/caddy-route53.env` by
+op-secrets (`modules/server/op-secrets.nix`) at `make switch` time — store the
+two key values as the `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` fields on the
+`caddy-route53` item in the `polaris` 1Password vault. For bootstrap and
+rotation steps, see [op-secrets-manual.md](op-secrets-manual.md).
 
 ### 3c. DNS record (Route53)
 
@@ -436,34 +425,30 @@ which is what lets it drop sidecars alongside the media.
 ## 11. Miniflux admin credentials
 
 `modules/media/miniflux.nix` points `services.miniflux.adminCredentialsFile` at
-`/etc/miniflux/admin.env`. The module keeps `CREATE_ADMIN = 1` (a NixOS default),
-so this file **must exist before the first `make switch` that enables miniflux**
-or the unit fails to start. It is a systemd `EnvironmentFile` — plain `KEY=value`,
-no `export`, no quotes.
+`/var/lib/secrets/miniflux-admin.env`. The module keeps `CREATE_ADMIN = 1` (a
+NixOS default), so this file **must exist before the first `make switch` that
+enables miniflux** or the unit fails to start.
 
-Reuse the same password the old k8s deployment used (so nothing is invented by
-hand). Pull it from a workstation that still has the hetzner kubectl context:
+This secret is no longer hand-placed on the box. It's rendered from
+`op://polaris/miniflux/*` to `/var/lib/secrets/miniflux-admin.env` by op-secrets
+(`modules/server/op-secrets.nix`) at `make switch` time — reuse the same
+password the old k8s deployment used (so nothing is invented by hand) and store
+it as the `username`/`password` fields on the `miniflux` item in the `polaris`
+1Password vault:
 
 ```bash
 # workstation (hetzner kubectl context):
 PW=$(kubectl get secret miniflux-secrets -n miniflux \
       -o jsonpath='{.data.minifluxPassword}' | base64 -d)
-
-# on polaris (run there, or pipe the two commands over SSH):
-sudo install -d -m 0755 /etc/miniflux
-printf 'ADMIN_USERNAME=miniflux\nADMIN_PASSWORD=%s\n' "$PW" \
-  | sudo install -m 0600 /dev/stdin /etc/miniflux/admin.env
 ```
 
 After the data migration (`migrate-miniflux.sh`) restores the k8s database, the
 `miniflux` admin (and your real `mattias` account) already exist in it, so
 `CREATE_ADMIN` is a no-op — you log in with your **existing** credentials. This
-file is then only a break-glass admin. Full cutover order lives in the migration
-runbook: `docs/superpowers/plans/2026-08-12-polaris-miniflux.md` (§6) and its
-design doc `docs/superpowers/specs/2026-08-12-polaris-miniflux-design.md`.
-
-> Moving this (and `/etc/caddy/route53.env`) into **sops-nix** is a queued
-> follow-up; until then it's hand-placed like the other secrets above.
+credential is then only a break-glass admin. Full cutover order lives in the
+migration runbook: `docs/superpowers/plans/2026-08-12-polaris-miniflux.md` (§6)
+and its design doc `docs/superpowers/specs/2026-08-12-polaris-miniflux-design.md`.
+For bootstrap and rotation steps, see [op-secrets-manual.md](op-secrets-manual.md).
 
 ---
 
@@ -516,12 +501,12 @@ verify) is its own runbook:
 | Route53 zone | `mattiasgees.be` (`Z2570BL3CYXE68`) |
 | App URLs | `https://{sonarr,radarr,prowlarr,bazarr}.polaris.mattiasgees.be` |
 | Bazarr (subtitles) | `:6767`, DB `/srv/fast/appdata/bazarr`, langs en+nl+pt-BR |
-| Miniflux (RSS) | `https://miniflux.polaris.mattiasgees.be` → `:8080`, DB `miniflux` on shared pg18, secret `/etc/miniflux/admin.env` (§11) |
+| Miniflux (RSS) | `https://miniflux.polaris.mattiasgees.be` → `:8080`, DB `miniflux` on shared pg18, secret `/var/lib/secrets/miniflux-admin.env` (§11) |
 | Karakeep (bookmarks) | `https://karakeep.polaris.mattiasgees.be` → `:3000`, SQLite `/srv/fast/appdata/karakeep`, secret `/etc/karakeep/karakeep.env` (§12), migration runbook |
 | App config | `/srv/fast/appdata/<app>` (fast NVMe mirror) |
 | Media roots | `/srv/media/{Series,Movies,Downloads}` (`media` group, setgid) |
 | ZFS key | `/etc/zfs/keys/polaris.key` (**back up offline**) |
-| Caddy AWS creds | `/etc/caddy/route53.env` (`0600 root`) |
+| Caddy AWS creds | `/var/lib/secrets/caddy-route53.env` (`0600 caddy`) |
 | Terraform (IAM) | `infrastructure/stacks/kubernetes/polaris-caddy-iam.tf` |
 | Seedbox roles | `ansible/roles/{plex-proxy,seedbox-proxy}` |
 | Indexer egress proxy | seedbox tailnet IP `:8888` (HTTP, tinyproxy) |

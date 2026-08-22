@@ -56,17 +56,15 @@ in
     virtualHosts."chat.polaris.mattiasgees.be".extraConfig = proxy 3001;
   };
 
-  # AWS creds for Route53 (AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY / AWS_DEFAULT_REGION).
-  # op-secrets renders these from op://polaris/caddy-route53/* to
-  # /var/lib/secrets/caddy-route53.env at deploy time. Caddy still reads the
-  # hand-placed /etc/caddy/route53.env below until the EnvironmentFile is flipped
-  # to the rendered path in the consumer follow-up PR (diff the two files first).
+  # AWS creds for Route53 (AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY / AWS_DEFAULT_REGION),
+  # rendered from op://polaris/caddy-route53/* by op-secrets (modules/server/op-secrets.nix)
+  # at deploy time, kept out of git.
   opSecrets.caddy-route53 = {
     template = ./caddy.route53.env.tpl;
     path = "/var/lib/secrets/caddy-route53.env";
     owner = "caddy";
   };
-  systemd.services.caddy.serviceConfig.EnvironmentFile = "/etc/caddy/route53.env";
+  systemd.services.caddy.serviceConfig.EnvironmentFile = "/var/lib/secrets/caddy-route53.env";
 
   networking.firewall.allowedTCPPorts = [ 80 443 ];
 }
