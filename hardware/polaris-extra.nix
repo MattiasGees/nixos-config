@@ -2,7 +2,7 @@
 # hardware/polaris.nix. Wired in via flake.nix `extraModules` (NOT imported by
 # hardware/polaris.nix or machines/polaris.nix), so:
 #   - hardware/polaris.nix stays pure nixos-generate-config output (overwrite it
-#     wholesale — see docs/polaris/manual-install-guide.md), and
+#     wholesale — see docs/polaris/setup.md Part 1), and
 #   - the aarch64 polaris-vm variant does NOT inherit any of this (the NVIDIA
 #     driver and real ZFS pools don't belong on a throwaway aarch64 VM).
 { lib, ... }:
