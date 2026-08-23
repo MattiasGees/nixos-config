@@ -22,6 +22,7 @@
     ../modules/services/karakeep.nix
     ../modules/media/ollama.nix
     ../modules/media/open-webui.nix
+    ../modules/services/pihole/pihole.nix
     ../modules/media/caddy.nix
     ../modules/media/seedbox-downloads.nix
     ../modules/media/recyclarr.nix

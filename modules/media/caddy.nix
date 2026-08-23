@@ -54,6 +54,9 @@ in
     # Open WebUI (open-webui.nix) — chat frontend for local Ollama. Port 3001,
     # not 8080, to avoid the miniflux collision above.
     virtualHosts."chat.polaris.mattiasgees.be".extraConfig = proxy 3001;
+    # Pi-hole (pihole.nix) — DNS ad-blocker admin UI. Its web server is moved to
+    # :8081 (FTLCONF_webserver_port) so it doesn't collide with Caddy's :80/:443.
+    virtualHosts."pihole.polaris.mattiasgees.be".extraConfig = proxy 8081;
   };
 
   # AWS creds for Route53 (AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY / AWS_DEFAULT_REGION),
