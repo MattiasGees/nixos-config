@@ -213,7 +213,10 @@ the service-account token — once, **before the first `make switch`**.
 
 1. **Create the `polaris` vault** in 1Password with the items/fields referenced in
    the verification below (`caddy-route53`, `miniflux`, `restic`, `restic-backend`,
-   `karakeep`).
+   `karakeep`, `cloudflared-polaris`). The `cloudflared-polaris` item is created
+   during the one-time Cloudflare tunnel bootstrap — documented in the **Cloudflare
+   Tunnel** service doc in the wiki. (That bootstrap isn't part of *rebuilding*
+   polaris; on a rebuild the credential just re-renders here.)
 2. **Create a service account** with **read** access to **only** the `polaris`
    vault; copy its token (starts with `ops_`).
 3. **Place the token** on polaris:
@@ -237,13 +240,14 @@ the service-account token — once, **before the first `make switch`**.
        op://polaris/restic/repo-password \
        op://polaris/restic-backend/AWS_ACCESS_KEY_ID \
        op://polaris/restic-backend/AWS_SECRET_ACCESS_KEY \
-       op://polaris/karakeep/OPENAI_API_KEY; do \
+       op://polaris/karakeep/OPENAI_API_KEY \
+       op://polaris/cloudflared-polaris/credentials-json; do \
        printf "%s -> " "$r"; \
        nix run --impure nixpkgs#_1password-cli -- read "$r" >/dev/null && echo OK || echo FAIL; \
      done'
    ```
 
-   All eight must print `OK` before you `make switch`. A `FAIL` is a
+   All nine must print `OK` before you `make switch`. A `FAIL` is a
    vault/item/field-name mismatch or a scope problem.
 
 ---
@@ -314,6 +318,8 @@ tailnet. (Caddy creates and deletes the `_acme-challenge` TXT records itself.)
 | Terraform (IAM) | `infrastructure/stacks/kubernetes/polaris-caddy-iam.tf` |
 | Miniflux (RSS) | `https://miniflux.polaris.mattiasgees.be` → `:8080`, secret `/var/lib/secrets/miniflux-admin.env` |
 | Karakeep (bookmarks) | `https://karakeep.polaris.mattiasgees.be` → `:3000`, secret `/var/lib/secrets/karakeep.env` |
+| Seerr (requests) | `https://requests.gees.dev` (Cloudflare tunnel) + `https://seerr.polaris.mattiasgees.be` (tailnet) → `:5055` |
+| Cloudflare tunnel | `polaris` tunnel (`modules/server/cloudflared.nix`), creds `/var/lib/secrets/cloudflared-polaris.json` (`0600 root`) |
 | App config | `/srv/fast/appdata/<app>` (fast NVMe mirror) |
 | Media roots | `/srv/media/{Series,Movies,Downloads}` (`media` group, setgid) |
 
