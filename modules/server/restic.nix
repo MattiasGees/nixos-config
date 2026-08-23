@@ -45,7 +45,7 @@
     # the fast mirror (the *arr stack, bazarr, plex, karakeep, …) — small, awkward
     # to recreate by hand, so it rides the same offsite sweep. NOTE: those app DBs
     # are copied live; the only one with a point-in-time-consistent export is
-    # karakeep (its 02:45 .backup/.dump in modules/media/karakeep.nix). Adding
+    # karakeep (its 02:45 .backup/.dump in modules/services/karakeep.nix). Adding
     # per-app SQLite dumps for the *arr stack is a possible future improvement.
     paths = [ "/srv/data" "/srv/fast/appdata" ];
     exclude = [
