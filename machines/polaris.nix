@@ -4,6 +4,7 @@
     ../modules/server/zfs.nix
     ../modules/server/virtualisation.nix
     ../modules/server/tailscale.nix
+    ../modules/server/cloudflared.nix
     ../modules/server/postgresql.nix
     ../modules/server/restic.nix
     ../modules/server/data-nfs-backup.nix
