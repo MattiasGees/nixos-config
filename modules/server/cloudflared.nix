@@ -24,9 +24,10 @@
 # op-secrets' chown — no such user — and root can read it for LoadCredential).
 { ... }:
 let
-  # Printed by `cloudflared tunnel create polaris`; a deploy-time placeholder until
-  # the tunnel is created out-of-band (see header / docs/polaris/setup.md §4).
-  tunnelId = "REPLACE_WITH_TUNNEL_UUID";
+  # The polaris tunnel's ID from `cloudflared tunnel create polaris` (see header /
+  # docs/polaris/setup.md §4). Not a secret — it's public in the
+  # <id>.cfargotunnel.com hostname; the secret is the credentials JSON.
+  tunnelId = "36de13f7-382b-4562-ac1c-15b521aef569";
 in
 {
   opSecrets.cloudflared-polaris = {
