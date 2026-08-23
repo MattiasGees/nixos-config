@@ -213,8 +213,10 @@ the service-account token — once, **before the first `make switch`**.
 
 1. **Create the `polaris` vault** in 1Password with the items/fields referenced in
    the verification below (`caddy-route53`, `miniflux`, `restic`, `restic-backend`,
-   `karakeep`, `cloudflared-polaris`). The `cloudflared-polaris` item also has a
-   one-time tunnel bootstrap of its own — see [§4 Cloudflare tunnel](#4-cloudflare-tunnel--public-services-initial-setup).
+   `karakeep`, `cloudflared-polaris`). The `cloudflared-polaris` item is created
+   during the one-time Cloudflare tunnel bootstrap — documented in the **Cloudflare
+   Tunnel** service doc in the wiki. (That bootstrap isn't part of *rebuilding*
+   polaris; on a rebuild the credential just re-renders here.)
 2. **Create a service account** with **read** access to **only** the `polaris`
    vault; copy its token (starts with `ops_`).
 3. **Place the token** on polaris:
@@ -300,38 +302,6 @@ The one manual step is the wildcard DNS record:
 
 This makes `https://<app>.polaris.mattiasgees.be` resolve to polaris over the
 tailnet. (Caddy creates and deletes the `_acme-challenge` TXT records itself.)
-
----
-
-## 4. Cloudflare tunnel — public services (initial setup)
-
-Some polaris services are reachable on the **public** internet (not just the
-tailnet) through a single Cloudflare **tunnel** — outbound-only, so it works
-behind CGNAT with no port-forward, and Cloudflare terminates TLS at the edge. The
-tunnel and its routing table live in `modules/server/cloudflared.nix`; each public
-hostname is one `ingress` line there plus one DNS route. First service: **Seerr**
-(media requests) at `https://requests.gees.dev`.
-
-One-time bootstrap (needs an authenticated `cloudflared`, i.e. a prior
-`cloudflared tunnel login` for the `gees.dev` zone):
-
-```bash
-cloudflared tunnel create polaris                       # prints the tunnel UUID + a creds JSON path
-cloudflared tunnel route dns polaris requests.gees.dev  # CNAME → <UUID>.cfargotunnel.com
-```
-
-Then:
-
-1. Put the printed **UUID** into `tunnelId` in `modules/server/cloudflared.nix`
-   (replacing `REPLACE_WITH_TUNNEL_UUID`).
-2. Store the contents of the credentials JSON file (e.g. `~/.cloudflared/<UUID>.json`)
-   in `op://polaris/cloudflared-polaris/credentials-json` — op-secrets renders it
-   to `/var/lib/secrets/cloudflared-polaris.json` (`0600 root`; the tunnel is a
-   DynamicUser service and systemd `LoadCredential` reads it as root).
-
-Adding another public service later is just an `ingress` line in `cloudflared.nix`
-(`"<host>.gees.dev" = "http://localhost:<port>";`) plus a
-`cloudflared tunnel route dns polaris <host>.gees.dev`.
 
 ---
 
