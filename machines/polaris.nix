@@ -18,8 +18,8 @@
     ../modules/media/bazarr.nix
     ../modules/media/seerr.nix
     ../modules/media/immich.nix
-    ../modules/media/miniflux.nix
-    ../modules/media/karakeep.nix
+    ../modules/services/miniflux.nix
+    ../modules/services/karakeep.nix
     ../modules/media/ollama.nix
     ../modules/media/open-webui.nix
     ../modules/media/caddy.nix
