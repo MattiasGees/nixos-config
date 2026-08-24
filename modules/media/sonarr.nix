@@ -17,7 +17,8 @@
   # The default systemd UMask=0022 strips the group-write bit, leaving 2755;
   # setgid then propagates the media group but not write permission, so a
   # non-owner in the group gets PermissionError on write. 0002 keeps group write.
-  systemd.services.sonarr.serviceConfig.UMask = "0002";
+  # mkForce: the upstream servarr module pins UMask="0022"; override it.
+  systemd.services.sonarr.serviceConfig.UMask = lib.mkForce "0002";
 
   # The nixpkgs module does not create a custom dataDir, and the parent
   # /srv/fast/appdata is root-owned, so Sonarr (running as `sonarr`) cannot
