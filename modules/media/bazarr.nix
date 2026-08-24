@@ -3,7 +3,7 @@
 # Pass needed). Config on the fast pool (SQLite DB worth keeping on the redundant
 # NVMe mirror), library access via the shared `media` group. No openFirewall —
 # localhost only, Caddy is the only ingress (port 6767).
-{ ... }:
+{ lib, ... }:
 {
   services.bazarr = {
     enable = true;
@@ -20,5 +20,6 @@
   # Write sidecar subtitles group-writable/readable (0664) so other media-group
   # members (Plex, the *arrs) can manage them, matching the 0002 umask used by
   # Sonarr/Radarr when creating the library directories these files land in.
-  systemd.services.bazarr.serviceConfig.UMask = "0002";
+  # mkForce for parity with radarr/sonarr and to override any upstream pin.
+  systemd.services.bazarr.serviceConfig.UMask = lib.mkForce "0002";
 }

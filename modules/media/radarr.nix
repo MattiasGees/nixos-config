@@ -17,7 +17,8 @@
   # The default systemd UMask=0022 strips the group-write bit, leaving 2755;
   # setgid then propagates the media group but not write permission, so a
   # non-owner in the group gets PermissionError on write. 0002 keeps group write.
-  systemd.services.radarr.serviceConfig.UMask = "0002";
+  # mkForce: the upstream servarr module pins UMask="0022"; override it.
+  systemd.services.radarr.serviceConfig.UMask = lib.mkForce "0002";
 
   # Same as Sonarr: the module does not create a custom dataDir and the parent
   # is root-owned. Radarr's dir currently exists only as a leftover from an
