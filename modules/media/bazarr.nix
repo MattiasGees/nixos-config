@@ -16,4 +16,9 @@
   # systemd.tmpfiles, owned bazarr:bazarr) and sets RequiresMountsFor, so no
   # ExecStartPre root-create step is needed here.
   users.users.bazarr.extraGroups = [ "media" ];
+
+  # Write sidecar subtitles group-writable/readable (0664) so other media-group
+  # members (Plex, the *arrs) can manage them, matching the 0002 umask used by
+  # Sonarr/Radarr when creating the library directories these files land in.
+  systemd.services.bazarr.serviceConfig.UMask = "0002";
 }

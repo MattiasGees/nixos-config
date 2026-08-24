@@ -12,6 +12,13 @@
   # media = read/write /srv/media (root folder: /srv/media/Movies).
   users.users.radarr.extraGroups = [ "media" ];
 
+  # Create library dirs group-writable (2775) so other media-group members
+  # (e.g. Bazarr writing sidecar subtitles) can add files next to the video.
+  # The default systemd UMask=0022 strips the group-write bit, leaving 2755;
+  # setgid then propagates the media group but not write permission, so a
+  # non-owner in the group gets PermissionError on write. 0002 keeps group write.
+  systemd.services.radarr.serviceConfig.UMask = "0002";
+
   # Same as Sonarr: the module does not create a custom dataDir and the parent
   # is root-owned. Radarr's dir currently exists only as a leftover from an
   # earlier deploy — create it declaratively so a fresh pool works too. `+` runs
