@@ -213,10 +213,11 @@ the service-account token — once, **before the first `make switch`**.
 
 1. **Create the `polaris` vault** in 1Password with the items/fields referenced in
    the verification below (`caddy-route53`, `miniflux`, `restic`, `restic-backend`,
-   `karakeep`, `cloudflared-polaris`). The `cloudflared-polaris` item is created
-   during the one-time Cloudflare tunnel bootstrap — documented in the **Cloudflare
-   Tunnel** service doc in the wiki. (That bootstrap isn't part of *rebuilding*
-   polaris; on a rebuild the credential just re-renders here.)
+   `karakeep`, `cloudflared-polaris`, `outline`). The `cloudflared-polaris` and
+   `outline` items are populated during their one-time service bootstraps —
+   documented in the **Cloudflare Tunnel** and **Outline** service docs in the
+   wiki. (Those bootstraps aren't part of *rebuilding* polaris; on a rebuild the
+   credentials just re-render here.)
 2. **Create a service account** with **read** access to **only** the `polaris`
    vault; copy its token (starts with `ops_`).
 3. **Place the token** on polaris:
@@ -241,13 +242,18 @@ the service-account token — once, **before the first `make switch`**.
        op://polaris/restic-backend/AWS_ACCESS_KEY_ID \
        op://polaris/restic-backend/AWS_SECRET_ACCESS_KEY \
        op://polaris/karakeep/OPENAI_API_KEY \
-       op://polaris/cloudflared-polaris/credentials-json; do \
+       op://polaris/cloudflared-polaris/credentials-json \
+       op://polaris/outline/SECRET_KEY \
+       op://polaris/outline/UTILS_SECRET \
+       op://polaris/outline/OIDC_CLIENT_SECRET \
+       op://polaris/outline/GOOGLE_CLIENT_SECRET \
+       op://polaris/outline/SMTP_PASSWORD; do \
        printf "%s -> " "$r"; \
        nix run --impure nixpkgs#_1password-cli -- read "$r" >/dev/null && echo OK || echo FAIL; \
      done'
    ```
 
-   All nine must print `OK` before you `make switch`. A `FAIL` is a
+   All fourteen must print `OK` before you `make switch`. A `FAIL` is a
    vault/item/field-name mismatch or a scope problem.
 
 ---
@@ -320,6 +326,7 @@ tailnet. (Caddy creates and deletes the `_acme-challenge` TXT records itself.)
 | Karakeep (bookmarks) | `https://karakeep.polaris.mattiasgees.be` → `:3000`, secret `/var/lib/secrets/karakeep.env` |
 | Seerr (requests) | `https://requests.gees.dev` (Cloudflare tunnel) + `https://seerr.polaris.mattiasgees.be` (tailnet) → `:5055` |
 | Cloudflare tunnel | `polaris` tunnel (`modules/server/cloudflared.nix`), creds `/var/lib/secrets/cloudflared-polaris.json` (`0600 root`) |
+| Outline (wiki) | `https://wiki.polaris.mattiasgees.be` (tailnet) → `:3002`, secrets `/var/lib/secrets/outline-*`; public `https://wiki.gees.dev` via the Cloudflare tunnel (follow-up) |
 | App config | `/srv/fast/appdata/<app>` (fast NVMe mirror) |
 | Media roots | `/srv/media/{Series,Movies,Downloads}` (`media` group, setgid) |
 
