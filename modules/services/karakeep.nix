@@ -32,12 +32,12 @@
 
   services.karakeep = {
     enable = true;
-    # Build karakeep against Node 22. karakeep pins better-sqlite3 11.3.0, and
-    # better-sqlite3 < 12.0.0 has no Node 24 support — under nixpkgs' nodejs-24.19.0
-    # the workers process core-dumps at startup (native Statement::~Statement ->
-    # node::RemoveEnvironmentCleanupHook, (env) != nullptr), a known Node-24.19.0
-    # regression. Node 22 avoids it. Drop this once karakeep ships better-sqlite3 >= 12.
-    package = pkgs.karakeep.override { nodejs = pkgs.nodejs_22; };
+    # NOTE: the Node 22 pin is now upstream. karakeep pins better-sqlite3 11.3.0,
+    # which has no Node 24 support — under nodejs-24.19.0 the workers core-dump at
+    # startup (a known regression, karakeep-app/karakeep#2989). nixpkgs' karakeep
+    # now hardcodes nodejs_22 in its build inputs for exactly this reason, so our
+    # former `package = pkgs.karakeep.override { nodejs = pkgs.nodejs_22; };` is
+    # both unnecessary and broken (the package no longer takes a `nodejs` arg).
     # OPENAI_API_KEY (op-secrets). The module feeds this to the web + workers
     # units; the workers do the inference.
     environmentFile = "/var/lib/secrets/karakeep.env";
@@ -82,8 +82,21 @@
     where = "/var/lib/karakeep";
     type = "none";
     options = "bind";
+    # systemd-tmpfiles-setup (which creates + chowns the source subdir above) is
+    # itself ordered After local-fs.target, while a normal mount is ordered Before
+    # local-fs.target — so requiring tmpfiles-setup here forms an ordering cycle
+    # (mount → tmpfiles-setup → local-fs.target → mount). systemd 261 breaks it by
+    # dropping the mount job, which silently leaves /var/lib/karakeep unmounted and
+    # every karakeep unit dead. Fix: take the mount out of the local-fs.target
+    # ordering with DefaultDependencies=no so it may legitimately run *after*
+    # tmpfiles-setup, as a late mount pulled up with multi-user.target. We re-add
+    # the umount.target ordering that DefaultDependencies would have provided so
+    # the bind is still torn down cleanly ahead of the ZFS unmount at shutdown.
+    unitConfig.DefaultDependencies = false;
     requires = [ "systemd-tmpfiles-setup.service" ];
     after = [ "systemd-tmpfiles-setup.service" ];
+    before = [ "umount.target" ];
+    conflicts = [ "umount.target" ];
     wantedBy = [ "multi-user.target" ];
   }];
 

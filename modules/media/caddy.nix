@@ -38,7 +38,7 @@ in
       # FOD hash of the Caddy source with the route53 plugin vendored. Emitted by
       # the first build (with lib.fakeHash) as "got: sha256-...". Bumping the
       # plugin/Caddy version invalidates this — reset to lib.fakeHash to re-derive.
-      hash = "sha256-/9c9b+S98V+eDj6mzb6KfAWWSBCrZoUzA1JDrMxuKQ0=";
+      hash = "sha256-Vzp4Y9mARJrAHZ1C3x6+5zTSGiYY1l3FxIPkqK1RI30=";
     };
     # ACME account email (was in globalConfig alongside acme_dns; the DNS
     # challenge now lives per-site in the tls block so it can set resolvers).
