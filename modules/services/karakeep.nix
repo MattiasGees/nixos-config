@@ -82,8 +82,21 @@
     where = "/var/lib/karakeep";
     type = "none";
     options = "bind";
+    # systemd-tmpfiles-setup (which creates + chowns the source subdir above) is
+    # itself ordered After local-fs.target, while a normal mount is ordered Before
+    # local-fs.target — so requiring tmpfiles-setup here forms an ordering cycle
+    # (mount → tmpfiles-setup → local-fs.target → mount). systemd 261 breaks it by
+    # dropping the mount job, which silently leaves /var/lib/karakeep unmounted and
+    # every karakeep unit dead. Fix: take the mount out of the local-fs.target
+    # ordering with DefaultDependencies=no so it may legitimately run *after*
+    # tmpfiles-setup, as a late mount pulled up with multi-user.target. We re-add
+    # the umount.target ordering that DefaultDependencies would have provided so
+    # the bind is still torn down cleanly ahead of the ZFS unmount at shutdown.
+    unitConfig.DefaultDependencies = false;
     requires = [ "systemd-tmpfiles-setup.service" ];
     after = [ "systemd-tmpfiles-setup.service" ];
+    before = [ "umount.target" ];
+    conflicts = [ "umount.target" ];
     wantedBy = [ "multi-user.target" ];
   }];
 
