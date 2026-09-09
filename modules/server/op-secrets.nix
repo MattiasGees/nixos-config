@@ -75,10 +75,18 @@ in
     # so the file owners exist before chown (the "users" script creates users
     # and groups). The dir is created here (not via tmpfiles) to avoid
     # activation-ordering races on a fresh switch.
+    #
+    # Mode 0711 (not 0700): most consumers read their secret via systemd
+    # (EnvironmentFile / LoadCredential), which runs as root and doesn't care.
+    # Outline is the exception — it reads secretKeyFile/utilsSecretFile/etc.
+    # directly in its service script running as the unprivileged `outline` user,
+    # so that user must be able to *traverse* this dir to reach the 0600 file it
+    # owns. 0711 grants traverse (o+x) without listing (no o+r), and the files
+    # themselves stay 0600 owner-only — so nothing here becomes world-readable.
     system.activationScripts.opSecrets = {
       deps = [ "users" ];
       text = ''
-        ${pkgs.coreutils}/bin/install -d -m 0700 -o root -g root ${secretsDir}
+        ${pkgs.coreutils}/bin/install -d -m 0711 -o root -g root ${secretsDir}
         if [ ! -r ${tokenFile} ]; then
           echo "op-secrets: no token at ${tokenFile}; skipping (services use last-good if present)" >&2
         else

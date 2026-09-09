@@ -57,6 +57,10 @@ in
     # Pi-hole (pihole.nix) — DNS ad-blocker admin UI. Its web server is moved to
     # :8081 (FTLCONF_webserver_port) so it doesn't collide with Caddy's :80/:443.
     virtualHosts."pihole.polaris.mattiasgees.be".extraConfig = proxy 8081;
+    # Outline wiki (outline.nix) — tailnet front door. Also public at wiki.gees.dev
+    # via the shared Cloudflare tunnel (cloudflared.nix). Port 3002 (3000/3001
+    # taken by karakeep/open-webui).
+    virtualHosts."wiki.polaris.mattiasgees.be".extraConfig = proxy 3002;
   };
 
   # AWS creds for Route53 (AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY / AWS_DEFAULT_REGION),
