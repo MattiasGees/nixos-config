@@ -45,6 +45,7 @@ in
       # Central public-ingress map — add one line per new public service.
       ingress = {
         "requests.gees.dev" = "http://localhost:5055"; # Seerr (media/seerr.nix)
+        "wiki.gees.dev"     = "http://localhost:3002"; # Outline (services/outline.nix)
       };
     };
   };
