@@ -54,8 +54,15 @@
     unitConfig.RequiresMountsFor = "/mnt/polaris-nfs";
     serviceConfig = {
       Type = "oneshot";
+      # --no-owner/--no-group: the Synology export runs root_squash, so any
+      # chown on the destination is rejected ("Operation not permitted"). Under
+      # plain `-a` that makes rsync exit 23 on every run — the file data still
+      # mirrors, but the unit goes red and stops being a usable health signal.
+      # We don't need ownership preserved on a browse-only NAS mirror, so drop
+      # the chown attempts entirely (and --numeric-ids, which is moot without
+      # them) and let a non-zero exit mean a genuine failure again.
       ExecStart = ''
-        ${pkgs.rsync}/bin/rsync -a --delete --numeric-ids \
+        ${pkgs.rsync}/bin/rsync -a --delete --no-owner --no-group \
           --exclude=/immich/thumbs \
           --exclude=/immich/encoded-video \
           /srv/data/ /mnt/polaris-nfs/
