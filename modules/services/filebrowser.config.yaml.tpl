@@ -1,8 +1,14 @@
-# Filebrowser Quantum config — rendered by op-secrets from op://polaris/filebrowser/*
-# at deploy time (do NOT edit the deployed copy under /var/lib/secrets; edit this
-# template). Only adminPassword is a secret; everything else is plain config kept
-# here so the whole file is one artifact. The container reads it from
-# /home/filebrowser/data/config.yaml (FILEBROWSER_CONFIG default in the image).
+# Filebrowser Quantum config — rendered by op-secrets from the polaris/filebrowser
+# 1Password item at deploy time (do NOT edit the deployed copy under
+# /var/lib/secrets; edit this template). Only adminPassword is a secret;
+# everything else is plain config kept here so the whole file is one artifact. The
+# container reads it from /home/filebrowser/data/config.yaml (FILEBROWSER_CONFIG
+# default in the image).
+#
+# NOTE: keep 1Password reference literals (the op scheme) and mustache
+# placeholder pairs OUT of comments. op inject scans the WHOLE file, not just the
+# real reference on adminPassword below, so any stray or partial one fails the
+# render (this bit us once with a wildcard ref left in a header comment).
 http:
   port: 80
 server:
