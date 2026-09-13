@@ -22,6 +22,7 @@
     ../modules/services/miniflux.nix
     ../modules/services/karakeep.nix
     ../modules/services/outline.nix
+    ../modules/services/filebrowser.nix
     ../modules/media/ollama.nix
     ../modules/media/open-webui.nix
     ../modules/services/pihole/pihole.nix

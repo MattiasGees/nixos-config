@@ -61,6 +61,9 @@ in
     # via the shared Cloudflare tunnel (cloudflared.nix). Port 3002 (3000/3001
     # taken by karakeep/open-webui).
     virtualHosts."wiki.polaris.mattiasgees.be".extraConfig = proxy 3002;
+    # Filebrowser Quantum (filebrowser.nix) — simple web file manager. Container
+    # publishes :80 on loopback:8083; LAN/tailnet only, no public tunnel.
+    virtualHosts."files.polaris.mattiasgees.be".extraConfig = proxy 8083;
   };
 
   # AWS creds for Route53 (AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY / AWS_DEFAULT_REGION),
