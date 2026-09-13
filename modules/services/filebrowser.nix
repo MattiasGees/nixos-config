@@ -10,10 +10,13 @@
 #
 # Image runs as the non-root `filebrowser` user, UID 1000 — which on polaris maps
 # to `mattias:users`. So the data dir, the managed files and the rendered config
-# are all owned by mattias(1000) so that UID can read/write them. The image's
-# FILEBROWSER_CONFIG / FILEBROWSER_DATABASE_PATH default to /home/filebrowser/data/
-# {config.yaml,database.sqlite}; we bind /var/lib/filebrowser there for the DB and
-# bind the op-secrets-rendered config read-only on top.
+# are all owned by mattias(1000) so that UID can read/write them. The DB lives in
+# /var/lib/filebrowser -> /home/filebrowser/data (FILEBROWSER_DATABASE_PATH
+# default). The op-secrets config is mounted as a SIBLING of the data dir, at
+# /home/filebrowser/config.yaml (FILEBROWSER_CONFIG points there) — NOT nested
+# inside the data-dir volume: runc can't create a file mountpoint inside another
+# bind mount's empty volume and fails container init with a "not a directory" /
+# status-125 error.
 #
 # Ingress is Caddy only (files.polaris.mattiasgees.be -> localhost:8083, wired in
 # caddy.nix); the port binds to loopback and no firewall port is opened. LAN /
@@ -42,14 +45,17 @@
     image = "gtstef/filebrowser:2.0.6-beta";
     # Loopback-only publish; Caddy fronts it for TLS on the LAN/tailnet.
     ports = [ "127.0.0.1:8083:80" ];
+    # Read config from a sibling path, not the default inside the data dir (see
+    # header — the nested-mount failure).
+    environment.FILEBROWSER_CONFIG = "/home/filebrowser/config.yaml";
     volumes = [
       # Files the app manages (host /srv/files -> container /srv, matches the
       # single `sources` entry in the config template).
       "/srv/files:/srv"
       # Persistent state (database.sqlite lives here per FILEBROWSER_DATABASE_PATH).
       "/var/lib/filebrowser:/home/filebrowser/data"
-      # Rendered config, mounted read-only on top of the data dir.
-      "/var/lib/secrets/filebrowser-config.yaml:/home/filebrowser/data/config.yaml:ro"
+      # Rendered config, mounted read-only as a sibling of the data dir.
+      "/var/lib/secrets/filebrowser-config.yaml:/home/filebrowser/config.yaml:ro"
     ];
   };
 
