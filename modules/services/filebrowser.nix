@@ -49,9 +49,13 @@
     # header — the nested-mount failure).
     environment.FILEBROWSER_CONFIG = "/home/filebrowser/config.yaml";
     volumes = [
-      # Files the app manages (host /srv/files -> container /srv, matches the
-      # single `sources` entry in the config template).
-      "/srv/files:/srv"
+      # Sources, each bind-mounted at the same path it has in the config template's
+      # `sources` list. They sit under /srv as siblings (nothing is mounted at /srv
+      # itself), so no nested-bind issues. media is :ro (read-only browse); the
+      # /srv/data store is a dedicated subfolder, NOT all of /srv/data.
+      "/srv/files:/srv/files"
+      "/srv/media:/srv/media:ro"
+      "/srv/data/files:/srv/data/files"
       # Persistent state (database.sqlite lives here per FILEBROWSER_DATABASE_PATH).
       "/var/lib/filebrowser:/home/filebrowser/data"
       # Rendered config, mounted read-only as a sibling of the data dir.
@@ -64,6 +68,9 @@
   # reproducible — same pattern as plex.nix/immich.nix/pihole.nix.
   systemd.tmpfiles.rules = [
     "d /srv/files 0755 mattias users - -"
+    # Dedicated writable store on the /srv/data volume (its parent /srv/data is
+    # root-owned; this subfolder is ours). /srv/media is pre-existing, not created.
+    "d /srv/data/files 0755 mattias users - -"
     "d /var/lib/filebrowser 0700 mattias users - -"
   ];
 }
