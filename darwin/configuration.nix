@@ -82,6 +82,7 @@
       # "tidal"
       "insomnia"
       "nordvpn"
+      "tailscale-app"
       # "nordpass"
       "iterm2"
       # installs new version that I do not like
