@@ -33,7 +33,8 @@
     taps = [
       "FelixKratz/formulae"
       # "homebrew/cask-drivers"
-      "koekeishiya/formulae"
+      # koekeishiya/formulae dropped: yabai/skhd come from nixpkgs via
+      # services.yabai/services.skhd, and newer Homebrew refuses the tap.
       "theseal/ssh-askpass"
     ];
     brews = [
