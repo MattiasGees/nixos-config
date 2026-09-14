@@ -7,7 +7,11 @@ export PATH=/Users/mattias/Library/Python/3.9/bin:$PATH
 export PATH=/run/wrappers/bin:/run/current-system/sw/bin:/opt/homebrew/bin:$PATH
 export PATH=/etc/profiles/per-user/mattias/bin:$PATH
 export PATH="${KREW_ROOT:-$HOME/.krew}/bin:$PATH"
-export DOCKER_HOST="unix://$HOME/.colima/docker.sock"
+# colima is macOS-only; on Linux (servers) docker uses the native
+# /var/run/docker.sock, so this override must not leak onto those hosts.
+if [ "$(uname)" = "Darwin" ]; then
+  export DOCKER_HOST="unix://$HOME/.colima/docker.sock"
+fi
 # Defaults
 export SHELL=zsh
 export EDITOR='vim'
