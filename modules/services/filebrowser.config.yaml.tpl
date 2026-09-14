@@ -4,7 +4,10 @@ http:
   port: 80
 server:
   sources:
-    - path: "/srv/files"
+    # The writable store, on the /srv/data dataset (so it rides the restic +
+    # NFS-mirror backups). A dedicated subfolder, not all of /srv/data, which holds
+    # private service data (immich library, postgres backups).
+    - path: "/srv/data/files"
       name: "files"
     # Read-only; folderPath "/" + viewable keeps the large library browsable but
     # excluded from indexing.
@@ -15,9 +18,6 @@ server:
         rules:
           - folderPath: "/"
             viewable: true
-    # A dedicated subfolder, not all of /srv/data (which holds private service data).
-    - path: "/srv/data/files"
-      name: "data"
 frontend:
   name: "Polaris Files"
 auth:
