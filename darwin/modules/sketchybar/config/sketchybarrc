@@ -62,14 +62,6 @@ sketchybar --add item front_app left \
                            label.color=$WHITE \
            --subscribe front_app front_app_switched
 
-# Days Until (tsdays)
-sketchybar --add item days_until left \
-           --set days_until update_freq=3600 \
-                            icon=0 \
-                            script="$ITEM_DIR/daysuntil.sh" \
-                            icon.color=$LAVENDER \
-                            label.padding_right=0
-
 # 2. Network Speed (triggered on network changes and manual clicks)
 sketchybar --add item network left 15 \
            --set network icon.color=$LAVENDER \
@@ -106,7 +98,7 @@ sketchybar --add item tailscale left \
                            popup.background.border_width=1 \
            --subscribe tailscale mouse.clicked mouse.entered mouse.exited
 
-sketchybar --add bracket left_bracket "${SPACES[@]}" home front_app days_until network kube tailscale \
+sketchybar --add bracket left_bracket "${SPACES[@]}" home front_app network kube tailscale \
            --set left_bracket background.color=$ITEM_COLOR \
                               background.corner_radius=8
 
