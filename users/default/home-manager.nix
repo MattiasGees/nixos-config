@@ -19,6 +19,7 @@ in {
         ../../darwin/modules/yabai/yabai.nix
         ../../darwin/modules/skhd/skhd.nix
         # ../../darwin/modules/syncthing/syncthing.nix
+        ../../modules/programs/claude-code.nix
         ../../pkgs/macos.nix
         ]) ++ (lib.optionals pkgs.stdenv.hostPlatform.isLinux [
         ../../modules/desktop/hyprland/home.nix
