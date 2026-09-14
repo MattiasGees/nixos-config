@@ -20,8 +20,7 @@
     # can't create a file mountpoint inside another bind mount's empty volume.
     environment.FILEBROWSER_CONFIG = "/home/filebrowser/config.yaml";
     volumes = [
-      # Sources, mounted as siblings under /srv (paths match the config template).
-      "/srv/files:/srv/files"
+      # Sources, bind-mounted at the same paths they carry in the config template.
       "/srv/media:/srv/media:ro"
       "/srv/data/files:/srv/data/files"
       "/var/lib/filebrowser:/home/filebrowser/data"
@@ -30,7 +29,6 @@
   };
 
   systemd.tmpfiles.rules = [
-    "d /srv/files 0755 mattias users - -"
     "d /srv/data/files 0755 mattias users - -"
     "d /var/lib/filebrowser 0700 mattias users - -"
   ];
