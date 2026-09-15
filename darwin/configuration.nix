@@ -59,6 +59,7 @@ in
       "nowplaying-cli"
     ];
     casks = [
+      "claude-code"
       "1password"
       "1password-cli"
       "firefox"

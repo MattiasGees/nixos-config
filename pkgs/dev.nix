@@ -1,4 +1,4 @@
-{ pkgs, ... }:
+{ pkgs, lib, ... }:
 with pkgs;
 
 {
@@ -11,8 +11,9 @@ with pkgs;
       ## Tools that I have needed to install in weird circumstances. I don't actually write
       ## hehehe
       openjdk maven
-
-      # vibes
+    ] ++ lib.optionals (!pkgs.stdenv.hostPlatform.isDarwin) [
+      # vibes -- on Darwin claude-code comes from the Homebrew cask (nixpkgs
+      # lags behind); Linux hosts have no Homebrew, so keep the nixpkgs build.
       claude-code
     ];
   };
