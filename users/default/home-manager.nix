@@ -18,6 +18,7 @@ in {
         ../../darwin/modules/sketchybar/sketchybar.nix
         ../../darwin/modules/yabai/yabai.nix
         ../../darwin/modules/skhd/skhd.nix
+        ../../darwin/modules/vscode/vscode.nix
         # ../../darwin/modules/syncthing/syncthing.nix
         ../../pkgs/macos.nix
         ]) ++ (lib.optionals pkgs.stdenv.hostPlatform.isLinux [
