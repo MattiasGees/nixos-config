@@ -39,6 +39,7 @@ in
       # koekeishiya/formulae dropped: yabai/skhd come from nixpkgs via
       # services.yabai/services.skhd, and newer Homebrew refuses the tap.
       "theseal/ssh-askpass"
+      "vitobotta/tap"                     # hetzner_k3s
     ];
     brews = [
       "FelixKratz/formulae/sketchybar"
@@ -57,6 +58,8 @@ in
       "mosh"
       "lua"
       "nowplaying-cli"
+      # Brew-only CLIs (not provided / not cleanly on darwin via nixpkgs)
+      "vitobotta/tap/hetzner_k3s"
     ];
     casks = [
       "1password"
@@ -77,7 +80,11 @@ in
       # "alacritty"
       "slack"
       "spotify"
+      "claude-code@latest"
       "claude"
+      "discord"
+      "signal"
+      "obs"
       # "notion"
       # "raycast"
       # "transmission"
@@ -99,6 +106,10 @@ in
       "sf-symbols"
       # "hiddenbar"
       "font-sketchybar-app-font"
+      "font-fontawesome"
+      "font-jetbrains-mono"
+      "font-jetbrains-mono-nerd-font"
+      "font-source-code-pro"
       # SF Pro / SF Mono: the Homebrew casks (font-sf-pro/font-sf-mono) are
       # broken upstream (Apple renamed the .pkg inside the DMG). Install these
       # two fonts manually from https://developer.apple.com/fonts/.
