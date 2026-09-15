@@ -299,8 +299,13 @@ in
         fi
         rm -rf "$TMP"
       fi
-      # Set the desktop wallpaper for every display (runs as the user, not root)
-      sudo -u ${user} osascript -e 'tell application "System Events" to tell every desktop to set picture to "${wallpaper}"' || true
+      # Set the desktop wallpaper for every display. postActivation runs as
+      # root, but Apple Events to System Events only work inside the user's
+      # Aqua login session, so bridge in with `launchctl asuser <uid>` before
+      # dropping to the user with sudo. (Plain `sudo -u` alone silently fails.)
+      wallpaperUid=$(id -u ${user})
+      launchctl asuser "$wallpaperUid" sudo -u ${user} \
+        osascript -e 'tell application "System Events" to tell every desktop to set picture to "${wallpaper}"' || true
     ''; # Since it's not possible to declare default shell, run this command after build
     stateVersion = 5;
   };
