@@ -8,6 +8,9 @@
 #
 
 { config, pkgs, user, system, ... }:
+let
+  wallpaper = ../wallpapers/Sienna.jpg;   # Desktop background, set in postActivation
+in
 {
   security.pam.services.sudo_local.touchIdAuth = true;
 
@@ -296,6 +299,8 @@
         fi
         rm -rf "$TMP"
       fi
+      # Set the desktop wallpaper for every display (runs as the user, not root)
+      sudo -u ${user} osascript -e 'tell application "System Events" to tell every desktop to set picture to "${wallpaper}"' || true
     ''; # Since it's not possible to declare default shell, run this command after build
     stateVersion = 5;
   };
