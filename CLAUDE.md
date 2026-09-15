@@ -49,13 +49,12 @@ This is a single flake covering NixOS hosts, nix-darwin hosts, and standalone ho
 
 **Overlays** are defined inline in `flake.nix` for the desktop `pkgs`: they expose `nordpass` and `waterfox` as new attrs, and pin a list of packages (waybar, swww, slack, steam, go, …) to `nixpkgs-unstable`. Darwin uses an un-overlaid `pkgs`. There is also an in-system overlay in `users/default/nixos.nix` that rebuilds `waybar` with `-Dexperimental=true`.
 
-**Modules (`modules/`, `darwin/modules/`)** are reusable home-manager / system pieces (hyprland, dunst, waybar, kitty, ghostty, sketchybar, yabai, syncthing, nvim, zsh, git, …). They are imported by `users/default/home-manager*.nix` and `machines/shared.nix` rather than auto-discovered — adding a new module means adding an explicit `imports = [ ... ]` entry somewhere.
+**Modules (`modules/`, `darwin/modules/`)** are reusable home-manager / system pieces (hyprland, dunst, waybar, kitty, ghostty, sketchybar, yabai, syncthing, nvim, zsh, git, …). They are imported by `users/default/home-manager*.nix` and `machines/shared.nix` rather than auto-discovered — adding a new module means adding an explicit `imports = [ ... ]` entry somewhere. `sketchybar` is a SbarLua (Lua) config vendored from FelixKratz/dotfiles; C event providers (cpu_load, network_load) and the SbarLua module are built at activation. Menu-bar swap needs a manual macOS Accessibility grant for `helpers/menus/bin/menus`. The config selects the `SF Pro` / `SF Mono` fonts; the Homebrew casks for these are broken upstream, so install them manually from https://developer.apple.com/fonts/ (a fresh install without them falls back to a system font).
 
 ## Submodules
 
-Two git submodules are required for a complete build:
+One git submodule is required for a complete build:
 - `modules/editors/nvim/AstroNvim` (upstream AstroNvim).
-- `darwin/modules/sketchybar/config/plugins/Dynamic-Island-Sketchybar`.
 
 Run `git submodule update --init --recursive` after cloning.
 
