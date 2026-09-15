@@ -52,6 +52,8 @@
       "oras"
       "coreutils"
       "mosh"
+      "lua"
+      "nowplaying-cli"
     ];
     casks = [
       "1password"
@@ -93,6 +95,10 @@
       # "microsoft-teams"
       "sf-symbols"
       # "hiddenbar"
+      "font-sketchybar-app-font"
+      # SF Pro / SF Mono: the Homebrew casks (font-sf-pro/font-sf-mono) are
+      # broken upstream (Apple renamed the .pkg inside the DMG). Install these
+      # two fonts manually from https://developer.apple.com/fonts/.
     ];
   };
 
@@ -116,7 +122,7 @@
         left_padding = "10";
         right_padding = "10";
         window_gap = "10";
-        external_bar = "all:28:0";
+        external_bar = "all:40:0";
         insert_feedback_color = "0xffd75f5f";
         active_window_border_color = "0xffAFDCA4";
         normal_window_border_color = "0xffaaaaaa";
@@ -280,6 +286,16 @@
       sudo chsh -s ${pkgs.zsh}/bin/zsh
       # Reload yabai scripting addition after rebuild
       sudo /run/current-system/sw/bin/yabai --load-sa 2>/dev/null || true
+      SBARLUA_DIR="$HOME/.local/share/sketchybar_lua"
+      if [ ! -f "$SBARLUA_DIR/sketchybar.so" ]; then
+        echo "Installing SbarLua..."
+        TMP=$(mktemp -d)
+        ${pkgs.git}/bin/git clone --depth 1 https://github.com/FelixKratz/SbarLua.git "$TMP/SbarLua" || true
+        if [ -d "$TMP/SbarLua" ]; then
+          ( cd "$TMP/SbarLua" && /usr/bin/make install ) || echo "SbarLua build failed; run 'make install' in SbarLua manually"
+        fi
+        rm -rf "$TMP"
+      fi
     ''; # Since it's not possible to declare default shell, run this command after build
     stateVersion = 5;
   };
