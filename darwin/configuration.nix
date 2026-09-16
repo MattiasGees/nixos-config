@@ -94,6 +94,9 @@ in
       "visual-studio-code"
       # "tidal"
       "insomnia"
+      "paseo"                       # Orchestrate coding agents; bundles its own
+                                    # daemon (localhost:6767). ~/.paseo/config.json
+                                    # is owned by paseo at runtime — not managed here.
       "nordvpn"
       "tailscale-app"
       # "nordpass"

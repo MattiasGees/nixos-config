@@ -10,6 +10,7 @@ darwin.lib.darwinSystem {
     ../machines/${name}.nix
     ../machines/shared.nix
     ../darwin/configuration.nix
+    ../darwin/paseo.nix
 
     {
       documentation.enable = false;
