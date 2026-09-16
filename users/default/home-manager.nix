@@ -31,6 +31,12 @@ in {
         ]);
 
   home = {
-    stateVersion = "23.05"; 
+    stateVersion = "23.05";
+
+    sessionVariables = lib.optionalAttrs isDarwin {
+      # Skip Homebrew's third-party tap-trust prompt (FelixKratz / koekeishiya /
+      # theseal taps) so brew installs don't need manual trust each time.
+      HOMEBREW_NO_REQUIRE_TAP_TRUST = "1";
+    };
   };
 }
