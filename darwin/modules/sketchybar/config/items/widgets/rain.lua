@@ -26,13 +26,16 @@ local upd_line = sbar.add("item", { position = "popup." .. rain.name,
 
 -- Shell pipeline: resolve location (CoreLocationCLI -> cache) then Open-Meteo,
 -- emit "CITY|<32 space-separated precip values>" or "NOLOC" on stdout.
+-- Uses CoreLocationCLI's --format (not --json): the JSON output embeds raw,
+-- unescaped newlines in the reverse-geocoded "address" field, which breaks
+-- jq's parser unpredictably depending on key order.
 local FETCH = [[
 sh -c '
 LAT=""; LON=""; CITY="Location unavailable"
 if command -v CoreLocationCLI >/dev/null 2>&1; then
-  J=$(CoreLocationCLI --json 2>/dev/null)
-  LAT=$(echo "$J" | jq -r ".latitude // empty"); LON=$(echo "$J" | jq -r ".longitude // empty")
-  CITY=$(echo "$J" | jq -r ".locality // \"Unknown\"")
+  LOC=$(CoreLocationCLI -f "%latitude|%longitude|%locality" 2>/dev/null)
+  LAT=$(echo "$LOC" | cut -d"|" -f1); LON=$(echo "$LOC" | cut -d"|" -f2)
+  CITY=$(echo "$LOC" | cut -d"|" -f3); [ -z "$CITY" ] && CITY="Unknown"
   [ -n "$LAT" ] && [ -n "$LON" ] && echo "$LAT,$LON,$CITY" > ]] .. CACHE .. "\n" .. [[fi
 if { [ -z "$LAT" ] || [ -z "$LON" ]; } && [ -f ]] .. CACHE .. [[ ]; then
   IFS=, read LAT LON CITY < ]] .. CACHE .. [[; CITY="$CITY (cached)"

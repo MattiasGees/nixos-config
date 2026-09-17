@@ -81,33 +81,11 @@ local ssid = sbar.add("item", {
   },
   width = popup_width,
   align = "center",
-  label = {
-    font = {
-      size = 15,
-      style = settings.font.style_map["Bold"]
-    },
-    max_chars = 18,
-    string = "????????????",
-  },
+  label = { drawing = false },
   background = {
     height = 2,
     color = colors.grey,
     y_offset = -15
-  }
-})
-
-local hostname = sbar.add("item", {
-  position = "popup." .. wifi_bracket.name,
-  icon = {
-    align = "left",
-    string = "Hostname:",
-    width = popup_width / 2,
-  },
-  label = {
-    max_chars = 20,
-    string = "????????????",
-    width = popup_width / 2,
-    align = "right",
   }
 })
 
@@ -153,13 +131,47 @@ local router = sbar.add("item", {
   },
 })
 
+local signal = sbar.add("item", {
+  position = "popup." .. wifi_bracket.name,
+  icon = {
+    align = "left",
+    string = "Signal:",
+    width = popup_width / 2,
+  },
+  label = {
+    string = "?????????",
+    width = popup_width / 2,
+    align = "right",
+  }
+})
+
 local speedtest = sbar.add("item", {
   position = "popup." .. wifi_bracket.name,
   icon = { string = "Speed test:", align = "left", width = popup_width / 2 },
   label = { string = "click to run", align = "right", width = popup_width / 2 },
 })
 
-speedtest:subscribe("mouse.clicked", function()
+-- RSSI for the current network only: the first "Signal / Noise" line precedes
+-- the "Other Local Wi-Fi Networks" section in system_profiler's output.
+local SIGNAL_CMD = "system_profiler SPAirPortDataType 2>/dev/null | grep -m1 'Signal / Noise' | awk -F': ' '{print $2}' | awk '{print $1}'"
+
+local function refresh_signal()
+  sbar.exec(SIGNAL_CMD, function(result)
+    local rssi = tonumber(result)
+    if not rssi then
+      signal:set({ label = "Unknown" })
+      return
+    end
+    local quality = "Poor"
+    if rssi >= -50 then quality = "Excellent"
+    elseif rssi >= -60 then quality = "Good"
+    elseif rssi >= -70 then quality = "Fair"
+    end
+    signal:set({ label = string.format("%s (%d dBm)", quality, rssi) })
+  end)
+end
+
+local function run_speedtest()
   speedtest:set({ label = "running…" })
   sbar.exec("networkQuality 2>/dev/null | awk '/Downlink capacity/{d=$3} /Uplink capacity/{u=$3} END{printf \"%s|%s\", d, u}'", function(out)
     local dl, ul = (out or ""):match("^([^|]*)|(.*)$")
@@ -169,7 +181,13 @@ speedtest:subscribe("mouse.clicked", function()
       speedtest:set({ label = "error" })
     end
   end)
-end)
+end
+
+speedtest:subscribe("mouse.clicked", run_speedtest)
+
+-- Populate on startup so nothing needs a manual run.
+refresh_signal()
+run_speedtest()
 
 sbar.add("item", { position = "right", width = settings.group_paddings })
 
@@ -202,6 +220,8 @@ wifi:subscribe({"wifi_change", "system_woke"}, function(env)
       },
     })
   end)
+  refresh_signal()
+  run_speedtest()
 end)
 
 local function hide_details()
@@ -212,14 +232,8 @@ local function toggle_details()
   local should_draw = wifi_bracket:query().popup.drawing == "off"
   if should_draw then
     wifi_bracket:set({ popup = { drawing = true }})
-    sbar.exec("networksetup -getcomputername", function(result)
-      hostname:set({ label = result })
-    end)
     sbar.exec("ipconfig getifaddr en0", function(result)
       ip:set({ label = result })
-    end)
-    sbar.exec("ipconfig getsummary en0 | awk -F ' SSID : '  '/ SSID : / {print $2}'", function(result)
-      ssid:set({ label = result })
     end)
     sbar.exec("networksetup -getinfo Wi-Fi | awk -F 'Subnet mask: ' '/^Subnet mask: / {print $2}'", function(result)
       mask:set({ label = result })
@@ -245,10 +259,10 @@ wifi_up:subscribe("mouse.exited", wifi_hover.leave)
 wifi_down:subscribe("mouse.exited", wifi_hover.leave)
 wifi:subscribe("mouse.exited", wifi_hover.leave)
 wifi_hover.bind(ssid)
-wifi_hover.bind(hostname)
 wifi_hover.bind(ip)
 wifi_hover.bind(mask)
 wifi_hover.bind(router)
+wifi_hover.bind(signal)
 wifi_hover.bind(speedtest)
 
 local function copy_label_to_clipboard(env)
@@ -260,8 +274,6 @@ local function copy_label_to_clipboard(env)
   end)
 end
 
-ssid:subscribe("mouse.clicked", copy_label_to_clipboard)
-hostname:subscribe("mouse.clicked", copy_label_to_clipboard)
 ip:subscribe("mouse.clicked", copy_label_to_clipboard)
 mask:subscribe("mouse.clicked", copy_label_to_clipboard)
 router:subscribe("mouse.clicked", copy_label_to_clipboard)
