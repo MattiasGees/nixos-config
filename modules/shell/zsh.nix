@@ -34,7 +34,22 @@ in
 
     oh-my-zsh = {                               # Extra plugins for zsh
       enable = true;
-      plugins = [ "git" "z" ];
+      # zsh-autosuggestions is provided by autosuggestion.enable above.
+      plugins = [
+        "git"
+        "z"
+        "kubectl"
+        "helm"
+        "docker"
+        "terraform"
+        "aws"
+        "gcloud"
+        "golang"
+        "encode64"
+        "extract"
+        "colored-man-pages"
+        "web-search"
+      ];
       custom = "$HOME/.config/zsh_nix/custom";
     };
 
