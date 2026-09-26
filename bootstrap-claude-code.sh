@@ -21,6 +21,17 @@
 #
 set -uo pipefail
 
+# Fetch GitHub repos over HTTPS, never SSH. Claude Code clones GitHub sources
+# over SSH when it thinks SSH works, but during `make switch` there may be no
+# ssh-agent (and a fresh Mac has no GitHub key at all). Everything fetched here
+# is public, so HTTPS needs no credentials. Applies only to this script's git
+# calls; the user's git/SSH config is untouched.
+export GIT_CONFIG_COUNT=2
+export GIT_CONFIG_KEY_0="url.https://github.com/.insteadOf"
+export GIT_CONFIG_VALUE_0="git@github.com:"
+export GIT_CONFIG_KEY_1="url.https://github.com/.insteadOf"
+export GIT_CONFIG_VALUE_1="ssh://git@github.com/"
+
 CLAUDE_DIR="${HOME}/.claude"
 SETTINGS_FILE="${CLAUDE_DIR}/settings.json"
 INSTALLED_FILE="${CLAUDE_DIR}/plugins/installed_plugins.json"
@@ -33,7 +44,10 @@ is_enabled() { [ -f "${SETTINGS_FILE}" ] && grep -qE "\"$1\"[[:space:]]*:[[:spac
 # "<name>": { ... } key in known_marketplaces.json
 has_marketplace() { [ -f "${MARKETPLACES_FILE}" ] && grep -qF "\"$1\":" "${MARKETPLACES_FILE}"; }
 
+# claude-plugins-official is normally auto-added on Claude Code's first
+# interactive run; listing it covers a fresh Mac where that hasn't happened yet.
 MARKETPLACES=(
+  "claude-plugins-official anthropics/claude-plugins-official"
   "karpathy-skills forrestchang/andrej-karpathy-skills"
 )
 
@@ -51,7 +65,7 @@ fi
 
 failed=0
 
-echo "==> Marketplaces (claude-plugins-official is built in)"
+echo "==> Marketplaces"
 for entry in "${MARKETPLACES[@]}"; do
   read -r name source <<<"${entry}"
   if has_marketplace "${name}"; then
