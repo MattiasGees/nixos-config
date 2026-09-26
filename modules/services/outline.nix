@@ -142,7 +142,7 @@
   services.postgresql.extensions = ps: [ ps.pgvector ];
 
   # Fast-pool storage, bind-mounted onto the module's hardcoded /var/lib/outline
-  # (karakeep pattern — read modules/media/karakeep.nix for the full rationale).
+  # (karakeep pattern — read modules/services/karakeep.nix for the full rationale).
   # No dedicated dataset: plain subdirs of the existing fast/appdata dataset,
   # owned by the outline user. We create data/ too: the bind mount comes up after
   # systemd-tmpfiles-setup, so the module's own `d /var/lib/outline/data` rule
@@ -162,8 +162,16 @@
     where = "/var/lib/outline";
     type = "none";
     options = "bind";
+    # Same ordering-cycle fix as karakeep.nix: tmpfiles-setup runs After
+    # local-fs.target, which a default mount must come Before, so without this
+    # systemd drops the mount at boot and outline (RequiresMountsFor) never
+    # starts. DefaultDependencies=no takes it out of local-fs.target ordering;
+    # the umount.target lines keep a clean unmount at shutdown.
+    unitConfig.DefaultDependencies = false;
     requires = [ "systemd-tmpfiles-setup.service" ];
     after = [ "systemd-tmpfiles-setup.service" ];
+    before = [ "umount.target" ];
+    conflicts = [ "umount.target" ];
     wantedBy = [ "multi-user.target" ];
   }];
 
