@@ -10,6 +10,7 @@ All builds go through the `Makefile`, which dispatches based on `uname` and the 
 make switch                       # Linux → nixosConfigurations.server; macOS → darwinConfigurations.macbook-m1
 make switch NIXNAME=desktop       # NixOS desktop
 make switch NIXNAME=macbook-m1    # Darwin (aarch64)
+make switch NIXNAME=pacesetter    # Darwin (aarch64), same as macbook-m1 with its own hostname
 make build-server                 # nix build the server toplevel without activating
 make home-manager                 # Apply standalone home-manager (non-NixOS / non-Darwin Linux)
 make setup-home-manager           # Same, but backs up existing dotfiles with `.backup`
@@ -32,7 +33,7 @@ This is a single flake covering NixOS hosts, nix-darwin hosts, and standalone ho
 - `mkdarwin.nix` → nix-darwin; injects the distributed-build settings and imports `darwin/configuration.nix`.
 - `mkhm.nix` / `mkvm.nix` exist but `flake.nix` does not call them — treat as legacy unless wiring something new.
 
-**Host wiring (`flake.nix`)** — declares `nixosConfigurations.{desktop,server,server-arm64}`, `darwinConfigurations.{macbook-m1,macbook-x86}`, and `homeConfigurations.${user}` (plus `${user}@x86_64-linux` / `${user}@aarch64-linux`). The builder imports `hardware/${name}.nix`, `machines/${name}.nix`, and `machines/shared.nix` — so adding a host means creating those three files and a builder call in `flake.nix`.
+**Host wiring (`flake.nix`)** — declares `nixosConfigurations.{desktop,server,server-arm64}`, `darwinConfigurations.{macbook-m1,pacesetter,macbook-x86}`, and `homeConfigurations.${user}` (plus `${user}@x86_64-linux` / `${user}@aarch64-linux`). The builder imports `hardware/${name}.nix`, `machines/${name}.nix`, and `machines/shared.nix` — so adding a host means creating those three files and a builder call in `flake.nix`.
 
 **Layered configuration:**
 - `hardware/<host>.nix` — disk, filesystems, kernel modules. Host-specific.
