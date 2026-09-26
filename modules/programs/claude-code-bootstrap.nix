@@ -9,8 +9,12 @@
 #
 # It runs at most once per script version: the marker is keyed to the script's
 # store hash, so editing bootstrap-claude-code.sh (e.g. adding a plugin)
-# re-triggers it on the next switch. Failures don't abort activation and leave
-# no marker, so they retry next time.
+# re-triggers it on the next switch. The script exits non-zero unless every
+# item is verified present; then no marker is written and it retries next time.
+#
+# Runs after linkGeneration so stale home-manager symlinks under ~/.claude are
+# already cleaned up, and inside a subshell so the PATH tweak doesn't leak into
+# later activation steps (they rely on GNU coreutils, not macOS /usr/bin tools).
 #
 { lib, pkgs, ... }:
 
@@ -19,20 +23,22 @@ let
   markerName = ".nix-bootstrap." + builtins.baseNameOf "${bootstrapScript}";
 in
 {
-  home.activation.claudeCodeBootstrap = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-    export PATH="/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
-    marker="$HOME/.claude/${markerName}"
-    if [ ! -e "$marker" ]; then
-      if command -v claude >/dev/null 2>&1; then
-        echo "Running Claude Code bootstrap (plugins + MCP)..."
-        if ${pkgs.bash}/bin/bash ${bootstrapScript} </dev/null; then
-          mkdir -p "$HOME/.claude" && touch "$marker"
+  home.activation.claudeCodeBootstrap = lib.hm.dag.entryAfter [ "linkGeneration" ] ''
+    (
+      export PATH="$PATH:/opt/homebrew/bin"
+      marker="$HOME/.claude/${markerName}"
+      if [ ! -e "$marker" ]; then
+        if command -v claude >/dev/null 2>&1; then
+          echo "Running Claude Code bootstrap (plugins + MCP)..."
+          if ${pkgs.bash}/bin/bash ${bootstrapScript} </dev/null; then
+            mkdir -p "$HOME/.claude" && touch "$marker"
+          else
+            echo "Claude Code bootstrap did not complete; will retry next switch." >&2
+          fi
         else
-          echo "Claude Code bootstrap did not complete; will retry next switch." >&2
+          echo "claude CLI not found; skipping Claude Code bootstrap (retries next switch)." >&2
         fi
-      else
-        echo "claude CLI not found; skipping Claude Code bootstrap (retries next switch)." >&2
       fi
-    fi
+    ) || true
   '';
 }
