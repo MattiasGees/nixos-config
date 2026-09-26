@@ -71,6 +71,10 @@
   ];
   services.openssh.settings.PasswordAuthentication = false;
 
+  # Claude Code plugins/marketplaces/MCP servers, set up on each switch by the
+  # same bootstrap the Mac uses (claude-code itself comes from pkgs/dev.nix).
+  home-manager.users.mattias.imports = [ ../modules/programs/claude-code-bootstrap.nix ];
+
   # Ship terminfo for common terminals (kitty, alacritty, foot, wezterm, …) so
   # SSHing in doesn't error with "can't find terminal definition for
   # xterm-kitty" and TUIs render correctly.
