@@ -176,6 +176,16 @@
         lib = pkgs.lib;
       };
 
+      darwinConfigurations.pacesetter = mkDarwin "pacesetter" rec {
+        inherit darwin home-manager user;
+        system = "aarch64-darwin";
+        pkgs = import nixpkgs {
+          inherit system;
+          config = { allowUnfree = true; };
+        };
+        lib = pkgs.lib;
+      };
+
       darwinConfigurations.macbook-x86 = mkDarwin "macbook-x86" rec {
         inherit darwin home-manager user;
         system = "x86_64-darwin";
