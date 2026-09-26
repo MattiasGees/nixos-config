@@ -51,7 +51,7 @@
       # with "variable $src or $srcs should point to the source" (nixpkgs#458799).
       # Pinning it here prunes them from the closure regardless of how the build is
       # invoked; without this, ollama-cuda fails to build on polaris.
-      config = { allowUnfree = true; allowInsecure = true; allowUnsupportedSystem = false; };
+      config = { allowUnfree = true; allowUnsupportedSystem = false; };
       overlays = [
         (final: prev: {
           waybar = inputs.nixpkgs-unstable.legacyPackages.${system}.waybar;
@@ -104,7 +104,7 @@
          system = "aarch64-linux";
          pkgs = import nixpkgs {
            system = "aarch64-linux";
-           config = { allowUnfree = true; allowInsecure = true; };
+           config = { allowUnfree = true; };
          };
          lib = pkgs.lib;
       };
@@ -127,7 +127,7 @@
          system = "aarch64-linux";
          pkgs = import nixpkgs {
            system = "aarch64-linux";
-           config = { allowUnfree = true; allowInsecure = true; };
+           config = { allowUnfree = true; };
          };
          lib = pkgs.lib;
       };
@@ -140,7 +140,7 @@
             let
               systemPkgs = import nixpkgs {
                 system = systemArch;
-                config = { allowUnfree = true; allowInsecure = true; };
+                config = { allowUnfree = true; };
               };
             in
             home-manager.lib.homeManagerConfiguration {
@@ -171,7 +171,7 @@
         system = "aarch64-darwin";
         pkgs = import nixpkgs {
           inherit system;
-          config = { allowUnfree = true; allowInsecure = true; };
+          config = { allowUnfree = true; };
         };
         lib = pkgs.lib;
       };
@@ -181,7 +181,7 @@
         system = "x86_64-darwin";
         pkgs = import nixpkgs {
           inherit system;
-          config = { allowUnfree = true; allowInsecure = true; };
+          config = { allowUnfree = true; };
         };
         lib = pkgs.lib;
       };

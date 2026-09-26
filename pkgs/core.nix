@@ -7,7 +7,7 @@ with pkgs;
     packages = with pkgs; [
       # Terminal
       yq coreutils-full fzf ripgrep bat colordiff htop tree wget diceware
-      keychain watch jq starship git gnumake gawk tmate fastfetch
+      keychain watch jq starship git gnumake gawk fastfetch
       glow step-ca openssl asciinema asciinema-agg objconv atuin mosh
     ]
     # gcc is Linux-only: on macOS the Nix gcc/ld land ahead of Apple's

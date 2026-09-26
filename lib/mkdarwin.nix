@@ -14,7 +14,7 @@ darwin.lib.darwinSystem {
 
     {
       documentation.enable = false;
-      nixpkgs.config = { allowUnfree = true; allowInsecure = true; };
+      nixpkgs.config = { allowUnfree = true; };
       nix.distributedBuilds = true;
       nix.buildMachines = [{
         hostName = "ssh://builder@localhost";
