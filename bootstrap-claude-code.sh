@@ -29,7 +29,7 @@ for plugin in \
   superpowers@claude-plugins-official \
   andrej-karpathy-skills@karpathy-skills; do
   echo "  - ${plugin}"
-  claude plugin install "${plugin}" || true
+  claude plugin install "${plugin}" -y || true
   claude plugin enable "${plugin}" || true
 done
 
