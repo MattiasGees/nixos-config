@@ -20,6 +20,7 @@ in {
         ../../darwin/modules/skhd/skhd.nix
         ../../darwin/modules/vscode/vscode.nix
         # ../../darwin/modules/syncthing/syncthing.nix
+        ../../modules/programs/claude-code.nix
         ../../pkgs/macos.nix
         ]) ++ (lib.optionals pkgs.stdenv.hostPlatform.isLinux [
         ../../modules/desktop/hyprland/home.nix
