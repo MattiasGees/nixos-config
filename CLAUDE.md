@@ -20,7 +20,6 @@ make update                       # nix flake update
 Notes:
 - All `nix build` / `*-rebuild` calls pass `--impure` (the flake reads `builtins.getEnv "USER"` / `"HOME"` for the standalone home configuration). Reproduce manually with the same flag.
 - `NIX_CONFIG="experimental-features = nix-command flakes"` is set inline by the Makefile; mirror that when invoking nix commands directly.
-- Darwin builds enable `nix.distributedBuilds` against `ssh://builder@localhost` for `aarch64-linux`. Cross-system builds from the MacBook assume that builder is reachable.
 - There is no CI, linter, or formatter wired in. `nix flake check` is not part of the workflow.
 
 ## Architecture
@@ -30,7 +29,7 @@ This is a single flake covering NixOS hosts, nix-darwin hosts, and standalone ho
 **Builders (`lib/`)** — each takes a `name` plus inputs and returns a system:
 - `mksys.nix` → full NixOS desktop (hyprland + xremap + GUI home-manager).
 - `mkserver.nix` → headless NixOS (no GUI imports, uses `users/default/nixos-server.nix` + `home-manager-server.nix`).
-- `mkdarwin.nix` → nix-darwin; injects the distributed-build settings and imports `darwin/configuration.nix`.
+- `mkdarwin.nix` → nix-darwin; imports `darwin/configuration.nix`.
 - `mkhm.nix` / `mkvm.nix` exist but `flake.nix` does not call them — treat as legacy unless wiring something new.
 
 **Host wiring (`flake.nix`)** — declares `nixosConfigurations.{desktop,server,server-arm64}`, `darwinConfigurations.{macbook-m1,pacesetter,macbook-x86}`, and `homeConfigurations.${user}` (plus `${user}@x86_64-linux` / `${user}@aarch64-linux`). The builder imports `hardware/${name}.nix`, `machines/${name}.nix`, and `machines/shared.nix` — so adding a host means creating those three files and a builder call in `flake.nix`.
