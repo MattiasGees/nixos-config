@@ -9,6 +9,7 @@ in {
   imports = [
         ../../modules/shell/git.nix
         ../../modules/shell/zsh.nix
+        ../../modules/shell/direnv-hm.nix
         # ../../modules/editors/nvim/nvim.nix
         ../../modules/archive-downloads/archive-downloads.nix
         ../../pkgs/default.nix
