@@ -59,7 +59,7 @@ PLUGINS=(
 )
 
 if ! command -v claude >/dev/null 2>&1; then
-  echo "error: 'claude' CLI not found. Install the claude-code@latest cask (make switch) first." >&2
+  echo "error: 'claude' CLI not found (Darwin: claude-code@latest cask; Linux: pkgs/dev.nix). Run make switch first." >&2
   exit 1
 fi
 
