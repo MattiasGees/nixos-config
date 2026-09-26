@@ -47,7 +47,6 @@ in
       # "ddcctl"
       # "ykman"
       "gpg"
-      "openssh"
       "pinentry"
       "blueutil"
       "node"
