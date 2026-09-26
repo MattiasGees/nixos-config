@@ -14,7 +14,24 @@
 # non-zero if anything is still missing afterwards (e.g. a running Claude Code
 # session overwrote ~/.claude.json), so the activation hook retries next switch.
 #
+# Presence is read straight from Claude Code's state files rather than parsed
+# from `claude plugin list`: under nix-darwin activation (sudo + launchctl
+# asuser) the CLI reported installed plugins as missing, and re-installing an
+# already-installed plugin then fails ("Failed to clone repository").
+#
 set -uo pipefail
+
+CLAUDE_DIR="${HOME}/.claude"
+SETTINGS_FILE="${CLAUDE_DIR}/settings.json"
+INSTALLED_FILE="${CLAUDE_DIR}/plugins/installed_plugins.json"
+MARKETPLACES_FILE="${CLAUDE_DIR}/plugins/known_marketplaces.json"
+
+# "<id>": [ ... ] key in installed_plugins.json
+is_installed() { [ -f "${INSTALLED_FILE}" ] && grep -qF "\"$1\":" "${INSTALLED_FILE}"; }
+# "<id>": true in settings.json's enabledPlugins
+is_enabled() { [ -f "${SETTINGS_FILE}" ] && grep -qE "\"$1\"[[:space:]]*:[[:space:]]*true" "${SETTINGS_FILE}"; }
+# "<name>": { ... } key in known_marketplaces.json
+has_marketplace() { [ -f "${MARKETPLACES_FILE}" ] && grep -qF "\"$1\":" "${MARKETPLACES_FILE}"; }
 
 MARKETPLACES=(
   "karpathy-skills forrestchang/andrej-karpathy-skills"
@@ -37,7 +54,7 @@ failed=0
 echo "==> Marketplaces (claude-plugins-official is built in)"
 for entry in "${MARKETPLACES[@]}"; do
   read -r name source <<<"${entry}"
-  if claude plugin marketplace list 2>/dev/null | grep -qF "${name}"; then
+  if has_marketplace "${name}"; then
     echo "  - ${name}: present"
   else
     claude plugin marketplace add "${source}" || failed=1
@@ -46,14 +63,14 @@ done
 
 echo "==> Plugins"
 for plugin in "${PLUGINS[@]}"; do
-  if ! claude plugin list 2>/dev/null | grep -qF "${plugin}"; then
+  if ! is_installed "${plugin}"; then
     claude plugin install "${plugin}" -y || { failed=1; continue; }
   fi
-  status=$(claude plugin list 2>/dev/null | grep -F -A3 "${plugin}" | grep -F "Status:")
-  case "${status}" in
-    *enabled*) echo "  - ${plugin}: enabled" ;;
-    *) claude plugin enable "${plugin}" || failed=1 ;;
-  esac
+  if is_enabled "${plugin}"; then
+    echo "  - ${plugin}: enabled"
+  else
+    claude plugin enable "${plugin}" || failed=1
+  fi
 done
 
 echo "==> MCP servers (user scope = available in every project)"
