@@ -12,6 +12,8 @@ let
   # vmctlPackages.vmctl is already wrapped (PATH deps) by its own flake; this
   # adds a second wrapProgram layer for the VMCTL_* env. If those vars don't
   # take effect, check `cat $(which vmctl)` for both layers (runbook B.8).
+  # DNS is Pi-hole, not the router: the router returns SERVFAIL for some public
+  # domains (same reason machines/polaris.nix avoids it).
   vmctlWrapped = pkgs.symlinkJoin {
     name = "vmctl-wrapped";
     paths = [ vmctlPackages.vmctl ];
@@ -21,7 +23,7 @@ let
         --set VMCTL_BRIDGE "br0" \
         --set VMCTL_VMROOT "${vmRoot}" \
         --set VMCTL_GATEWAY "192.168.1.1" \
-        --set VMCTL_DNS "192.168.1.1" \
+        --set VMCTL_DNS "192.168.1.86" \
         --set VMCTL_USER "mattias" \
         --set VMCTL_SSH_KEYS_URL "https://github.com/mattiasgees.keys" \
         --set VMCTL_NIXOS_BASE "${nixosBase}" \
