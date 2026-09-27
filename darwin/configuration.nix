@@ -219,8 +219,6 @@ in
         alt - c : yabai -m window --toggle float;\
                   yabai -m window --grid 4:4:1:1:2:2
 
-        shift + alt - 0 : yabai -m space --balance
-
         shift + ctrl + alt - h : yabai -m window --insert west
         shift + ctrl + alt - j : yabai -m window --insert south
         shift + ctrl + alt - k : yabai -m window --insert north
@@ -238,8 +236,6 @@ in
         shift + ctrl + alt - c : echo "https://calendly.com/tpmeadows1/30min" | pbcopy
 
         shift + alt - space : osascript -e 'tell application "Spotify" to playpause'
-
-        shift + alt - p : osascript ~/.config/scripts/flow.applescript
 
         shift + ctrl - 1 : m1ddc display 1 set input 17
         shift + ctrl - 2 : m1ddc display 1 set input 15
