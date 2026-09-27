@@ -1,8 +1,5 @@
 # Mark targets that aren't files
-.PHONY: install update switch bootstrap build-server home-manager setup-home-manager help
-
-# Get the path to this Makefile and directory
-MAKEFILE_DIR := $(patsubst %/,%,$(dir $(abspath $(lastword $(MAKEFILE_LIST)))))
+.PHONY: install-brew install update switch bootstrap build-server home-manager setup-home-manager help
 
 # Detect the operating system
 UNAME := $(shell uname)

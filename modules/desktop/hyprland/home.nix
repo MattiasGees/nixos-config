@@ -15,12 +15,6 @@ let
         workspace_swipe_distance=100
       }
     '';
-  workspaces = ''
-      monitor=Virtual-1,2560x1600@60,2560x0,1
-    '';
-  monitors = ''
-      workspace=10, persistent:true
-    '';
 in
 let
   hyprlandConf = ''

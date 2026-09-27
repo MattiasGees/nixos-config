@@ -2,7 +2,6 @@
 
 let
   isDarwin = pkgs.stdenv.hostPlatform.isDarwin;
-  isLinux = pkgs.stdenv.hostPlatform.isLinux;
 
 in {
 

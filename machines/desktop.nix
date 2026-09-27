@@ -1,13 +1,4 @@
-{ config, pkgs, lib, ... }: 
-let
-  # GTX 1660 Super
-  gpuIDs = [
-    "10de:21c4"
-    "10de:1aeb"
-    "10de:1aec"
-    "10de:1aed"
-  ];
-in 
+{ config, pkgs, lib, ... }:
 {
 
   hardware.opengl = {
@@ -53,6 +44,7 @@ in
   boot.initrd.availableKernelModules = [ 
     "amdgpu"
   ];
+  # GTX 1660 Super (GPU, audio, USB, UCSI) bound to vfio-pci for passthrough.
   boot.extraModprobeConfig="options vfio-pci ids=10de:21c4,10de:1aeb,10de:1aec,10de:1aed";
 
   boot.blacklistedKernelModules = ["nouveau" "nvidiafb" "nvidia" "nvidia-uvm" "nvidia-drm" "nvidia-modeset"];
