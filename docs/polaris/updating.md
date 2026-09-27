@@ -24,7 +24,7 @@ Run everything here **on polaris**, as `mattias` (not root — see below).
 ## Routine update (all software)
 
 ```bash
-cd ~/Documents/git/nixos-config
+cd ~/git/nixos-config
 git pull                                  # get the latest committed config first
 
 make update                               # = nix flake update — bumps every input

@@ -181,6 +181,15 @@ If `keystatus` isn't `available`, check `journalctl -u load-zfs-keyfiles` (the
 unit in `modules/server/zfs.nix`). The OS is now
 up — but secrets and per-service setup are **not** done yet. Continue with Part 2.
 
+The `/etc/nixos-config` clone was only for the install. The working checkout on
+polaris is `~/git/nixos-config`, as `mattias` (needs a GitHub SSH key for the
+private `vmctl` input):
+
+```bash
+git clone git@github.com:mattiasgees/nixos-config.git ~/git/nixos-config
+cd ~/git/nixos-config && git checkout mattias
+```
+
 ---
 
 ## Part 2 — Out-of-band setup (secrets, auth, DNS)
