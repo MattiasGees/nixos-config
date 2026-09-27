@@ -19,7 +19,7 @@ Besides the modules below, `lib/mkdarwin.nix` sets `documentation.enable = false
 |---|---|
 | `machines/<host>.nix` | Hostname and nerd fonts. `pacesetter.nix` imports `macbook-m1.nix` and only overrides the name. |
 | `machines/shared.nix` | Nix settings shared with NixOS: trusted users, automatic GC (`--delete-older-than 7d`), `auto-optimise-store`, flakes. |
-| `darwin/configuration.nix` | **The big one.** Homebrew taps/brews/casks, yabai + skhd + jankyborders, `system.defaults` (dock, finder, trackpad, NSGlobalDomain), Touch ID for sudo, activation script (chsh to zsh, reload the yabai scripting addition). |
+| `darwin/configuration.nix` | **The big one.** Homebrew taps/brews/casks, yabai + skhd + jankyborders (keybindings and yabai rules live inline here), `system.defaults` (dock, finder, trackpad, NSGlobalDomain), Touch ID for sudo, activation script (chsh to zsh, reload the yabai scripting addition). |
 | `darwin/paseo.nix` | Rewrites `daemon.listen` in `~/.paseo/config.json` to this Mac's Tailscale IP; leaves the rest of Paseo's runtime-owned file alone. |
 
 ## Home-manager (`users/default/home-manager.nix`)
@@ -44,7 +44,6 @@ darwin/modules/ghostty/ghostty.nix   ── Ghostty config (same)
 
 ```
 darwin/modules/sketchybar/           ── SbarLua menu bar; C helpers built at activation
-darwin/modules/yabai/, skhd/         ── out-of-store symlinks to the rc files
 darwin/modules/vscode/               ── declarative VSCode settings, seeded extensions
 modules/programs/claude-code-bootstrap.nix ── runs bootstrap-claude-code.sh on activation
 pkgs/macos.nix                       ── macOS-only packages
@@ -64,7 +63,7 @@ Several modules link back into the repo with `mkOutOfStoreSymlink` so edits appl
 nixConfigDir = "${config.home.homeDirectory}/Documents/git/nixos-config";
 ```
 
-Used by `darwin/modules/{sketchybar,yabai,skhd,ghostty,kitty}`, `modules/shell/zsh.nix` and `modules/archive-downloads/`. The path is hardcoded — if the repo moves, these all break.
+Used by `darwin/modules/{sketchybar,ghostty,kitty}`, `modules/shell/zsh.nix` and `modules/archive-downloads/`. The path is hardcoded — if the repo moves, these all break.
 
 ## Not loaded on Mac
 
@@ -86,5 +85,5 @@ nix build ".#darwinConfigurations.macbook-m1.system" --impure   # build only
 ## Gotchas
 
 1. **Homebrew is declarative.** `onActivation.cleanup = "zap"` uninstalls anything not listed in `brews` / `casks` / `taps`. A manual `brew install` won't survive a switch.
-2. **yabai scripting addition.** `services.yabai.enableScriptingAddition` installs the sudoers entry that the activation script and `yabairc` rely on for `yabai --load-sa`.
+2. **yabai scripting addition.** `services.yabai.enableScriptingAddition` installs the sudoers entry that the activation script relies on for `yabai --load-sa`.
 3. **Manual steps on a fresh Mac:** grant Accessibility to sketchybar's `helpers/menus/bin/menus`, and install SF Pro / SF Mono from https://developer.apple.com/fonts/ (the Homebrew casks are broken).

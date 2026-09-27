@@ -17,8 +17,6 @@ in {
         ../../darwin/modules/ghostty/ghostty.nix
         ] ++ (lib.optionals pkgs.stdenv.hostPlatform.isDarwin [
         ../../darwin/modules/sketchybar/sketchybar.nix
-        ../../darwin/modules/yabai/yabai.nix
-        ../../darwin/modules/skhd/skhd.nix
         ../../darwin/modules/vscode/vscode.nix
         # ../../darwin/modules/syncthing/syncthing.nix
         ../../modules/programs/claude-code-bootstrap.nix

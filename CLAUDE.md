@@ -48,12 +48,12 @@ NixOS builders import `hardware/<name>.nix`, `machines/<name>.nix` and `machines
   - `nixos.nix` / `nixos-server.nix` — system-level user + services (desktop vs. SSH/mosh/docker server).
   - `home-manager.nix` — desktop/Mac profile; platform-specific imports are gated with `lib.optionals pkgs.stdenv.hostPlatform.isDarwin` / `isLinux`.
   - `home-manager-server.nix` — stripped headless profile (servers, polaris, standalone).
-- `darwin/configuration.nix` — Homebrew (declarative, `cleanup = "zap"`: anything unlisted is uninstalled), yabai/skhd/jankyborders, `system.defaults`. `darwin/paseo.nix` binds the Paseo daemon to the Tailscale IP.
+- `darwin/configuration.nix` — Homebrew (declarative, `cleanup = "zap"`: anything unlisted is uninstalled), yabai/skhd/jankyborders (configured inline here — the only place they're configured), `system.defaults`. `darwin/paseo.nix` binds the Paseo daemon to the Tailscale IP.
 - `pkgs/` — package lists imported as **home-manager modules**, not derivations. `pkgs/default.nix` bundles `core.nix` + `dev.nix` + `kube.nix` for the desktop/Mac profile; the server profile imports those three directly. `linux.nix`, `nixos.nix`, `macos.nix` are platform-specific.
 - `modules/` — reusable pieces, always imported explicitly (nothing is auto-discovered):
   - `shell/`, `editors/`, `desktop/`, `programs/`, `archive-downloads/`, `vm/` — home-manager / workstation.
   - `server/`, `media/`, `services/` — polaris system modules (ZFS, restic, NFS, tailscale, cloudflared, Caddy, *arr stack, Immich, Outline, …), wired in from `machines/polaris.nix`.
-- `darwin/modules/` — Mac home-manager modules (sketchybar, yabai, skhd, kitty, ghostty, vscode). `darwin/modules/archive/` is unused.
+- `darwin/modules/` — Mac home-manager modules (sketchybar, kitty, ghostty, vscode). `darwin/modules/archive/` is unused.
 - `hardware/polaris.nix` is raw `nixos-generate-config` output and may be overwritten; hand-maintained hardware bits go in `hardware/polaris-extra.nix`.
 - Human docs: `docs/polaris/` runbooks, `docs/workstation-manual.md` (desktop), `architecture/mac.md` (Darwin), `SERVER-SETUP.md` (generic servers / non-NixOS).
 

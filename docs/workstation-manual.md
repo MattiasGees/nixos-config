@@ -292,7 +292,7 @@ imports = [
   ../../darwin/modules/ghostty/ghostty.nix
 ]
 ++ lib.optionals pkgs.stdenv.hostPlatform.isDarwin [
-  # sketchybar, yabai, skhd, vscode, claude-code-bootstrap, …
+  # sketchybar, vscode, claude-code-bootstrap, …
   ../../pkgs/macos.nix                 # colima, lima, docker plugins
 ]
 ++ lib.optionals pkgs.stdenv.hostPlatform.isLinux [
