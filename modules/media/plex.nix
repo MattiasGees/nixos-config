@@ -1,14 +1,13 @@
-# Native Plex Media Server, with NVENC hardware transcoding on the RTX 3080
-# (driver from modules/server/nvidia.nix). Hardware acceleration itself and
-# the transcode temp dir are enabled/set in the Plex UI after deploy — see the
-# Plex design archived in the Homecluster/NixOS wiki (Specs), §6, §9.
+# Native Plex Media Server, with NVENC transcoding on the RTX 3080 (nvidia.nix).
+# Hardware acceleration and the transcode dir are set in the Plex UI after
+# deploy (Plex design, Homecluster/NixOS wiki → Specs, §6, §9).
 { ... }:
 {
   services.plex = {
     enable = true;
-    # Opens 32400 + Plex's discovery ports on the LAN.
+    # 32400 + Plex's discovery ports.
     openFirewall = true;
-    # Config/metadata/DB on the fast (NVMe mirror, encrypted) pool.
+    # Config/metadata/DB on the fast pool (encrypted NVMe mirror).
     dataDir = "/srv/fast/appdata/plex";
   };
 

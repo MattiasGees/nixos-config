@@ -1,19 +1,18 @@
-# Reverse proxy for the *arr stack, with automatic TLS via ACME DNS-01 on
-# Route53. Polaris is behind CGNAT so HTTP-01 can't work; DNS-01 doesn't
-# require inbound access from the CA. Listens on all interfaces, reachable
-# on the LAN and the tailnet (wildcard *.polaris.mattiasgees.be -> tailnet
-# IP, set up out-of-band in Route53).
+# Reverse proxy for every polaris web app, with automatic TLS via ACME DNS-01
+# on Route53 (behind CGNAT, so HTTP-01 can't work). Listens on all interfaces,
+# reachable on the LAN and the tailnet (wildcard *.polaris.mattiasgees.be ->
+# tailnet IP, set up out-of-band in Route53). Public exposure is separate:
+# see modules/server/cloudflared.nix.
 { pkgs, lib, ... }:
 let
   # Per-site TLS using the Route53 DNS-01 challenge.
   #
-  # Why the custom resolvers + delay: polaris resolves DNS only through the LAN
-  # router, and the mattiasgees.be zone has Route53's default 24h SOA negative
-  # TTL. A lookup of _acme-challenge.<app> before the record exists poisons the
-  # router's cache with NXDOMAIN for 24h, so certmagic's propagation check never
-  # sees the record it just created ("timed out ... last error: <nil>"). Point
-  # the check at fresh public resolvers (which never cached that NXDOMAIN) and
-  # give Route53 a moment to settle, bypassing the router cache entirely.
+  # Why the custom resolvers + delay: the mattiasgees.be zone has Route53's
+  # default 24h SOA negative TTL, so a lookup of _acme-challenge.<app> before
+  # the record exists poisons the LAN resolver's cache with NXDOMAIN for 24h and
+  # certmagic's propagation check never sees the new record ("timed out ...
+  # last error: <nil>"). Checking against public resolvers bypasses that cache;
+  # the delay lets Route53 settle.
   acmeTls = ''
     tls {
       dns route53
@@ -30,18 +29,16 @@ in
 {
   services.caddy = {
     enable = true;
-    # Caddy built with the Route53 DNS plugin. v1.6.2+ targets libdns v1 (matches
-    # Caddy 2.11); older tags (e.g. v1.5.0) use the old struct API and fail to
-    # compile with "invalid composite literal type libdns.Record".
+    # Route53 DNS plugin. Needs v1.6.2+ (libdns v1, matching Caddy 2.11); older
+    # tags fail with "invalid composite literal type libdns.Record".
     package = pkgs.caddy.withPlugins {
       plugins = [ "github.com/caddy-dns/route53@v1.6.2" ];
-      # FOD hash of the Caddy source with the route53 plugin vendored. Emitted by
-      # the first build (with lib.fakeHash) as "got: sha256-...". Bumping the
-      # plugin/Caddy version invalidates this — reset to lib.fakeHash to re-derive.
+      # FOD hash of Caddy + vendored plugin. Bumping either invalidates it:
+      # set lib.fakeHash, build, and copy the "got: sha256-..." value.
       hash = "sha256-Vzp4Y9mARJrAHZ1C3x6+5zTSGiYY1l3FxIPkqK1RI30=";
     };
-    # ACME account email (was in globalConfig alongside acme_dns; the DNS
-    # challenge now lives per-site in the tls block so it can set resolvers).
+    # ACME account email. The DNS challenge is per-site (acmeTls) rather than a
+    # global acme_dns, because only the per-site tls block can set resolvers.
     email = "mattias@gees.dev";
     virtualHosts."sonarr.polaris.mattiasgees.be".extraConfig = proxy 8989;
     virtualHosts."radarr.polaris.mattiasgees.be".extraConfig = proxy 7878;
@@ -51,24 +48,18 @@ in
     virtualHosts."immich.polaris.mattiasgees.be".extraConfig = proxy 2283;
     virtualHosts."miniflux.polaris.mattiasgees.be".extraConfig = proxy 8080;
     virtualHosts."karakeep.polaris.mattiasgees.be".extraConfig = proxy 3000;
-    # Open WebUI (open-webui.nix) — chat frontend for local Ollama. Port 3001,
-    # not 8080, to avoid the miniflux collision above.
+    # Open WebUI (open-webui.nix).
     virtualHosts."chat.polaris.mattiasgees.be".extraConfig = proxy 3001;
-    # Pi-hole (pihole.nix) — DNS ad-blocker admin UI. Its web server is moved to
-    # :8081 (FTLCONF_webserver_port) so it doesn't collide with Caddy's :80/:443.
+    # Pi-hole admin UI (pihole.nix), moved off :80/:443 to :8081.
     virtualHosts."pihole.polaris.mattiasgees.be".extraConfig = proxy 8081;
-    # Outline wiki (outline.nix) — tailnet front door. Also public at wiki.gees.dev
-    # via the shared Cloudflare tunnel (cloudflared.nix). Port 3002 (3000/3001
-    # taken by karakeep/open-webui).
+    # Outline (outline.nix); also public at wiki.gees.dev via cloudflared.nix.
     virtualHosts."wiki.polaris.mattiasgees.be".extraConfig = proxy 3002;
-    # Filebrowser Quantum (filebrowser.nix) — simple web file manager. Container
-    # publishes :80 on loopback:8083; LAN/tailnet only, no public tunnel.
+    # Filebrowser (filebrowser.nix); LAN/tailnet only, no public tunnel.
     virtualHosts."files.polaris.mattiasgees.be".extraConfig = proxy 8083;
   };
 
-  # AWS creds for Route53 (AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY / AWS_DEFAULT_REGION),
-  # rendered from op://polaris/caddy-route53/* by op-secrets (modules/server/op-secrets.nix)
-  # at deploy time, kept out of git.
+  # Route53 AWS credentials, rendered from op://polaris/caddy-route53/* by
+  # op-secrets.
   opSecrets.caddy-route53 = {
     template = ./caddy.route53.env.tpl;
     path = "/var/lib/secrets/caddy-route53.env";

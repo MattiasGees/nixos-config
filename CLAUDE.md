@@ -1,63 +1,72 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Guidance for Claude Code when working in this repository.
 
-## Build / switch commands
+## Build / switch
 
-All builds go through the `Makefile`, which dispatches based on `uname` and the `NIXNAME` variable. There is no test suite — verification means a successful `nix build` / rebuild on the relevant host.
+Everything goes through the `Makefile`, which picks a target by `uname` and `NIXNAME` (default: `server` on Linux, `macbook-m1` on macOS). There is no test suite — verification means a successful `nix build` of the affected host.
 
 ```bash
-make switch                       # Linux → nixosConfigurations.server; macOS → darwinConfigurations.macbook-m1
-make switch NIXNAME=desktop       # NixOS desktop
-make switch NIXNAME=macbook-m1    # Darwin (aarch64)
-make switch NIXNAME=pacesetter    # Darwin (aarch64), same as macbook-m1 with its own hostname
-make build-server                 # nix build the server toplevel without activating
-make home-manager                 # Apply standalone home-manager (non-NixOS / non-Darwin Linux)
-make setup-home-manager           # Same, but backs up existing dotfiles with `.backup`
-make update                       # nix flake update
+make switch NIXNAME=<host>   # build as the user, then activate with sudo
+make build-server            # build nixosConfigurations.server without activating
+make home-manager            # standalone home-manager (non-NixOS Linux)
+make setup-home-manager      # same, backing up existing dotfiles with `.backup`
+make update                  # nix flake update
 ```
 
-Notes:
-- All `nix build` / `*-rebuild` calls pass `--impure` (the flake reads `builtins.getEnv "USER"` / `"HOME"` for the standalone home configuration). Reproduce manually with the same flag.
-- `NIX_CONFIG="experimental-features = nix-command flakes"` is set inline by the Makefile; mirror that when invoking nix commands directly.
-- There is no CI, linter, or formatter wired in. `nix flake check` is not part of the workflow.
+To build without activating, mirror the Makefile:
 
-## Architecture
+```bash
+NIX_CONFIG="experimental-features = nix-command flakes" \
+  nix build ".#nixosConfigurations.<host>.config.system.build.toplevel" --impure
+NIX_CONFIG="experimental-features = nix-command flakes" \
+  nix build ".#darwinConfigurations.<host>.system" --impure
+```
 
-This is a single flake covering NixOS hosts, nix-darwin hosts, and standalone home-manager — every host wires the same module library together via small builder functions.
+- `--impure` is required: `homeConfigurations` reads `builtins.getEnv "USER"` / `"HOME"`.
+- The `vmctl` input is a **private** `git+ssh` repo. Evaluate as a user with GitHub SSH access, never as root — this is why `make switch` on Linux builds unprivileged and only uses sudo to activate.
+- The only flake check is `checks.x86_64-linux.polaris-zfs` (a NixOS VM test of `scripts/create-zfs-pools.sh`). No CI, linter or formatter.
+- PRs target the `mattias` branch.
 
-**Builders (`lib/`)** — each takes a `name` plus inputs and returns a system:
-- `mksys.nix` → full NixOS desktop (hyprland + xremap + GUI home-manager).
-- `mkserver.nix` → headless NixOS (no GUI imports, uses `users/default/nixos-server.nix` + `home-manager-server.nix`).
-- `mkdarwin.nix` → nix-darwin; imports `darwin/configuration.nix`.
-- `mkhm.nix` / `mkvm.nix` exist but `flake.nix` does not call them — treat as legacy unless wiring something new.
+## Hosts (`flake.nix`)
 
-**Host wiring (`flake.nix`)** — declares `nixosConfigurations.{desktop,server,server-arm64}`, `darwinConfigurations.{macbook-m1,pacesetter,macbook-x86}`, and `homeConfigurations.${user}` (plus `${user}@x86_64-linux` / `${user}@aarch64-linux`). The builder imports `hardware/${name}.nix`, `machines/${name}.nix`, and `machines/shared.nix` — so adding a host means creating those three files and a builder call in `flake.nix`.
+| Output | Builder | Notes |
+|---|---|---|
+| `nixosConfigurations.desktop` | `lib/mksys.nix` | Hyprland + xremap + full GUI home-manager. **Currently doesn't evaluate** (bit-rotted: removed NixOS options, `waterfox` isn't in nixpkgs and no overlay provides it) |
+| `nixosConfigurations.server` / `server-arm64` | `lib/mkserver.nix` | Generic headless box; both use `hardware/server.nix` + `machines/server.nix` |
+| `nixosConfigurations.polaris` | `lib/mkserver.nix` | Home server (ZFS, media stack, self-hosted services). `extraModules` adds `hardware/polaris-extra.nix` (NVIDIA, ZFS pools) and `modules/server/vmctl.nix` |
+| `nixosConfigurations.polaris-vm` | `lib/mkserver.nix` | aarch64 throwaway VM of polaris: `machines/polaris-vm.nix` imports `polaris.nix` and overrides networking/hostname |
+| `darwinConfigurations.macbook-m1` / `pacesetter` / `macbook-x86` | `lib/mkdarwin.nix` | `pacesetter` is `macbook-m1` with a different hostname |
+| `homeConfigurations.mattias[@<arch>-linux]` | inline | `users/default/home-manager-server.nix` for non-NixOS Linux |
 
-**Layered configuration:**
-- `hardware/<host>.nix` — disk, filesystems, kernel modules. Host-specific.
-- `machines/<host>.nix` — per-host system options (hostname, fonts, etc.). `machines/shared.nix` is imported by every host and sets `nix.gc`, `nix.extraOptions`, trusted users.
-- `users/default/nixos.nix` / `nixos-server.nix` — system-level user/services (full desktop vs. minimal SSH+docker server). The username `mattias` is hardcoded across these files; renaming it touches multiple places.
-- `users/default/home-manager.nix` — full home-manager profile, gated with `lib.optionals pkgs.stdenv.isDarwin` / `isLinux` so the same file feeds both NixOS and Darwin hosts. `home-manager-server.nix` is a deliberately stripped variant for headless Linux.
-- `darwin/configuration.nix` — Homebrew taps/brews/casks, yabai/skhd/jankyborders, macOS `system.defaults`.
+NixOS builders import `hardware/<name>.nix`, `machines/<name>.nix` and `machines/shared.nix`; Darwin skips `hardware/`. Adding a host means creating those files and a builder call in `flake.nix`. `lib/mkhm.nix` and `lib/mkvm.nix` are not called (legacy).
 
-**Package lists (`pkgs/`)** are imported as home-manager modules, not as derivations:
-- `core.nix` / `dev.nix` / `kube.nix` — used by both server and full configs.
-- `linux.nix`, `nixos.nix`, `macos.nix` — platform-specific, imported conditionally from `users/default/home-manager.nix`.
-- `pkgs/default.nix` is unused — top-level `pkgs/` callPackages live in the overlay block of `flake.nix`.
-- Custom derivations live in `pkgs/nordpass/` and `pkgs/waterfox/`.
+## Layout
 
-**Overlays** are defined inline in `flake.nix` for the desktop `pkgs`: they expose `nordpass` and `waterfox` as new attrs, and pin a list of packages (waybar, swww, slack, steam, go, …) to `nixpkgs-unstable`. Darwin uses an un-overlaid `pkgs`. There is also an in-system overlay in `users/default/nixos.nix` that rebuilds `waybar` with `-Dexperimental=true`.
+- `machines/shared.nix` — imported by every host (NixOS and Darwin): nix GC/settings, trusted users.
+- `users/default/`
+  - `nixos.nix` / `nixos-server.nix` — system-level user + services (desktop vs. SSH/mosh/docker server).
+  - `home-manager.nix` — desktop/Mac profile; platform-specific imports are gated with `lib.optionals pkgs.stdenv.hostPlatform.isDarwin` / `isLinux`.
+  - `home-manager-server.nix` — stripped headless profile (servers, polaris, standalone).
+- `darwin/configuration.nix` — Homebrew (declarative, `cleanup = "zap"`: anything unlisted is uninstalled), yabai/skhd/jankyborders, `system.defaults`. `darwin/paseo.nix` binds the Paseo daemon to the Tailscale IP.
+- `pkgs/` — package lists imported as **home-manager modules**, not derivations. `pkgs/default.nix` bundles `core.nix` + `dev.nix` + `kube.nix` for the desktop/Mac profile; the server profile imports those three directly. `linux.nix`, `nixos.nix`, `macos.nix` are platform-specific.
+- `modules/` — reusable pieces, always imported explicitly (nothing is auto-discovered):
+  - `shell/`, `editors/`, `desktop/`, `programs/`, `archive-downloads/`, `vm/` — home-manager / workstation.
+  - `server/`, `media/`, `services/` — polaris system modules (ZFS, restic, NFS, tailscale, cloudflared, Caddy, *arr stack, Immich, Outline, …), wired in from `machines/polaris.nix`.
+- `darwin/modules/` — Mac home-manager modules (sketchybar, yabai, skhd, kitty, ghostty, vscode). `darwin/modules/archive/` is unused.
+- `hardware/polaris.nix` is raw `nixos-generate-config` output and may be overwritten; hand-maintained hardware bits go in `hardware/polaris-extra.nix`.
+- Human docs: `docs/polaris/` runbooks, `docs/workstation-manual.md` (desktop), `architecture/mac.md` (Darwin), `SERVER-SETUP.md` (generic servers / non-NixOS).
 
-**Modules (`modules/`, `darwin/modules/`)** are reusable home-manager / system pieces (hyprland, dunst, waybar, kitty, ghostty, sketchybar, yabai, syncthing, nvim, zsh, git, …). They are imported by `users/default/home-manager*.nix` and `machines/shared.nix` rather than auto-discovered — adding a new module means adding an explicit `imports = [ ... ]` entry somewhere. `sketchybar` is a SbarLua (Lua) config vendored from FelixKratz/dotfiles; C event providers (cpu_load, network_load) and the SbarLua module are built at activation. Menu-bar swap needs a manual macOS Accessibility grant for `helpers/menus/bin/menus`. The config selects the `SF Pro` / `SF Mono` fonts; the Homebrew casks for these are broken upstream, so install them manually from https://developer.apple.com/fonts/ (a fresh install without them falls back to a system font).
+## Conventions and gotchas
+
+- **Overlays** live inline in `flake.nix` and apply only to the shared x86_64-linux `pkgs` (desktop, server, polaris): a few packages pinned to `nixpkgs-unstable` and `onnxruntime` built without OpenVINO (for Immich). Darwin, aarch64 hosts and standalone home-manager get un-overlaid `pkgs`. `overlays/` is unused.
+- **Secrets** on polaris come from 1Password at activation (`modules/server/op-secrets.nix`), rendered from the `*.tpl` files next to each module. Never put secrets in Nix strings — the store is world-readable.
+- **Live-edit symlinks:** many home-manager modules use `mkOutOfStoreSymlink` to `~/Documents/git/nixos-config/...`, so config edits apply without a rebuild — and break if the repo lives elsewhere.
+- The username `mattias` is hardcoded in several places (`flake.nix`, `machines/shared.nix`, `users/default/nixos*.nix`, `machines/polaris.nix`, bootstrap scripts).
+- **Claude Code** config on the Macs and polaris is set up imperatively by `bootstrap-claude-code.sh`, run on activation via `modules/programs/claude-code-bootstrap.nix` (Claude Code rewrites its own config files, so home-manager can't own them).
+- **sketchybar** is a vendored SbarLua config from FelixKratz/dotfiles; its C helpers are built at activation. The menu-bar helper `helpers/menus/bin/menus` needs a manual macOS Accessibility grant. SF Pro / SF Mono must be installed manually from https://developer.apple.com/fonts/ (the Homebrew casks are broken).
+- Vendored trees — don't restyle: `modules/desktop/hyprland/rofi/`, `darwin/modules/sketchybar/config/`, `modules/editors/nvim/{AstroNvim,LazyNvim}`.
 
 ## Submodules
 
-One git submodule is required for a complete build:
-- `modules/editors/nvim/AstroNvim` (upstream AstroNvim).
-
-Run `git submodule update --init --recursive` after cloning.
-
-## Bootstrap scripts
-
-`bootstrap-server.sh` / `install-home-manager.sh` are one-shot provisioning scripts for fresh non-NixOS Linux servers. They hardcode the username `mattias` and the repo URL `github.com/mattiasgees/nixos-config` — update both if reusing.
+`modules/editors/nvim/AstroNvim` is a git submodule. Run `git submodule update --init --recursive` after cloning.

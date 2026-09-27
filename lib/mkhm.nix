@@ -1,3 +1,4 @@
+# Legacy: standalone home-manager builder, not called from flake.nix.
 name: { pkgs, lib, home-manager, user }:
 
   home-manager.lib.homeManagerConfiguration {

@@ -1,4 +1,5 @@
-### None of this is currently in use at the moment. Got the auth plugin some other way
+# Cross-platform package set for the full home-manager profile
+# (imported by users/default/home-manager.nix on desktop and Darwin).
 { pkgs, ... }:
 let
 in {

@@ -1,19 +1,25 @@
 # polaris — Updating & Maintenance
 
-How to move polaris' software forward: the OS, the kernel, Plex, the *arr apps,
-and Caddy. Run everything here **on polaris** (it builds for `x86_64-linux` and
-activates locally).
+How to move polaris' software forward: the OS, the kernel, the apps, and Caddy.
+Run everything here **on polaris**, as `mattias` (not root — see below).
 
 ## The update model
 
 - **nixpkgs tracks `nixos-unstable`** (a rolling branch), and `flake.lock` pins
   the exact commit. "Updating" means moving that lock forward — there is **no
   discrete release upgrade** to do (no `25.05 → 26.11` branch bump).
-- **Everything comes from the flake**: kernel, ZFS, Plex, Sonarr/Radarr/Prowlarr,
-  Caddy, CLI tools. One update mechanism covers all of them.
+- **Everything comes from the flake**: kernel, ZFS, Plex, the *arr apps, Immich,
+  Caddy, CLI tools. One update mechanism covers all of them. (Exception: Pi-hole
+  runs as an OCI container — see `modules/services/pihole/pihole.nix` for its
+  image pin.)
 - **Do not update apps from their own web UIs.** Nix owns the binary versions; an
-  in-app update won't survive the next `nixos-rebuild` and can leave the app's
-  database ahead of the binary Nix reinstalls. Update via the flake only.
+  in-app update won't survive the next switch and can leave the app's database
+  ahead of the binary Nix reinstalls. Their config/SQLite DBs live on
+  `/srv/fast/appdata/<app>` and persist across updates and rollbacks.
+- **Build as your user, never `sudo nixos-rebuild`.** The `vmctl` input is a
+  private `git+ssh` repo; evaluating as root has no GitHub key and dies with
+  `Permission denied (publickey)`. `make switch` builds unprivileged and only
+  uses `sudo` to activate the result.
 
 ## Routine update (all software)
 
@@ -22,8 +28,7 @@ cd ~/Documents/git/nixos-config
 git pull                                  # get the latest committed config first
 
 make update                               # = nix flake update — bumps every input
-sudo nixos-rebuild build --flake .#polaris --impure   # optional: build without activating
-make switch NIXNAME=polaris               # build + activate
+make switch NIXNAME=polaris               # build + activate (see below to test first)
 
 git add flake.lock
 git commit -m "flake: update inputs"      # the lock IS the reproducibility record
@@ -44,10 +49,11 @@ nix flake update nixpkgs                  # newer syntax
 
 ```bash
 # Build the new system without activating it — catches build failures safely:
-sudo nixos-rebuild build --flake .#polaris --impure
+NIX_CONFIG="experimental-features = nix-command flakes" \
+  nix build .#nixosConfigurations.polaris.config.system.build.toplevel --impure
 
-# See what a switch would change without committing to it:
-sudo nixos-rebuild dry-activate --flake .#polaris --impure
+# See which units a switch would restart, without changing anything:
+sudo ./result/bin/switch-to-configuration dry-activate
 ```
 
 If a `switch` leaves the box unhappy, roll back to the previous generation:
@@ -110,13 +116,6 @@ supports.
   nvidia-smi                       # driver loads, GPU visible
   systemctl --failed               # nothing failed
   ```
-
-## Apps (Plex, Sonarr, Radarr, Prowlarr)
-
-- Versions move with `make update` + switch like everything else. Their config
-  and SQLite DBs live on `/srv/fast/appdata/<app>` and **persist across updates**
-  and rollbacks.
-- Again: don't use the in-app updaters — let Nix manage the binaries.
 
 ## Housekeeping
 

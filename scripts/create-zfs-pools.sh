@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
-# Create polaris' ZFS pools + datasets — the automated form of the manual
-# install guide's steps 8–12 (keyfile, fast, tank, scratch, verify).
+# Create polaris' ZFS pools + datasets — the automated form of
+# docs/polaris/setup.md Appendix A–D (keyfile, fast, tank, scratch); step E
+# (verify, back up key, export) stays manual.
 #
-# Run ONCE from the NixOS installer, AFTER partitioning NVMe #1 (guide step 6).
-# Idempotency is NOT assumed — re-running needs `zpool destroy` first.
+# Run ONCE from the NixOS installer, AFTER partitioning NVMe #1 (setup.md
+# Part 1 §2). Not idempotent — re-running needs `zpool destroy` first.
 #
 # Usage:
 #   create-zfs-pools.sh <nvme2> <hdd1> <hdd2> <hdd3>
@@ -36,7 +37,7 @@ echo "   fast  mirror: $FAST_MEMBER + $NVME2"
 echo "   tank  raidz1: $H1 $H2 $H3"
 echo "   scratch     : $SCRATCH_DEV"
 
-# --- Step 8: encryption keyfile (only if not already present) ---
+# --- A: encryption keyfile (only if not already present) ---
 if [[ ! -f $KEYFILE ]]; then
   install -d -m 0700 /etc/zfs/keys
   head -c 32 /dev/urandom > "$KEYFILE"
@@ -44,7 +45,7 @@ if [[ ! -f $KEYFILE ]]; then
   echo ">> Generated $KEYFILE — BACK IT UP SECURELY (password manager)."
 fi
 
-# --- Step 9: fast — NVMe mirror, encrypted at the pool root ---
+# --- B: fast — NVMe mirror, encrypted at the pool root ---
 zpool create -f \
   -o ashift=12 -o autotrim=on \
   -O compression=zstd -O atime=off -O xattr=sa -O acltype=posixacl \
@@ -54,7 +55,7 @@ zpool create -f \
 zfs create -o mountpoint=/srv/fast/appdata fast/appdata
 zfs create -o mountpoint=/srv/fast/db      fast/db
 
-# --- Step 10: tank — HDD RAIDZ1, pool root unencrypted ---
+# --- C: tank — HDD RAIDZ1, pool root unencrypted ---
 zpool create -f \
   -o ashift=12 \
   -O compression=zstd -O atime=off -O xattr=sa -O acltype=posixacl \
@@ -65,14 +66,14 @@ zfs create -o mountpoint=/srv/data \
   -o encryption=aes-256-gcm -o keyformat=raw -o "keylocation=file://$KEYFILE" \
   tank/data
 
-# --- Step 11: scratch — single NVMe partition, no redundancy, unencrypted ---
+# --- D: scratch — single NVMe partition, no redundancy, unencrypted ---
 zpool create -f \
   -o ashift=12 -o autotrim=on \
   -O compression=zstd -O atime=off -O xattr=sa -O acltype=posixacl \
   -O mountpoint=/srv/scratch \
   scratch "$SCRATCH_DEV"
 
-# --- Step 12 (partial): show the result ---
+# --- Show the result (setup.md step E continues from here) ---
 echo ">> Pools created. Verify below, then back up $KEYFILE and export:"
 zpool status
 zfs list

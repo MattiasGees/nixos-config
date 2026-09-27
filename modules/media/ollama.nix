@@ -1,29 +1,20 @@
-# Ollama — local LLM inference on the RTX 3080. Uses the CUDA package variant
-# (pkgs.ollama-cuda); the NVIDIA driver + hardware.graphics from
-# modules/server/nvidia.nix are already in place, so inference offloads to the
-# GPU with no extra host wiring — verify with `nvidia-smi` showing an `ollama`
-# process (and VRAM in use) while a prompt runs.
+# Ollama — local LLM inference on the RTX 3080 (driver from nvidia.nix).
+# Verify offload with `nvidia-smi` showing an `ollama` process during a prompt.
 #
-# ⚠️ The upstream `services.ollama.acceleration = "cuda"` option was REMOVED from
-# the NixOS module: GPU support is now selected purely by the package variant.
-# Hence `package = pkgs.ollama-cuda` rather than a config toggle. (CUDA is
-# unfree — covered by the flake-wide `allowUnfree = true`, same as the driver.)
+# ⚠️ GPU support is selected by the package variant (pkgs.ollama-cuda); the old
+# `services.ollama.acceleration = "cuda"` option was removed upstream. (CUDA is
+# unfree — covered by the flake-wide allowUnfree.)
 #
-# Listens on 127.0.0.1:11434 (module defaults) — no firewall hole. The only
-# ingress is localhost: Open WebUI (open-webui.nix) for the chat UI, plus any
-# tailnet client hitting the OpenAI-compatible API through Caddy. Same posture
-# as immich — Caddy is the front door, nothing binds a public interface.
+# Listens on 127.0.0.1:11434 (default), no firewall hole and no Caddy vhost;
+# its only client is Open WebUI (open-webui.nix).
 #
-# Storage: models live on the `scratch` ZFS pool at /srv/scratch/ollama. They're
-# large but freely re-downloadable (`ollama pull`), so scratch — no RAID, and
-# NOT swept by restic (modules/server/restic.nix only backs up /srv/data and
-# /srv/fast/appdata) — is exactly the right home for them. `modelsDir` defaults
-# to ${home}/models, i.e. /srv/scratch/ollama/models.
+# Storage: models are large but re-downloadable, so they live on the
+# unredundant, un-backed-up `scratch` pool (modelsDir defaults to
+# /srv/scratch/ollama/models).
 #
-# Static user (user/group = "ollama") instead of the module's default
-# DynamicUser: a transient UID drifts across reboots and would leave the
-# persistent models dir unwritable. Setting BOTH user and group makes the module
-# create the system user/group itself and point its home at /srv/scratch/ollama.
+# Static user/group instead of the default DynamicUser: a transient UID would
+# leave the persistent models dir unwritable. Setting BOTH makes the module
+# create the system user/group with home = /srv/scratch/ollama.
 { pkgs, ... }:
 {
   services.ollama = {
@@ -32,23 +23,18 @@
     user = "ollama";
     group = "ollama";
     home = "/srv/scratch/ollama";
-    # Pre-pull the default general-chat model on startup. Qwen3 8B (~5GB at Q4)
-    # fits the 3080's VRAM with headroom and has a toggleable thinking mode
-    # (/think, /no_think). Pull more models later with `ollama pull <name>`.
+    # Pre-pulled on startup. Qwen3 8B (~5 GB at Q4) fits the 3080's VRAM with
+    # headroom and has a toggleable thinking mode (/think, /no_think).
     loadModels = [ "qwen3:8b" ];
   };
 
-  # The scratch pool mounts at boot (boot.zfs.extraPools in hardware/polaris-extra.nix)
-  # and systemd-tmpfiles-setup runs after local-fs.target, so this `d` rule lands
-  # on the mounted dataset — same non-default-path pattern as immich's
-  # /srv/data/immich. The module's ReadWritePaths grants the unit access, but it
-  # does not create the directory, so we do it here owned by the ollama user.
+  # The module grants ReadWritePaths but doesn't create the dir. tmpfiles runs
+  # after local-fs.target, so this lands on the mounted scratch pool.
   systemd.tmpfiles.rules = [
     "d /srv/scratch/ollama 0700 ollama ollama - -"
   ];
 
-  # Belt-and-suspenders: never start the daemon (WorkingDirectory = home) before
-  # the scratch pool is mounted, so it can't silently write models to the empty
-  # underlying dir on the root disk. /srv/scratch is the ZFS mountpoint.
+  # Never start before scratch is mounted, so models can't silently land in the
+  # empty underlying dir on the root disk.
   systemd.services.ollama.unitConfig.RequiresMountsFor = "/srv/scratch";
 }

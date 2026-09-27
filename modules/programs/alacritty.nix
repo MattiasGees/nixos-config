@@ -1,7 +1,5 @@
 #
-# Terminal Emulator
-#
-# Hardcoded as terminal for rofi and doom emacs
+# Alacritty terminal (not currently imported anywhere)
 #
 
 { pkgs, ... }:
@@ -15,7 +13,7 @@
       settings = {
         window.decorations = "none";
         startup_mode = "Maximised";
-        font = rec {                          # Font - Laptop has size manually changed at home.nix
+        font = rec {
           normal.family = "JetBrainsMono Nerd Font";
           bold = { style = "Bold"; };
           size = 16;

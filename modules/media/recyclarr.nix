@@ -1,9 +1,7 @@
-# Recyclarr — syncs TRaSH-Guides quality profiles + custom formats into Sonarr.
-# CLI only, NO timer (by choice): run `recyclarr sync` by hand. The config is
-# declarative (./recyclarr.yml → /etc/recyclarr/recyclarr.yml); API keys stay OUT
-# of the Nix store via !env_var, provided at sync time:
-#   SONARR_API_KEY=<key> recyclarr sync --config /etc/recyclarr/recyclarr.yml --preview
-# Promote to services.recyclarr (timer + config as a Nix attrset) later if wanted.
+# Recyclarr — syncs TRaSH-Guides quality profiles + custom formats into Sonarr
+# and Radarr. CLI only, no timer (by choice); usage is in the header of
+# ./recyclarr.yml. Could be promoted to services.recyclarr (timer + Nix-attrset
+# config) later.
 { pkgs, ... }:
 {
   environment.systemPackages = [ pkgs.recyclarr ];

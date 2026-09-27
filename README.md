@@ -1,33 +1,25 @@
-# NixOS Configuration
+# nixos-config
 
-Personal NixOS and Darwin system configuration with Flakes.
+Personal Nix flake for my NixOS machines (desktop, home server `polaris`), Macs (nix-darwin) and standalone home-manager on other Linux boxes.
 
-## Quick Start
-
-### For Linux Servers
-
-See [SERVER_SETUP.md](SERVER_SETUP.md) for detailed instructions on setting up a headless/server configuration with shell tools only.
-
-Quick start:
 ```bash
-git clone <this-repo>
-cd nixos-config
-make install  # Install Nix if needed
-make switch   # Build and apply server configuration
+git clone --recurse-submodules https://github.com/mattiasgees/nixos-config.git ~/Documents/git/nixos-config
+cd ~/Documents/git/nixos-config
+make switch NIXNAME=<host>   # desktop | server | polaris | macbook-m1 | pacesetter | macbook-x86
+make help                    # all targets
 ```
 
-### For Desktop/Laptop
+Clone to `~/Documents/git/nixos-config` — several home-manager modules symlink back into that path.
 
-Use the standard NixOS or Darwin configurations:
-```bash
-make switch NIXNAME=desktop    # For NixOS desktop
-make switch NIXNAME=macbook-m1 # For macOS M1
-```
+## Docs
 
-## Provisioning GPG Key
+- [CLAUDE.md](CLAUDE.md) — repo layout, hosts, build commands and gotchas
+- [architecture/mac.md](architecture/mac.md) — what a Darwin build loads
+- [docs/workstation-manual.md](docs/workstation-manual.md) — how the NixOS desktop is put together
+- [SERVER-SETUP.md](SERVER-SETUP.md) — generic NixOS servers and home-manager on other distros
+- [docs/polaris/](docs/polaris/) — home server setup, updating and backup/VM runbooks
 
-This is a step that I forget how to do every time I have to do it, so to avoid that:
+## Provisioning a GPG key from a smartcard
 
 1. `gpg --edit-card`
 2. `fetch`
-3. That should be it

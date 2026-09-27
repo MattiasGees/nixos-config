@@ -1,11 +1,9 @@
-# Server/headless machine configuration
-# Minimal configuration focused on shell and CLI tools
+# Generic headless server (nixosConfigurations.server / server-arm64).
 { config, pkgs, lib, ... }:
 
 {
   networking.hostName = "nixos-server";
 
-  # Basic system packages for a server environment
   environment.systemPackages = with pkgs; [
     neovim
     git
@@ -16,7 +14,4 @@
     killall
     bash
   ];
-
-  # No GUI, no graphical services
-  # Just shell and SSH access
 }

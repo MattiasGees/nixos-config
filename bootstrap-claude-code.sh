@@ -7,8 +7,9 @@
 # ~/.claude/plugins/known_marketplaces.json, ...), so a read-only Nix symlink
 # gets reverted the moment Claude Code runs. These bits also do NOT sync via
 # your account (unlike the Anthropic "Skills" under ~/.claude/skills/synced/),
-# so they must be re-established per machine. Nix still installs the
-# claude-code@latest cask; this script sets up the rest, imperatively.
+# so they must be re-established per machine. Nix still installs Claude Code
+# itself (claude-code@latest cask on Darwin, nixpkgs on Linux); this script sets
+# up the rest, imperatively.
 #
 # Idempotent: each item is checked first and only added when missing. Exits
 # non-zero if anything is still missing afterwards (e.g. a running Claude Code

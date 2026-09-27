@@ -1,8 +1,8 @@
 # Declarative Recyclarr config — installed to /etc/recyclarr/recyclarr.yml by
 # modules/media/recyclarr.nix. API keys stay OUT of the Nix store via !env_var
-# (provide SONARR_API_KEY at sync time). No timer, by choice — run manually:
-#   SONARR_API_KEY=<key> recyclarr sync --config /etc/recyclarr/recyclarr.yml --preview
-#   SONARR_API_KEY=<key> recyclarr sync --config /etc/recyclarr/recyclarr.yml
+# (SONARR_API_KEY / RADARR_API_KEY at sync time). No timer, by choice — run:
+#   SONARR_API_KEY=<key> RADARR_API_KEY=<key> recyclarr sync --config /etc/recyclarr/recyclarr.yml --preview
+#   (drop --preview to apply)
 #
 # Profiles are imported straight from TRaSH by trash_id — recyclarr pulls the full
 # profile (qualities, quality groups, score set, and its custom formats + scores).

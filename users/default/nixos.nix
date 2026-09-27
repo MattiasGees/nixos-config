@@ -25,10 +25,8 @@ in
   # Enable networking
   networking.networkmanager.enable = true;
 
-  # Set your time zone.
   time.timeZone = "Europe/London";
 
-  # Select internationalisation properties.
   i18n.defaultLocale = "en_GB.UTF-8";
 
   i18n.extraLocaleSettings = {
@@ -97,11 +95,7 @@ in
     #jack.enable = true;
   };
 
-  # List packages installed in system profile. To search, run:
-  # $ nix search wget
   environment.systemPackages = with pkgs; [
-  #  vim # Do not forget to add an editor to edit configuration.nix! The Nano editor is also installed by default.
-  #  wget
      killall
      bash
      neovim
@@ -186,7 +180,7 @@ in
   };
 
   services.xremap = {
-    userName = "mattias";  # run as a systemd service in alice
+    userName = "mattias";
     serviceMode = "user";  # run xremap as user
     withWlroots = true;
     config = {
@@ -200,19 +194,14 @@ in
                       "Alt-left" = "Ctrl-left"; "Alt-right" = "Ctrl-right"; "Alt-backspace" = "Ctrl-backspace";
                       "Super-g" = "C-g"; 
                         # not sure how this is gonna work yet "Super-=" = "C-="; "Super--" = "C--";
-                    };  # globally remap CapsLock to Esc
+                    };  # macOS-style Super shortcuts -> Ctrl (everywhere except kitty)
         }
       ];
     };
   };
 
 
-  # This value determines the NixOS release from which the default
-  # settings for stateful data, like file locations and database versions
-  # on your system were taken. It‘s perfectly fine and recommended to leave
-  # this value at the release version of the first install of this system.
-  # Before changing this value read the documentation for this option
-  # (e.g. man configuration.nix or on https://nixos.org/nixos/options.html).
-  system.stateVersion = "23.05"; # Did you read the comment?
+  # Release of the first install; don't bump without reading the option docs.
+  system.stateVersion = "23.05";
 
 }

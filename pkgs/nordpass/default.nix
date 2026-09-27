@@ -3,8 +3,7 @@
 , libgcrypt, systemd, fontconfig, dbus, expat, curlWithGnuTls, zlib, gnome
 , at-spi2-atk, at-spi2-core, libdrm, mesa, libxkbcommon
 , harfbuzz, libsecret, buildFHSEnv
-  # High-DPI support: Spotify's --force-device-scale-factor argument
-  # not added if `null`, otherwise, should be a number.
+  # Unused; left over from the nixpkgs Spotify derivation this was adapted from.
 , deviceScaleFactor ? null
 }:
 

@@ -12,10 +12,8 @@
   # Enable networking
   networking.networkmanager.enable = true;
 
-  # Set your time zone
   time.timeZone = "Europe/London";
 
-  # Select internationalisation properties
   i18n.defaultLocale = "en_GB.UTF-8";
 
   i18n.extraLocaleSettings = {
@@ -66,7 +64,6 @@
     { from = 60000; to = 61000; }
   ];
 
-  # List packages installed in system profile
   environment.systemPackages = with pkgs; [
     neovim
     git
@@ -82,6 +79,6 @@
     EDITOR = "nvim";
   };
 
-  # This value determines the NixOS release
+  # Release of the first install; don't bump without reading the option docs.
   system.stateVersion = "23.05";
 }

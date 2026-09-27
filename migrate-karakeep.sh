@@ -7,10 +7,9 @@
 #   - the hetzner kubectl context active (`kubectl get pods -n karakeep` works)
 #   - SSH access to polaris ($POLARIS_HOST)
 #
-# Prerequisites (must be done first — see docs/polaris/karakeep-migration-runbook.md):
-#   1. Storage for /var/lib/karakeep provisioned on the fast pool, the OpenAI key
-#      placed at /etc/karakeep/karakeep.env, and `make switch NIXNAME=polaris`
-#      deployed — karakeep is up (empty) on polaris.
+# Prerequisite: `make switch NIXNAME=polaris` deployed with the op-secrets token
+# in place (renders the OpenAI key) — karakeep is up (empty) on polaris with
+# /var/lib/karakeep bind-mounted from the fast pool.
 #
 # Unlike miniflux this is a FILE migration, not a pg_dump: Karakeep is SQLite-only,
 # so we tar the DATA_DIR (db.db + assets/) out of the k8s data-pvc and unpack it on

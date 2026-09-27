@@ -118,13 +118,13 @@ let
     bind = $mainMod SHIFT, D, exec, grimblast save area
     bind = $mainMod, D, exec, grimblast save window
 
-# Move focus with mainMod + arrow keys
+# Move focus with mainMod + h/j/k/l
     bind = $mainMod, h, movefocus, l
     bind = $mainMod, l, movefocus, r
     bind = $mainMod, k, movefocus, u
     bind = $mainMod, j, movefocus, d
 
-# Switch workspaces with mainMod + [0-9]
+# Switch workspaces with Control + [0-9]
     bind = Control, 1, workspace, 1
     bind = Control, 2, workspace, 2
     bind = Control, 3, workspace, 3
@@ -148,12 +148,12 @@ let
     bind = $mainMod SHIFT, 9, movetoworkspacesilent, 9
     bind = $mainMod SHIFT, 0, movetoworkspacesilent, 10
 
-# Scroll through existing workspaces with mainMod + scroll
+# Media controls (playerctl)
     bind = $mainMod SHIFT, n, exec, playerctl next
     bind = $mainMod SHIFT, p, exec, playerctl previous
     bind = $mainMod SHIFT, space, exec, playerctl play-pause
 
-# Move/resize windows with mainMod + LMB/RMB and dragging
+# Resize active window with mainMod + Control + h/j/k/l, then volume (pamixer)
     binde = $mainMod Control,l,resizeactive,50 0
     binde = $mainMod Control,h,resizeactive,-50 0
     binde = $mainMod Control,k,resizeactive,0 -50

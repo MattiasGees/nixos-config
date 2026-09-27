@@ -6,7 +6,8 @@ let
 in
 
 {
-  # Config and widgets ------------------------------------------------------------------------- {{{
+  # Out-of-store symlinks: edits apply without a rebuild, but the repo must be
+  # checked out at ~/Documents/git/nixos-config.
   xdg.configFile."wpaperd".source = mkOutOfStoreSymlink "${nixConfigDir}/modules/desktop/hyprland/wpaperd";
   xdg.configFile."waybar".source = mkOutOfStoreSymlink "${nixConfigDir}/modules/desktop/hyprland/waybar";
   xdg.configFile."swww".source = mkOutOfStoreSymlink "${nixConfigDir}/modules/desktop/hyprland/swww";

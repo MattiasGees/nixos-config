@@ -1,12 +1,10 @@
-# Tailscale — CGNAT-proof mesh VPN. Used to reach polaris (and Plex) at full
-# quality from outside the LAN, since port-forwarding isn't possible behind
-# CGNAT. Authenticate once after deploy: `sudo tailscale up` (prints a login URL).
+# Tailscale — private access to polaris from outside the LAN (CGNAT rules out
+# port-forwarding). Authenticate once after deploy: `sudo tailscale up`.
 { ... }:
 {
   services.tailscale = {
     enable = true;
-    # Open the UDP port so peers can make direct (non-relayed) connections —
-    # better throughput than falling back to Tailscale's DERP relays.
+    # Open the UDP port so peers connect directly instead of via DERP relays.
     openFirewall = true;
   };
 }

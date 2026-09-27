@@ -10,8 +10,9 @@ is an AMD board); use your board manual to locate each toggle.
   boot via `lanzaboote` is a possible future item, out of scope for Phase 1.)
 - **SVM / AMD-V: Enabled** — CPU virtualization, required for libvirt/KVM.
 - **IOMMU / AMD-Vi: Enabled** — enable *now* even though GPU passthrough is a
-  future phase; it avoids a second BIOS trip later. Pairs with the
-  `amd_iommu=on iommu=pt` kernel params already set in `machines/polaris.nix`.
+  future phase; it avoids a second BIOS trip later. The BIOS toggle is what turns
+  IOMMU on; `machines/polaris.nix` only adds `iommu=pt` (`amd_iommu=on` is not a
+  valid option and just logs `AMD-Vi: Unknown option`).
 - **SATA/NVMe mode: AHCI** — NOT motherboard "RAID"/fake-RAID. We use ZFS
   software RAID exclusively; hardware/fake-RAID would hide the raw disks.
 - **Restore on AC Power Loss: Power On** — the server should come back up after

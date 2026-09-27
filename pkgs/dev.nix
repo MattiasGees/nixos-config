@@ -9,8 +9,7 @@ with pkgs;
       go_1_26 python3 niv golangci-lint gh protoc-gen-go
       gnused grpcurl uv terraform yubikey-agent
 
-      ## Tools that I have needed to install in weird circumstances. I don't actually write
-      ## hehehe
+      # Occasionally needed for Java builds (not a day-to-day toolchain)
       openjdk maven
     ] ++ lib.optionals (!pkgs.stdenv.hostPlatform.isDarwin) [
       # vibes -- on Darwin claude-code comes from the Homebrew cask (nixpkgs

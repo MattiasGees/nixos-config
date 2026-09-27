@@ -1,10 +1,7 @@
 #
-#  Specific system configuration settings for MacBook
-#
-#  flake.nix
-#   └─ ./darwin
-#       ├─ ./default.nix
-#       └─ ./configuration.nix *
+#  nix-darwin system configuration shared by every Darwin host (imported by
+#  lib/mkdarwin.nix): Homebrew, yabai/skhd/jankyborders, macOS defaults and
+#  post-activation hooks. Per-host bits live in machines/<host>.nix.
 #
 
 { config, pkgs, user, system, ... }:
@@ -14,22 +11,23 @@ in
 {
   security.pam.services.sudo_local.touchIdAuth = true;
 
-  users.users."${user}" = {               # macOS user
+  users.users."${user}" = {
     home = "/Users/${user}";
-    shell = pkgs.zsh;                     # Default shell
+    shell = pkgs.zsh;
   };
   # environment.systemPackages = [ 
   #   (import (fetchTarball https://install.devenv.sh/latest)).default
   # ];
 
-  # Moved all the global package setup to pkgs/default.nix
+  # User packages come from home-manager (pkgs/*.nix via
+  # users/default/home-manager.nix), not environment.systemPackages.
 
   nixpkgs.config.allowBroken = true;
 
   homebrew = {                            # Declare Homebrew using Nix-Darwin
     enable = true;
     onActivation = {
-      autoUpdate = false;                 # Auto update packages
+      autoUpdate = false;
       upgrade = false;
       cleanup = "zap";                    # Uninstall not listed packages and casks
     };
@@ -121,7 +119,7 @@ in
     yabai = {                             # Tiling window manager
       enable = true;
       enableScriptingAddition = true;     # Loads SA on startup & sets up sudoers
-      config = {                          # Other configuration options
+      config = {
         layout = "bsp";
         auto_balance = "on";
         split_ratio = "0.50";
@@ -271,7 +269,7 @@ in
         AppleTemperatureUnit = "Celsius";
 
       };
-      dock = {               # Dock settings
+      dock = {
         autohide = true;
         autohide-delay = 0.0;
         autohide-time-modifier = 0.0;
@@ -285,11 +283,11 @@ in
         static-only = true;
         tilesize = 40;
       };
-      finder = {                          # Finder settings
-        QuitMenuItem = true;              # I believe this probably will need to be true if using spacebar
+      finder = {
+        QuitMenuItem = true;
         AppleShowAllExtensions = true; 
       };  
-      trackpad = {                        # Trackpad settings
+      trackpad = {
         Clicking = true;
         TrackpadRightClick = true;
       };
@@ -318,7 +316,7 @@ in
       wallpaperUid=$(id -u ${user})
       launchctl asuser "$wallpaperUid" sudo -u ${user} \
         osascript -e 'tell application "System Events" to tell every desktop to set picture to "${wallpaper}"' || true
-    ''; # Since it's not possible to declare default shell, run this command after build
+    ''; # chsh because nix-darwin can't set the login shell declaratively
     stateVersion = 5;
   };
 }

@@ -1,19 +1,19 @@
 {
   description = "Mattias's Personal NixOS and Darwin System Flake Configuration";
 
-  inputs =                                                                  # All flake references used to build my NixOS setup. These are dependencies.
+  inputs =
     {
-      nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";                  # Nix Packages
-      nixpkgs-unstable.url = "github:nixos/nixpkgs/nixos-unstable";                  # Nix Packages
+      nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+      nixpkgs-unstable.url = "github:nixos/nixpkgs/nixos-unstable";
       nixpkgs-wayland.url = "github:nix-community/nixpkgs-wayland";
 
-      home-manager = {                                                      # User Package Management
+      home-manager = {
         url = "github:nix-community/home-manager/master";
         inputs.nixpkgs.follows = "nixpkgs-unstable";
       };
 
       darwin = {
-        url = "github:lnl7/nix-darwin/master";                              # MacOS Package Management
+        url = "github:lnl7/nix-darwin/master";
         inputs.nixpkgs.follows = "nixpkgs-unstable";
       };
 
@@ -35,8 +35,8 @@
       nixpkgs-wayland.inputs.nixpkgs.follows = "nixpkgs";
     };
 
-  outputs = inputs @ { self, xremap-flake, hyprland, nixpkgs, nixpkgs-unstable, home-manager, darwin, ... }:   # Function that tells my flake which to use and what do what to do with the dependencies.
-    let                                                                     # Variables that can be used in the config files.
+  outputs = inputs @ { self, xremap-flake, hyprland, nixpkgs, nixpkgs-unstable, home-manager, darwin, ... }:
+    let
       mkDarwin = import ./lib/mkdarwin.nix;
       mkSys = import ./lib/mksys.nix;
       mkServer = import ./lib/mkserver.nix;
@@ -53,6 +53,8 @@
       # invoked; without this, ollama-cuda fails to build on polaris.
       config = { allowUnfree = true; allowUnsupportedSystem = false; };
       overlays = [
+        # Pin these to nixpkgs-unstable. Both inputs currently track
+        # nixos-unstable, so this only matters if `nixpkgs` moves to a release branch.
         (final: prev: {
           waybar = inputs.nixpkgs-unstable.legacyPackages.${system}.waybar;
           swww = inputs.nixpkgs-unstable.legacyPackages.${system}.swww;
@@ -86,7 +88,7 @@
         })
       ];
       };
-    in                                                                      # Use above variables in ...
+    in
     {
 
       nixosConfigurations.desktop = mkSys "desktop" rec {

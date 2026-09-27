@@ -38,7 +38,7 @@ pkgs.testers.runNixOSTest {
     # Compression choices
     machine.succeed("zfs get -H -o value compression tank/media | grep -q lz4")
     machine.succeed("zfs get -H -o value compression tank/data | grep -q zstd")
-    # Reboot -> key auto-loads (zfs-load-key.service) and datasets re-mount
+    # Reboot -> key auto-loads (load-zfs-keyfiles.service) and datasets re-mount
     machine.shutdown()
     machine.start()
     machine.wait_for_unit("zfs-mount.service")

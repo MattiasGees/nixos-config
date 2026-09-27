@@ -1,37 +1,25 @@
-# Immich (photo/video backup) — the first tenant of the shared PostgreSQL
-# from modules/server/postgresql.nix. `database.enable`/`createDB` default to
-# true, so the module connects over the unix socket (/run/postgresql, peer
-# auth, no password) and layers pgvector + vectorchord onto our pg18 cluster,
-# creating the `immich` role/DB itself — nothing to add to the Postgres
-# module for this tenant to exist.
+# Immich (photo/video backup) — a tenant of the shared PostgreSQL
+# (postgresql.nix). With the module defaults (database.enable/createDB) it
+# connects over the unix socket with peer auth and adds pgvector + vectorchord
+# and the `immich` role/DB to the cluster itself.
 #
-# Redis is `redis.enable = true` (default): a **dedicated** Valkey on its own
-# socket, deliberately not the shared-Postgres pattern. Redis multi-tenancy is
-# weak (shared auth/keyspace, apps assume they own the whole instance) and
-# instances are cheap, so one Redis per app is the norm — the opposite
-# tradeoff from Postgres. What lives in it (BullMQ job-queue/cache state) is
-# ephemeral and needs no backups anyway.
+# Redis (default redis.enable) is a *dedicated* Valkey on its own socket —
+# the opposite tradeoff from Postgres: Redis multi-tenancy is weak (shared
+# keyspace, apps assume they own the instance) and instances are cheap. Its
+# BullMQ queue/cache state is ephemeral and needs no backup.
 #
-# `machine-learning.enable = true` (default) runs CPU inference; CUDA is
-# deferred (own change — see the design doc §8). `host`/`port`/`openFirewall`
-# are left at their defaults (localhost:2283, no firewall hole) — Caddy is
-# the only ingress, wired in caddy.nix.
+# Machine learning runs on CPU (default); CUDA is a deferred follow-up.
+# Listens on localhost:2283 (default), no firewall hole — Caddy is the ingress.
 #
-# mediaLocation is a directory inside the existing `tank/data` dataset (same
-# pool Plex's library lives on) rather than a new ZFS dataset — irreplaceable
-# originals land on the redundant pool for free; no provisioning needed here
-# since the dataset already exists and mounts at /srv/data.
+# mediaLocation is a plain dir inside the existing encrypted `tank/data`
+# dataset, so the originals sit on the redundant pool and ride the restic sweep.
 #
-# NVENC: accelerationDevices grants the sandboxed immich unit access to the
-# device nodes; the NVIDIA driver/NVENC libs are already installed system-wide
-# (Plex uses them). Per the design doc's known iteration point: the likely
-# first-try gap is systemd sandboxing (ProtectSystem/PrivateDevices) hiding
-# /dev/nvidia* or /run/opengl-driver/lib from the unit even with the devices
-# listed — same class of issue Plex's NVENC setup hit. If Settings → Video
-# Transcoding → NVENC doesn't actually offload (check `nvidia-smi` while
-# transcoding), the fix is relaxing the unit's device/library sandboxing
-# and/or adding `immich` to the `video` group — a bounded follow-up, not a
-# redesign.
+# NVENC: accelerationDevices exposes the device nodes to the sandboxed unit;
+# the driver libs are system-wide (nvidia.nix). If Settings → Video
+# Transcoding → NVENC doesn't actually offload (`nvidia-smi` while
+# transcoding), the likely cause is unit sandboxing (ProtectSystem /
+# PrivateDevices) hiding /dev/nvidia* or /run/opengl-driver/lib — relax that
+# and/or add `immich` to the `video` group.
 { ... }:
 {
   services.immich = {
@@ -40,12 +28,8 @@
     accelerationDevices = [ "/dev/nvidia0" "/dev/nvidiactl" "/dev/nvidia-uvm" ];
   };
 
-  # The module only *adjusts ownership* of an existing mediaLocation (a tmpfiles
-  # `e` rule) — for a non-default path it does not create the directory ("the
-  # directory has to be created manually such that the immich user can read and
-  # write to it"). /srv/data/immich is a subdir of the root-owned tank/data ZFS
-  # mount and won't exist at first boot, so we create it here owned by immich —
-  # same non-default-path pattern as postgresql.nix's datadir under fast/db.
+  # For a non-default mediaLocation the module only adjusts ownership (tmpfiles
+  # `e`), it doesn't create the dir — and tank/data's root is root-owned.
   systemd.tmpfiles.rules = [
     "d /srv/data/immich 0700 immich immich - -"
   ];

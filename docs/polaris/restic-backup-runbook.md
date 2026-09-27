@@ -1,21 +1,20 @@
 # restic → Hetzner offsite backup runbook (polaris)
 
 Purpose: get `services.restic.backups.polaris` (`modules/server/restic.nix`)
-actually backing up — the manual bucket/key/secret steps that can't live in
-git, plus the verify and restore-drill checks. This is the ordered,
-copy-pasteable checklist to run **on polaris** (or in the Hetzner console)
-after `../modules/server/restic.nix` is merged and deployed.
+backing up — the manual bucket/key/secret steps that can't live in git, plus
+the verify and restore-drill checks. Run **on polaris** (or in the Hetzner
+console).
 
-The module itself only references two secret file paths
-(`/var/lib/secrets/restic-backend.env`, `/var/lib/secrets/restic-repo.pass`) —
-it ships no credentials. Both are rendered at deploy time by the op-secrets
-engine (`modules/server/op-secrets.nix`) from 1Password
-(`op://polaris/restic/repo-password` and `op://polaris/restic-backend/*`); see
-the **op-secrets** section of [`setup.md`](setup.md) for the full
-bootstrap, deploy, and rotation flow. Section A below (creating the Hetzner
-bucket + access key)
-still applies — only the *placement* of the resulting credentials has moved,
-which section B covers.
+What it backs up: `/srv/data` (Immich library + DB dumps + any tenant data) and
+`/srv/fast/appdata` (every service's config/SQLite DB), minus the regenerable
+`/srv/data/immich/{thumbs,encoded-video}`. Nightly at 03:00, retention
+`--keep-daily 7 --keep-weekly 4 --keep-monthly 6`.
+
+The module ships no credentials — it references two files rendered by
+op-secrets from 1Password: `/var/lib/secrets/restic-repo.pass`
+(`op://polaris/restic/repo-password`) and `/var/lib/secrets/restic-backend.env`
+(`op://polaris/restic-backend/*`). Token bootstrap and rotation are in the
+[op-secrets section of setup.md](setup.md#op-secrets--1password-service-account-token-do-this-first).
 
 ---
 
@@ -41,13 +40,6 @@ access key ID + secret key.
 ---
 
 ## B. Place the secrets
-
-Both secrets are now managed through 1Password and rendered onto polaris by
-the op-secrets engine (`modules/server/op-secrets.nix`) — they are **no
-longer hand-placed** under `/etc/restic/`. Full bootstrap (vault/item/field
-layout, service-account token), the deploy flow, and rotation are documented
-once in the **op-secrets** section of [`setup.md`](setup.md); this
-section only covers what's specific to restic's two secrets.
 
 **B.3 — restic repo password → `restic` item, field `repo-password`.**
 This is the restic **repository encryption password**, not a login password.
@@ -76,23 +68,19 @@ region (`AWS_DEFAULT_REGION=nbg1`) is **not** secret and is not stored in
 ```bash
 make switch NIXNAME=polaris
 sudo ls -l /var/lib/secrets/restic-repo.pass /var/lib/secrets/restic-backend.env
+systemctl cat restic-backups-polaris.timer >/dev/null && echo timer-ok
 ```
 
 *Good:* both files exist, `-rw-------` owned by `root:root`; `journalctl -b |
 grep op-secrets` shows `rendered restic-repo` / `rendered restic-backend`
-with no `WARNING`. See the **op-secrets** section of
-[`setup.md`](setup.md) for the token bootstrap, the per-secret
-render/rollback behavior, and how to rotate either value later (edit in
-1Password → `make switch` → restart the consuming unit).
+with no `WARNING`; the timer unit exists.
 
 ---
 
 ## C. Confirm the database dumps land before restic runs
 
-restic sweeps the whole `/srv/data` dataset — it does not dump any database
-itself, it just backs up whatever dump files are on disk when it runs. Two
-producers write those dumps under `/srv/data`, and both must finish *before*
-the 03:00 restic timer:
+restic dumps no database itself — it backs up whatever dump files are on disk
+when it runs. These producers must finish *before* the 03:00 restic timer:
 
 - **Immich's built-in DB backup** writes to `/srv/data/immich/backups/`
   (nightly, ~02:00). restic depends on Immich doing this first.
@@ -102,6 +90,10 @@ the 03:00 restic timer:
   at 02:30. It captures every database plus cluster globals (roles, grants,
   passwords), so it needs no per-tenant setup — a new database is picked up
   automatically. It runs unattended; there's nothing to enable by hand.
+- **Karakeep's SQLite export** (`karakeep-sqlite-backup` timer in
+  `modules/services/karakeep.nix`) writes a consistent `.backup` + `.dump` at
+  02:45 into Karakeep's `backups/` dir under `/srv/fast/appdata/karakeep`. The
+  other app DBs under `/srv/fast/appdata` are copied live (no consistent export).
 
 **C.5 — Check the Immich setting.**
 Immich web UI → **Administration → Settings → Backup**. Confirm the built-in
@@ -109,7 +101,7 @@ backup is **enabled**, and note its schedule (default is a nightly dump
 around 02:00).
 
 **C.6 — Confirm the ordering still holds.**
-The nightly chain is `~02:00 Immich dump → 02:30 pg_dumpall → 03:00 restic`
+The nightly chain is `~02:00 Immich dump → 02:30 pg_dumpall → 02:45 Karakeep → 03:00 restic`
 (`startAt = "02:30"` for `postgresqlBackup`; `OnCalendar = "03:00"` in
 `modules/server/restic.nix`) — so restic always sweeps fresh dumps rather
 than racing them. If Immich's backup schedule ever moves away from ~02:00,
@@ -121,20 +113,9 @@ earlier than 02:30, and the pg_dumpall's 02:30 timer sits before 03:00.
 
 ---
 
-## D. Deploy
+## D. Verify + restore drill
 
-```bash
-make switch NIXNAME=polaris
-```
-
-*Good:* the switch succeeds; `systemctl cat restic-backups-polaris.service`
-and `systemctl cat restic-backups-polaris.timer` both exist.
-
----
-
-## E. Verify + restore drill
-
-**E.7 — First run.**
+**D.7 — First run.**
 
 ```bash
 sudo systemctl start restic-backups-polaris.service
@@ -144,17 +125,17 @@ sudo journalctl -u restic-backups-polaris
 *Good:* the log shows the repository being initialized (first run only) and
 a completed snapshot, with no error exit.
 
-**E.8 — List snapshots.**
+**D.8 — List snapshots.**
 
 ```bash
 sudo restic-polaris snapshots
 ```
 
-*Good:* at least one snapshot is listed, with a path of `/srv/data` and a
-size roughly matching that dataset minus `/srv/data/immich/thumbs` and
-`/srv/data/immich/encoded-video`.
+*Good:* at least one snapshot is listed, with paths `/srv/data` and
+`/srv/fast/appdata`, and a size roughly matching those minus
+`/srv/data/immich/thumbs` and `/srv/data/immich/encoded-video`.
 
-**E.9 — Restore drill.**
+**D.9 — Restore drill.**
 Prove the backup is actually restorable, not just uploaded — pull the cluster
 dump directory back out:
 
@@ -175,7 +156,7 @@ sudo rm -rf /tmp/restore-test
 *Good:* the restored dump is present and passes `gunzip -t`;
 `/tmp/restore-test` is removed afterward.
 
-**E.10 — Timer armed.**
+**D.10 — Timer armed.**
 
 ```bash
 systemctl list-timers restic-backups-polaris
@@ -186,13 +167,13 @@ missed run) the next 03:00.
 
 ---
 
-## F. Restoring for real
+## E. Restoring for real
 
 Two different databases live in these backups, restored two different ways.
 
-**F.11 — Restore the cluster from the `pg_dumpall`.**
+**E.11 — Restore the cluster from the `pg_dumpall`.**
 For a full cluster rebuild (all databases + globals), restore the dump
-directory from restic as in E.9, then replay it:
+directory from restic as in D.9 (restore with `--target /` or copy it back), then replay it:
 
 ```bash
 gunzip -c /srv/data/postgres-backup/all.sql.gz | sudo -u postgres psql
@@ -203,7 +184,7 @@ database, so it's fed straight into `psql` as the `postgres` superuser — no
 `-d <db>`, it targets the whole cluster. This is the path for disaster
 recovery or resurrecting a non-Immich tenant.
 
-**F.12 — Restore Immich from Immich's own dump, not the `pg_dumpall`.**
+**E.12 — Restore Immich from Immich's own dump, not the `pg_dumpall`.**
 Immich's database uses pgvector/vectorchord, which `pg_dumpall` restores less
 reliably. Restore Immich from *its own* built-in dump under
 `/srv/data/immich/backups/`, following Immich's documented restore procedure
@@ -215,7 +196,7 @@ globals, not the blessed path for Immich itself.
 
 ---
 
-## G. Gotcha: region mismatches
+## F. Gotcha: region mismatches
 
 ⚠️ **Region (bounded iteration).** If restic errors on bucket location/region
 against Hetzner (e.g. a `BadRequest`/region-mismatch error from the S3
@@ -225,7 +206,7 @@ endpoint), double-check:
   `nbg1.your-objectstorage.com` host in the `repository` URL.
 - `AWS_DEFAULT_REGION=nbg1` is present in the rendered
   `/var/lib/secrets/restic-backend.env` (it's a literal in the render
-  template, not a 1Password field — see B.4 above).
+  template, not a 1Password field — see B.4).
 
 If both already match and restic still complains, set
 `services.restic.backups.polaris.extraOptions = [ "s3.region=nbg1" ]` in

@@ -33,24 +33,18 @@
   # "error switching console mode" on boot.
   boot.loader.systemd-boot.consoleMode = "0";
 
-  # Define your hostname.
   networking.hostName = "dev";
 
-  # Set your time zone.
   time.timeZone = "Europe/London";
 
   # Don't require password for sudo
   # security.sudo.wheelNeedsPassword = false;
   # security.sudo.enable = true;
 
-  # Select internationalisation properties.
   i18n.defaultLocale = "en_US.UTF-8";
 
-  # Define a user account. Don't forget to set a password with ‘passwd’.
   users.mutableUsers = true;
 
-  # List packages installed in system profile. To search, run:
-  # $ nix search wget
   environment.systemPackages = with pkgs; [
     cachix
     gnumake
@@ -66,12 +60,6 @@
   # easy to visit stuff in here. We only use NAT networking anyways.
   networking.firewall.enable = false;
 
-  # This value determines the NixOS release from which the default
-  # settings for stateful data, like file locations and database versions
-  # on your system were taken. It‘s perfectly fine and recommended to leave
-  # this value at the release version of the first install of this system.
-  # Before changing this value read the documentation for this option
-  # (e.g. man configuration.nix or on https://nixos.org/nixos/options.html).
-  # teehee changed it - it was 20.09
-  system.stateVersion = "23.05"; # Did you read the comment?
+  # Originally 20.09; bumped to 23.05.
+  system.stateVersion = "23.05";
 }
