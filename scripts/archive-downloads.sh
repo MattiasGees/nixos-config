@@ -11,7 +11,13 @@ DATE=$(date +%Y-%m-%d)
 ARCHIVE_DIR="$DOWNLOADS_DIR/archive-$DATE"
 
 # Log file for debugging
-LOG_FILE="$HOME/Library/Logs/archive-downloads.log"
+if [ "$(uname)" = "Darwin" ]; then
+    LOG_DIR="$HOME/Library/Logs"
+else
+    LOG_DIR="${XDG_STATE_HOME:-$HOME/.local/state}"
+fi
+mkdir -p "$LOG_DIR"
+LOG_FILE="$LOG_DIR/archive-downloads.log"
 
 log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "$LOG_FILE"
