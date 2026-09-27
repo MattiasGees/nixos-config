@@ -12,14 +12,11 @@
   };
 
   # media = read /srv/media and write sidecar subtitles next to each video.
-  # Unlike the *arr modules, the bazarr module creates its dataDir itself (via
-  # systemd.tmpfiles, owned bazarr:bazarr) and sets RequiresMountsFor, so no
-  # ExecStartPre root-create step is needed here.
+  # The upstream module creates dataDir itself (tmpfiles) and sets
+  # RequiresMountsFor, so no ExecStartPre create step like sonarr.nix.
   users.users.bazarr.extraGroups = [ "media" ];
 
-  # Write sidecar subtitles group-writable/readable (0664) so other media-group
-  # members (Plex, the *arrs) can manage them, matching the 0002 umask used by
-  # Sonarr/Radarr when creating the library directories these files land in.
-  # mkForce for parity with radarr/sonarr and to override any upstream pin.
+  # Subtitles group-writable (0664) so other media-group members can manage
+  # them; same 0002 UMask as sonarr.nix (see there), mkForce for parity.
   systemd.services.bazarr.serviceConfig.UMask = lib.mkForce "0002";
 }

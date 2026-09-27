@@ -7,11 +7,11 @@ imported, never recreated. Use this when:
 - the **OS M.2 (NVMe #1) dies** and you fit a replacement, or
 - you **move polaris to new hardware** but carry the existing disks over.
 
-**Part 1** rebuilds the OS and re-imports the pools. **Part 2** is the host-side
-out-of-band setup (secrets, third-party auth, DNS) that `nixos-rebuild` doesn't
-capture. For a **first-ever** build, or if the data
-pools are genuinely gone (all disks new/wiped), the [Appendix](#appendix--first-time-build-or-total-pool-loss)
-creates the pools from scratch instead of importing them.
+**Part 1** rebuilds the OS and re-imports the pools. **Part 2** is the
+out-of-band setup (secrets, third-party auth, DNS) the Nix config doesn't
+capture. For a **first-ever** build, or if the data pools are genuinely gone
+(all disks new/wiped), the [Appendix](#appendix--first-time-build-or-total-pool-loss)
+creates the pools instead of importing them.
 
 > **Golden rule — only ever repartition NVMe #1 (the boot disk).** `tank` and the
 > surviving half of `fast` hold your data; they are *imported*. Recreating them
@@ -150,10 +150,17 @@ cp /mnt/etc/nixos/hardware-configuration.nix hardware/polaris.nix
 ```
 
 The replacement boot disk has **new** root/boot UUIDs, so regenerating
-`hardware/polaris.nix` is required. **Keep the committed `networking.hostId`** in
+`hardware/polaris.nix` is required (it's pure generate-config output; the
+hand-maintained bits — GPU, ZFS pools, swap, ESP mask — live in
+`hardware/polaris-extra.nix`). **Keep the committed `networking.hostId`** in
 `hardware/polaris-extra.nix` — do *not* regenerate it; the existing pools were
-created under it. Confirm the NIC name (`ip -o link` → `enp6s0`) in
-`machines/polaris.nix`, then install and reboot:
+created under it. Confirm the NIC name (`ip -o link` → `enp6s0`, the `br0` bridge
+port in `machines/polaris.nix`), then install and reboot.
+
+The `vmctl` flake input is a **private** `git+ssh://git@github.com/...` repo, so
+the installer's root must be able to reach GitHub over SSH (e.g. a key in
+`/root/.ssh`, or an agent-forwarded `ssh -A` session into the installer);
+otherwise the fetch fails with `Permission denied (publickey)`.
 
 ```bash
 nixos-install --flake /mnt/etc/nixos-config#polaris   # prompts for a root password
@@ -170,16 +177,16 @@ nvidia-smi                                   # RTX 3080 detected
 systemctl is-system-running                  # running (or investigate 'degraded')
 ```
 
-If `keystatus` isn't `available`, check `journalctl -u zfs-load-key`. The OS is now
+If `keystatus` isn't `available`, check `journalctl -u load-zfs-keyfiles` (the
+unit in `modules/server/zfs.nix`). The OS is now
 up — but secrets and per-service setup are **not** done yet. Continue with Part 2.
 
 ---
 
 ## Part 2 — Out-of-band setup (secrets, auth, DNS)
 
-Everything on polaris that is **not** captured by `nixos-rebuild` and must be done
-by hand: secrets that live off git, third-party authentication, and DNS records.
-`make switch` builds the OS and services; this section covers the host-side rest.
+Everything `make switch` doesn't capture: secrets that live off git,
+third-party authentication, and DNS records.
 
 > **Golden rule — secrets never go in git.** The Nix config references secret
 > *paths* (e.g. `/var/lib/secrets/caddy-route53.env`), never secret *values*.
@@ -195,29 +202,30 @@ one: op-secrets renders each file from the `polaris` 1Password vault at every
 |-------------------|--------------|-----------|---------|
 | `/etc/zfs/keys/polaris.key` | `0400 root` | ZFS encryption key for `fast` + `tank/data` | **Irreplaceable — back up offline** |
 | `/etc/op/token` | `0600 root` | 1Password service-account token that unlocks the `polaris` vault for op-secrets (§ op-secrets) | Reproducible — re-issue from 1Password |
-| `/var/lib/secrets/*` | `0600` (per-service) | Per-service secrets (caddy, miniflux, restic, karakeep) **rendered automatically** by op-secrets — not hand-placed (see the **op-secrets** section) | Reproducible — re-renders from 1Password |
+| `/var/lib/secrets/*` | `0600` (per-service owner) | Per-service secrets **rendered automatically** by op-secrets — not hand-placed | Reproducible — re-renders from 1Password |
 
-None of these are in the repo, and none should ever be pasted into a commit,
-issue, or chat. Only the two roots need a human: `/etc/zfs/keys/polaris.key` is
-restored/created during the OS rebuild (Part 1 §4, or the Appendix), and
-`/etc/op/token` is placed once (see the **op-secrets** section below). After that,
-the `/var/lib/secrets/*` files render themselves on every `make switch`.
+None of these belong in a commit, issue, or chat. The ZFS key is restored (Part 1
+§4) or created (Appendix) during the OS build; the token is placed once (below).
 
 ---
 
 ## op-secrets — 1Password service-account token (do this first)
 
-The per-service secrets under `/var/lib/secrets/` render themselves from the
-`polaris` 1Password vault at `make switch`. The only thing you place by hand is
-the service-account token — once, **before the first `make switch`**.
+`modules/server/op-secrets.nix` renders each `opSecrets.<name>` template (git-
+committed `.tpl` files holding only `op://` references) into `/var/lib/secrets/`
+during activation, i.e. at every `make switch` and boot. A failed render (no
+token, 1Password unreachable, bad reference) logs
+`op-secrets: WARNING <name> render failed; keeping last-good …` and leaves the
+existing file in place, so a deploy never blocks on 1Password. The only thing you
+place by hand is the service-account token — once, **before the first
+`make switch`**.
 
 1. **Create the `polaris` vault** in 1Password with the items/fields referenced in
    the verification below (`caddy-route53`, `miniflux`, `restic`, `restic-backend`,
-   `karakeep`, `cloudflared-polaris`, `outline`). The `cloudflared-polaris` and
-   `outline` items are populated during their one-time service bootstraps —
-   documented in the **Cloudflare Tunnel** and **Outline** service docs in the
-   wiki. (Those bootstraps aren't part of *rebuilding* polaris; on a rebuild the
-   credentials just re-render here.)
+   `karakeep`, `cloudflared-polaris`, `outline`, `filebrowser`, `pihole`). The
+   `cloudflared-polaris` item is populated by the tunnel bootstrap (§4) and
+   `outline` by its service bootstrap (documented in the wiki). On a rebuild
+   these already exist and just re-render.
 2. **Create a service account** with **read** access to **only** the `polaris`
    vault; copy its token (starts with `ops_`).
 3. **Place the token** on polaris:
@@ -247,26 +255,34 @@ the service-account token — once, **before the first `make switch`**.
        op://polaris/outline/UTILS_SECRET \
        op://polaris/outline/OIDC_CLIENT_SECRET \
        op://polaris/outline/GOOGLE_CLIENT_SECRET \
-       op://polaris/outline/SMTP_PASSWORD; do \
+       op://polaris/outline/SMTP_PASSWORD \
+       op://polaris/filebrowser/admin-password \
+       op://polaris/pihole/password; do \
        printf "%s -> " "$r"; \
        nix run --impure nixpkgs#_1password-cli -- read "$r" >/dev/null && echo OK || echo FAIL; \
      done'
    ```
 
-   All fourteen must print `OK` before you `make switch`. A `FAIL` is a
-   vault/item/field-name mismatch or a scope problem.
+   All sixteen must print `OK` before you `make switch`. A `FAIL` is a
+   vault/item/field-name mismatch or a scope problem. (If a template gains a new
+   reference, add it here: `grep -rho 'op://[^ }]*' modules`.)
+
+5. **After `make switch`, confirm the renders:** `journalctl -b | grep op-secrets`
+   shows one `rendered <name> -> /var/lib/secrets/…` line per secret and no
+   `WARNING`.
+
+**Rotating a secret:** edit it in 1Password → `make switch` → restart the
+consuming unit (services read their secret at start).
 
 ---
 
 ## 1. ZFS encryption key (irreplaceable)
 
-Created once during the first build (Appendix §A) and **restored** on every OS
-rebuild (Part 1 §4). The `fast` pool and the `tank/data` dataset auto-unlock from
-this file at boot.
+Created once (Appendix §A) and **restored** on every OS rebuild (Part 1 §4). The
+`fast` pool and `tank/data` auto-unlock from this file at boot.
 
-**If this file is lost, that data is gone — there is no recovery.** This backup is
-exactly what Part 1 §4 restores from, so keep it current, off the machine,
-somewhere you control:
+**If this file is lost, that data is gone — there is no recovery.** Keep a copy
+off the machine, somewhere you control:
 
 ```bash
 # On polaris, copy it out over SSH to your workstation, then into a password
@@ -311,29 +327,48 @@ tailnet. (Caddy creates and deletes the `_acme-challenge` TXT records itself.)
 
 ---
 
+## 4. Cloudflare Tunnel (public hostnames)
+
+`modules/server/cloudflared.nix` runs one named tunnel, `polaris`, whose
+`ingress` map is the public routing table (`requests.gees.dev` → Seerr `:5055`,
+`wiki.gees.dev` → Outline `:3002`). The credentials JSON renders from
+`op://polaris/cloudflared-polaris/credentials-json`, so **on a rebuild there is
+nothing to do**. One-time bootstrap, only if the tunnel is ever recreated:
+
+```bash
+cloudflared tunnel create polaris                 # prints the tunnel UUID + writes credentials JSON
+# put the UUID in `tunnelId` in modules/server/cloudflared.nix;
+# store the JSON in op://polaris/cloudflared-polaris/credentials-json
+cloudflared tunnel route dns polaris requests.gees.dev   # one CNAME per public host
+```
+
+A new public service = one `ingress` line plus one `tunnel route dns`.
+
+---
+
 ## Quick reference
 
 | Thing | Value |
 |-------|-------|
-| Static LAN IP | `192.168.1.50` (enp6s0) |
+| Static LAN IP | `192.168.1.50` on `br0` (bridge over `enp6s0`), gateway `192.168.1.1` |
 | Tailnet IP | `100.93.157.59` |
 | Route53 zone | `mattiasgees.be` (`Z2570BL3CYXE68`) |
 | ZFS key | `/etc/zfs/keys/polaris.key` (**back up offline**) |
-| op-secrets token | `/etc/op/token` (`0600 root`) — unlocks the `polaris` 1P vault; renders `/var/lib/secrets/*` at `make switch` (§ op-secrets) |
+| op-secrets token | `/etc/op/token` (`0600 root`) — unlocks the `polaris` 1P vault (§ op-secrets) |
 | Caddy AWS creds | `/var/lib/secrets/caddy-route53.env` (`0600 caddy`) |
 | Terraform (IAM) | `infrastructure/stacks/kubernetes/polaris-caddy-iam.tf` |
 | Miniflux (RSS) | `https://miniflux.polaris.mattiasgees.be` → `:8080`, secret `/var/lib/secrets/miniflux-admin.env` |
 | Karakeep (bookmarks) | `https://karakeep.polaris.mattiasgees.be` → `:3000`, secret `/var/lib/secrets/karakeep.env` |
 | Seerr (requests) | `https://requests.gees.dev` (Cloudflare tunnel) + `https://seerr.polaris.mattiasgees.be` (tailnet) → `:5055` |
-| Cloudflare tunnel | `polaris` tunnel (`modules/server/cloudflared.nix`), creds `/var/lib/secrets/cloudflared-polaris.json` (`0600 root`) |
-| Outline (wiki) | `https://wiki.polaris.mattiasgees.be` (tailnet) → `:3002`, secrets `/var/lib/secrets/outline-*`; public `https://wiki.gees.dev` via the Cloudflare tunnel (follow-up) |
+| Cloudflare tunnel | `polaris` tunnel (§4), creds `/var/lib/secrets/cloudflared-polaris.json` (`0600 root`) |
+| Outline (wiki) | `https://wiki.gees.dev` (Cloudflare tunnel) + `https://wiki.polaris.mattiasgees.be` (tailnet) → `:3002`, secrets `/var/lib/secrets/outline-*` |
+| Other tailnet apps | `{sonarr,radarr,prowlarr,bazarr,immich,chat,pihole,files}.polaris.mattiasgees.be` — ports in `modules/media/caddy.nix` |
 | App config | `/srv/fast/appdata/<app>` (fast NVMe mirror) |
 | Media roots | `/srv/media/{Series,Movies,Downloads}` (`media` group, setgid) |
 
-See also: [updating.md](updating.md) (flake/Caddy/kernel updates) and
-[bios-checklist.md](bios-checklist.md) (BIOS/UEFI settings for the rebuild). The
-from-ISO OS + ZFS rebuild is Part 1 above; creating the pools from scratch is the
-Appendix below.
+See also: [updating.md](updating.md) (flake/Caddy/kernel updates),
+[bios-checklist.md](bios-checklist.md), and the backup runbooks
+([restic](restic-backup-runbook.md), [NFS mirror](nfs-data-backup-runbook.md)).
 
 ---
 
@@ -356,7 +391,10 @@ then the steps here, then continue at Part 1 §6 (install NixOS).
 >   /dev/disk/by-id/ata-<HDD3-14TB>
 > ```
 > The fast-member and scratch partitions come from their fixed GPT partlabels. It
-> prints verification when done; then jump to step E to back up the key and export.
+> generates the keyfile only if one isn't already present, is **not** idempotent
+> (a re-run needs `zpool destroy` first), and prints verification when done; then
+> jump to step E to back up the key and export. (`checks.x86_64-linux.polaris-zfs`
+> runs this script in a VM test.)
 
 ### A. Create the encryption keyfile
 

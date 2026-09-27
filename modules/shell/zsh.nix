@@ -22,7 +22,6 @@ in
   xdg.configFile."nixos-shell/shell_aliases".source = ./shell_aliases;
   xdg.configFile."nixos-shell/shell_functions".source = ./shell_functions;
 
-  # .zshenv
   programs.zsh = {
     enable = true;
     autosuggestion.enable = true;
@@ -59,7 +58,7 @@ in
       autoload -U promptinit; promptinit
       # Display red dots while waiting for completion
       COMPLETION_WAITING_DOTS="true"
-    '' + extraInitExtra;                                         # Zsh theme
+    '' + extraInitExtra;
 
     plugins = [
       {

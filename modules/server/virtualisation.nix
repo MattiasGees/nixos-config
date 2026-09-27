@@ -1,6 +1,5 @@
-# Reusable virtualisation stack: libvirt/KVM (for running VMs) + docker.
-# IOMMU is enabled via kernel params in machines/polaris.nix; GPU passthrough
-# is a later phase.
+# Reusable virtualisation stack: libvirt/KVM + docker. (IOMMU/passthrough
+# prep lives in machines/polaris.nix.)
 { pkgs, ... }:
 {
   virtualisation.libvirtd = {
@@ -8,8 +7,7 @@
     qemu = {
       package = pkgs.qemu_kvm;
       swtpm.enable = true;
-      # OVMF/UEFI firmware ships with QEMU by default now — the old
-      # qemu.ovmf submodule was removed, so we no longer set it.
+      # No qemu.ovmf: that option was removed; QEMU ships OVMF by default.
     };
     onBoot = "ignore";
     onShutdown = "shutdown";

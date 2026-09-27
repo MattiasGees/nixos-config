@@ -1,3 +1,4 @@
+# Legacy: VM builder, not called from flake.nix.
 name: { nixpkgs, pkgs, lib, home-manager, system, user, }:
 
 nixpkgs.lib.nixosSystem {

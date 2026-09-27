@@ -26,8 +26,8 @@
       # Use faster ciphers (AES-GCM is hardware accelerated on modern CPUs)
       Ciphers chacha20-poly1305@openssh.com,aes128-gcm@openssh.com,aes256-gcm@openssh.com
 
-      # Speed up connection by disabling host key checking for tailscale
-      # (optional - remove if you want strict security)
+      # Auto-accept first-seen Tailscale host keys (changed keys are still
+      # rejected). Remove for strict checking.
       Host *.ts.net
         StrictHostKeyChecking accept-new
         UserKnownHostsFile ~/.ssh/known_hosts

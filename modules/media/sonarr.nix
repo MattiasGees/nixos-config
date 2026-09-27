@@ -13,19 +13,15 @@
   users.users.sonarr.extraGroups = [ "media" ];
 
   # Create library dirs group-writable (2775) so other media-group members
-  # (e.g. Bazarr writing sidecar subtitles) can add files next to the video.
-  # The default systemd UMask=0022 strips the group-write bit, leaving 2755;
-  # setgid then propagates the media group but not write permission, so a
-  # non-owner in the group gets PermissionError on write. 0002 keeps group write.
-  # mkForce: the upstream servarr module pins UMask="0022"; override it.
+  # (e.g. Bazarr's sidecar subtitles) can write next to the video. Under the
+  # upstream-pinned UMask=0022 they'd be 2755: setgid passes on the group but
+  # not write permission. mkForce overrides that pin.
   systemd.services.sonarr.serviceConfig.UMask = lib.mkForce "0002";
 
-  # The nixpkgs module does not create a custom dataDir, and the parent
-  # /srv/fast/appdata is root-owned, so Sonarr (running as `sonarr`) cannot
-  # create it itself ("Access to the path /srv/fast/appdata/sonarr is denied").
-  # Create + chown it as root before start. The `+` prefix runs as root despite
-  # User=sonarr; the unit's RequiresMountsFor=/srv/fast/appdata/sonarr guarantees
-  # the ZFS dataset is mounted first, so this never writes under the mountpoint.
+  # The module doesn't create a custom dataDir and /srv/fast/appdata is
+  # root-owned, so Sonarr fails with "Access to the path ... is denied".
+  # `+` runs this as root; the module's RequiresMountsFor on dataDir ensures
+  # the dataset is mounted first, so it never writes under the mountpoint.
   systemd.services.sonarr.serviceConfig.ExecStartPre = lib.mkBefore [
     "+${pkgs.coreutils}/bin/install -d -o sonarr -g sonarr -m 0700 /srv/fast/appdata/sonarr"
   ];

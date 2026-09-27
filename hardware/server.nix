@@ -1,5 +1,5 @@
-# Generic hardware configuration for servers
-# This is a minimal configuration that should work on most x86_64 Linux systems
+# Generic QEMU-guest hardware profile shared by `server` (x86_64) and
+# `server-arm64`. Assumes filesystems labelled `nixos` and `boot`.
 { config, lib, pkgs, modulesPath, ... }:
 
 {
@@ -12,7 +12,6 @@
   boot.kernelModules = [ ];
   boot.extraModulePackages = [ ];
 
-  # Generic filesystem configuration - adjust for your actual system
   fileSystems."/" = {
     device = "/dev/disk/by-label/nixos";
     fsType = "ext4";
@@ -25,9 +24,7 @@
 
   swapDevices = [ ];
 
-  # Use DHCP on all interfaces by default
   networking.useDHCP = lib.mkDefault true;
 
-  # Will be overridden by the specific configuration
-  # nixpkgs.hostPlatform is set by the flake based on the system parameter
+  # No nixpkgs.hostPlatform: the flake passes `system` to nixosSystem.
 }

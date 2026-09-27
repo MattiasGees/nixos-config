@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Bootstrap script for setting up mattias user and nix on non-NixOS servers
-# Usage: curl -L https://raw.githubusercontent.com/YOUR_REPO/master/bootstrap-server.sh | sudo bash
+# Usage: curl -L https://raw.githubusercontent.com/mattiasgees/nixos-config/master/bootstrap-server.sh | sudo bash
 
 set -e
 
@@ -54,7 +54,6 @@ NIXCONF
 if [ ! -d ~/.config/nixos-config ]; then
     echo "==> Cloning nixos-config repository"
     mkdir -p ~/.config
-    # TODO: Update this with your actual repository URL
     git clone https://github.com/mattiasgees/nixos-config.git ~/.config/nixos-config
 else
     echo "==> nixos-config repository already exists"

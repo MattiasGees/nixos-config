@@ -1,38 +1,25 @@
-# On-LAN second copy of the whole tank/data dataset (/srv/data), mirrored
-# every 12 hours to the house NAS over NFS. This complements — does not replace — the
-# encrypted restic→Hetzner tier in modules/server/restic.nix: restic is the
-# offsite, encrypted, deduplicated backup of the irreplaceable Immich subset;
-# this is a fast, browsable 1:1 rsync mirror of the entire data dir on the NAS
-# at 192.168.1.88. tank/media (/srv/media) is deliberately not synced — bulk
-# and re-downloadable.
+# On-LAN second copy of tank/data (/srv/data): a browsable rsync mirror to the
+# house NAS (192.168.1.88) every 12 hours. Complements, not replaces, the
+# encrypted offsite restic→Hetzner tier (restic.nix). Immich's regenerable
+# thumbs/encoded-video are skipped (same excludes as restic); tank/media is not
+# synced at all — bulk and re-downloadable.
 #
-# Automount: the share is mounted on demand at /mnt/polaris-nfs with
-# `noauto` + `nofail`, so an offline NAS never blocks boot or wedges other
-# units. `x-systemd.automount` mounts it on first access and the
-# idle-timeout unmounts it 10 min after each run finishes, so the mount
-# only exists while it's actually being written to. `nfsvers=4.0` is pinned so
-# the client does not negotiate up to 4.1/4.2 (NFSv4 needs no rpcbind here).
+# Mount: on-demand automount with noauto + nofail, so an offline NAS never
+# blocks boot; the idle-timeout unmounts it 10 min after each run. nfsvers=4.0
+# is pinned so the client doesn't negotiate up to 4.1/4.2 (and v4 needs no
+# rpcbind). The sync unit's RequiresMountsFor triggers the mount and makes the
+# run fail loudly if the NAS is down, instead of mirroring into an empty
+# /mnt/polaris-nfs on the root disk.
 #
-# RequiresMountsFor ties the sync service to that automount: touching the path
-# triggers the mount, and the service fails cleanly (a real error in
-# journalctl) if the NAS is unreachable, rather than silently mirroring into an
-# empty /mnt/polaris-nfs on the root disk.
+# Trade-off: plaintext on the wire and at rest. rsync reads the encrypted
+# dataset decrypted and NFSv4.0 is unencrypted, so the NAS copy is plaintext.
+# Accepted for a trusted-LAN mirror; restic stays the encrypted tier.
 #
-# Trade-off: plaintext on the wire and at rest. tank/data is encrypted at rest
-# on ZFS, but rsync reads it decrypted and NFSv4.0 here is unencrypted over the
-# LAN, so the copy lands as plaintext on the NAS. Accepted — this is a
-# trusted-LAN mirror; the encrypted end-to-end tier stays restic→Hetzner.
-#
-# The `/volume1/polaris` export (a Synology shared folder — shares live under
-# /volume1, so the NFS path is /volume1/polaris, not /polaris), its host
-# allow-list, and the root_squash decision are manual NAS-side steps out of
-# git — see
-# docs/polaris/nfs-data-backup-runbook.md for those and the verify checklist;
-# this module only ever references the mountpoint and share path.
+# NAS side (manual, out of git): the `/volume1/polaris` Synology export (shares
+# live under /volume1, hence not /polaris), its host allow-list and
+# root_squash — see docs/polaris/nfs-data-backup-runbook.md.
 { pkgs, ... }:
 {
-  # On-demand NFS automount of the house NAS share. noauto + nofail so an
-  # offline NAS never blocks boot; idle-timeout unmounts it between runs.
   fileSystems."/mnt/polaris-nfs" = {
     device = "192.168.1.88:/volume1/polaris";
     fsType = "nfs";
@@ -50,17 +37,15 @@
     description = "Mirror /srv/data to NFS share on 192.168.1.88";
     after = [ "network-online.target" ];
     wants = [ "network-online.target" ];
-    # Pull in (and thus trigger) the automount; fail cleanly if the NAS is down.
+    # Triggers the automount; fails the run if the NAS is down (see header).
     unitConfig.RequiresMountsFor = "/mnt/polaris-nfs";
     serviceConfig = {
       Type = "oneshot";
-      # --no-owner/--no-group: the Synology export runs root_squash, so any
-      # chown on the destination is rejected ("Operation not permitted"). Under
-      # plain `-a` that makes rsync exit 23 on every run — the file data still
-      # mirrors, but the unit goes red and stops being a usable health signal.
-      # We don't need ownership preserved on a browse-only NAS mirror, so drop
-      # the chown attempts entirely (and --numeric-ids, which is moot without
-      # them) and let a non-zero exit mean a genuine failure again.
+      # --no-owner/--no-group: the export runs root_squash, so every chown is
+      # rejected and plain `-a` exits 23 on every run (data still copies, but
+      # the unit is permanently red and useless as a health signal). Ownership
+      # doesn't matter on a browse-only mirror, so skip it and let a non-zero
+      # exit mean a real failure.
       ExecStart = ''
         ${pkgs.rsync}/bin/rsync -a --delete --no-owner --no-group \
           --exclude=/immich/thumbs \
@@ -73,7 +58,7 @@
   systemd.timers.polaris-data-nfs-sync = {
     wantedBy = [ "timers.target" ];
     timerConfig = {
-      # Every 12 hours, at 00:00 and 12:00.
+      # 00:00 and 12:00.
       OnCalendar = "0/12:00:00";
       Persistent = true;
     };

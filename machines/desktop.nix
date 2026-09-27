@@ -63,9 +63,10 @@ in
   "video=efifb:off"
   ];
 
-  networking.hostName = "nixos"; # Define your hostname.
+  networking.hostName = "nixos";
 
-  # Configure keymap in X11
+  # The host display runs on the AMD GPU; the NVIDIA card is bound to vfio-pci
+  # (see boot.* above) for passthrough to a VM.
   services.xserver = {
     videoDrivers = ["amdgpu"];
   };
@@ -78,11 +79,7 @@ in
   services.getty.autologinUser = "mattias";
   users.groups.libvirtd.members = [ "root" "mattias"];
 
-  # List packages installed in system profile. To search, run:
-  # $ nix search wget
   environment.systemPackages = with pkgs; [
-  #  vim # Do not forget to add an editor to edit configuration.nix! The Nano editor is also installed by default.
-  #  wget
      cmake
      neovim
      kitty

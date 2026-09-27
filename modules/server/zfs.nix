@@ -1,51 +1,42 @@
-# Reusable ZFS enablement for servers.
-# Pool definitions and hostId live in the host's hardware/<host>.nix — this
-# module is pool-agnostic and safe to import anywhere.
+# Reusable, pool-agnostic ZFS enablement. Pools (boot.zfs.extraPools) and
+# networking.hostId are per-host — for polaris, hardware/polaris-extra.nix.
 { pkgs, lib, ... }:
 {
   boot.supportedFilesystems = [ "zfs" ];
   # Don't block boot prompting for encryption credentials: our encrypted
   # datasets are NOT needed for boot (root is ext4) and use file-based keys.
   boot.zfs.requestEncryptionCredentials = false;
-  # New default from 26.11; reduces data-loss risk (won't force-import a pool
-  # that looks in-use by another host). Our pools export cleanly, so importing
-  # never needs forcing.
+  # Upstream default from 26.11: never force-import a pool that looks in use
+  # by another host. Our pools export cleanly, so forcing is never needed.
   boot.zfs.forceImportRoot = false;
 
   # Weekly scrub + periodic TRIM for pool health.
   services.zfs.autoScrub.enable = true;
   services.zfs.trim.enable = true;
 
-  # Quiet the spinning-rust pool (tank). ZFS commits a transaction group every
-  # zfs_txg_timeout seconds whenever there is dirty async data; on a mostly-idle
-  # HDD pool this turns sparse trickle writes into an audible seek every 5 s (the
-  # default). Batching those into one flush every 30 s means far fewer, larger
-  # seeks — it's the seek chatter, not the constant spin, that's audible.
+  # Quiet the HDD pool (tank). ZFS commits a transaction group every
+  # zfs_txg_timeout seconds while there is dirty async data; on a mostly-idle
+  # HDD pool the 5 s default turns trickle writes into audible seek chatter.
+  # 30 s batches them into far fewer seeks.
   #
-  # This is a kernel-module parameter, so it is GLOBAL to every pool (tank, fast,
-  # scratch) — there is no per-pool equivalent. Safe for all of them because it
-  # only defers *async* writes (buffered up to 30 s in RAM, lost on a hard
-  # power-cut); it does NOT affect synchronous (fsync) writes. PostgreSQL lives
-  # on fast/db (ZFS, sync=standard), so on COMMIT its WAL fsync is written
-  # immediately via the ZIL regardless of this timer — committed rows are
-  # recovered by ZIL+WAL replay on power loss. ZFS is copy-on-write, so each txg
-  # is atomic: 30 s is exactly as crash-consistent as 5 s, just a wider rollback
-  # window for un-fsync'd async data, which no committed DB write is ever in.
+  # Module parameter, so GLOBAL to every pool (no per-pool equivalent). Safe:
+  # it only defers *async* writes (up to 30 s in RAM, lost on a hard power
+  # cut); fsync'd writes still go straight to the ZIL, so PostgreSQL commits on
+  # fast/db (sync=standard) are unaffected. Txgs are atomic (CoW), so 30 s is
+  # as crash-consistent as 5 s — just a wider rollback window for un-fsync'd
+  # data.
   boot.extraModprobeConfig = "options zfs zfs_txg_timeout=30";
 
-  # Load file-based encryption keys after import, before ZFS mounts.
-  # `zfs load-key -a` loads keys for every encrypted dataset whose keylocation
-  # is a readable file (set at dataset creation).
-  # NOTE: the name must NOT be `zfs-load-key` — that unit name is reserved and
-  # masked by the ZFS systemd integration, so a service by that name never runs.
+  # Load file-based encryption keys (keylocation=file://, set at creation)
+  # after import, before ZFS mounts.
+  # NOTE: must NOT be named `zfs-load-key` — the ZFS systemd integration
+  # reserves and masks that name, so a service called that never runs.
   systemd.services.load-zfs-keyfiles = {
     description = "Load ZFS encryption keys from keyfiles";
-    # DefaultDependencies=no is REQUIRED. This service runs before
-    # zfs-mount.service, which itself runs before local-fs.target (very early).
-    # A normal service implicitly gets After=basic.target, and basic.target is
-    # ordered after local-fs.target — so ordering this before zfs-mount created
-    # a cycle, and systemd broke it by DELETING zfs-mount.service (leaving all
-    # datasets unmounted). Opting out of default deps removes the cycle.
+    # DefaultDependencies=no is REQUIRED. A normal service gets
+    # After=basic.target (itself after local-fs.target), but this must run
+    # before zfs-mount.service, which is before local-fs.target. The resulting
+    # cycle made systemd drop zfs-mount.service, leaving every dataset unmounted.
     unitConfig.DefaultDependencies = false;
     after = [ "zfs-import.target" ];
     before = [ "zfs-mount.service" "shutdown.target" ];
@@ -60,7 +51,7 @@
     };
   };
 
-  # ARC sizing note: ZFS ARC defaults to ~50% of RAM (~32 GB on this 64 GB
-  # box). Fine for Phase 1. When VMs/services arrive, cap it here, e.g.:
-  #   boot.extraModprobeConfig = "options zfs zfs_arc_max=17179869184"; # 16 GiB
+  # ARC defaults to ~50% of RAM (~32 GB on polaris). To cap it (e.g. for VM
+  # headroom), add to the existing options line above, e.g.:
+  #   "options zfs zfs_txg_timeout=30 zfs_arc_max=17179869184" # 16 GiB
 }

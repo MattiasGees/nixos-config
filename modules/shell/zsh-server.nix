@@ -1,9 +1,9 @@
 # Server-friendly zsh config without out-of-store symlinks
 { config, pkgs, lib, ... }:
 let
-  # Read the extra config files directly (now cross-platform)
+  # Appended verbatim to initContent (same files as zsh.nix)
   extras = [
-    ./zshrc  # Now cross-platform with defensive checks
+    ./zshrc  # cross-platform, with defensive checks
     ./shell_exports
     ./shell_aliases
     ./shell_functions  # portable halp (reads ~/.config/nixos-shell), no repo-path dep

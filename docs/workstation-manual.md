@@ -1,21 +1,16 @@
 # NixOS Workstation Manual — How Everything Is Glued Together
 
-A start-to-finish walkthrough of how the **desktop** workstation
-(`nixosConfigurations.desktop`) is built and applied in this repo, written for
-someone new to NixOS. It explains the mental model first, then traces one
-`make switch` from the command you type all the way to a booted, running
-desktop, and finally shows how the individual modules fit in.
-
-> Scope: this focuses on the NixOS desktop. The macOS (Darwin) and headless
-> server paths reuse most of the same ideas — differences are called out at the
-> end.
+How the **desktop** workstation (`nixosConfigurations.desktop`) is built and
+applied, written for someone new to NixOS: the mental model, then one
+`make switch` traced from command to running desktop, then how the modules fit
+in. The macOS and headless-server paths reuse the same ideas; differences are in
+Part 8.
 
 ---
 
 ## Part 1 — The NixOS mental model (read this first)
 
-If you come from a normal Linux distro, four ideas are new and everything else
-follows from them.
+Coming from a normal Linux distro, four ideas are new.
 
 ### 1. It's declarative, not imperative
 
@@ -59,23 +54,23 @@ attribute set (`config`) using typed rules:
 - `lib.mkForce x` sets a high-priority value that wins.
 
 So "which file sets the hostname?" has one answer, but "which files add system
-packages?" can be many — they all contribute. Keep this in mind for the rest of
-the manual: **imports don't run, they contribute options to one merged result.**
+packages?" can be many. **Imports don't run, they contribute options to one
+merged result.**
 
 ---
 
 ## Part 2 — The big picture
 
-This repo is **one flake** (`flake.nix`) that can build three kinds of system:
+This repo is **one flake** (`flake.nix`) that builds several kinds of system:
 
 | Output | Builder (`lib/`) | What it produces |
 |--------|------------------|------------------|
 | `nixosConfigurations.desktop` | `mksys.nix` | Full NixOS desktop (this manual) |
-| `nixosConfigurations.server` | `mkserver.nix` | Headless NixOS server |
-| `darwinConfigurations.macbook-m1` | `mkdarwin.nix` | macOS via nix-darwin |
-| `homeConfigurations.mattias` | (inline) | Standalone home-manager, non-NixOS Linux |
+| `nixosConfigurations.{server,server-arm64,polaris,polaris-vm}` | `mkserver.nix` | Headless NixOS servers |
+| `darwinConfigurations.{macbook-m1,pacesetter,macbook-x86}` | `mkdarwin.nix` | macOS via nix-darwin |
+| `homeConfigurations.mattias` (+ `@x86_64-linux` / `@aarch64-linux`) | (inline) | Standalone home-manager, non-NixOS Linux |
 
-A **builder** is just a function: give it a name + some inputs, it returns a
+A **builder** is a function: give it a name + some inputs, it returns a
 fully-evaluated system. The desktop uses `mkSys`.
 
 Everything is wired **explicitly**. There is no auto-discovery of files — a
@@ -95,8 +90,8 @@ make switch NIXNAME=desktop
 [1] Makefile picks the command for your OS
         │
         ▼
-[2] sudo nixos-rebuild switch --flake .#desktop --impure
-        │
+[2] nix build .#nixosConfigurations.desktop.config.system.build.toplevel --impure
+        │   (as your user — no sudo yet)
         ▼
 [3] Nix evaluates flake.nix → builds the overlaid `pkgs`
         │
@@ -110,8 +105,8 @@ make switch NIXNAME=desktop
 [6] Nix realises (builds) config.system.build.toplevel in /nix/store
         │
         ▼
-[7] The activation script runs: symlinks /run/current-system, writes
-    bootloader entry, (re)starts systemd units, activates home-manager
+[7] sudo: new system-profile generation, then switch-to-configuration
+    (/run/current-system, bootloader entry, systemd units, home-manager)
         │
         ▼
 [8] On next login: greetd → Hyprland → autostart apps
@@ -122,51 +117,47 @@ make switch NIXNAME=desktop
 `make switch` dispatches on `uname`. On Linux it runs:
 
 ```make
-sudo NIX_CONFIG="experimental-features = nix-command flakes" \
-  NIXPKGS_ALLOW_UNSUPPORTED_SYSTEM=1 \
-  nixos-rebuild switch --flake ".#${NIXNAME}" --impure
+NIX_CONFIG="experimental-features = nix-command flakes" \
+  nix build ".#nixosConfigurations.${NIXNAME}.config.system.build.toplevel" --impure
+sudo nix-env -p /nix/var/nix/profiles/system --set ./result
+sudo ./result/bin/switch-to-configuration switch
 ```
 
 - `NIXNAME=desktop` selects `nixosConfigurations.desktop`.
 - `--impure` is required because `flake.nix` reads `builtins.getEnv "USER"` /
-  `"HOME"` (used by the standalone home-manager config). Pure evaluation would
-  forbid reading the environment.
+  `"HOME"` (used by the standalone home-manager config).
 - `NIX_CONFIG=…flakes` turns on the still-"experimental" flake commands.
+- The build runs **unprivileged**, so flake inputs are fetched with your own
+  GitHub SSH access (root has none, which breaks private `git+ssh` inputs such
+  as polaris' `vmctl`). `sudo` is only used to activate the already-built
+  result — no re-evaluation.
 
-`nixos-rebuild switch` = **build the new system, then activate it**. (`build`
-alone would build without activating; `boot` would activate only on next reboot.)
+Together these are what `nixos-rebuild switch` does: **build, then activate**.
 
 ### Step 2–3 — Flake evaluation and building `pkgs`
 
-`nixos-rebuild` asks the flake for `nixosConfigurations.desktop`. Evaluating
-`flake.nix` first constructs the package set that the whole desktop will use:
+Evaluating `flake.nix` first constructs the package set the whole desktop
+uses (shared with `server` and `polaris`):
 
 ```nix
 pkgs = import nixpkgs {
-  system = "x86_64-linux";
-  config = { allowUnfree = true; allowInsecure = true; };
-  overlays = [ (final: prev: { ... }) ];
+  inherit system;                     # x86_64-linux
+  config = { allowUnfree = true; allowUnsupportedSystem = false; };
+  overlays = [ (final: prev: { ... }) (final: prev: { ... }) ];
 };
 ```
 
-Two important things happen here:
+- **`allowUnfree`** lets you install Slack, Spotify, Steam, etc.
+- **Overlays** modify the package set (see Part 6): one pins a list of packages
+  to `nixpkgs-unstable`, the other rebuilds `onnxruntime` without OpenVINO (for
+  Immich on polaris).
 
-- **`allowUnfree`** lets you install Slack, Spotify, Steam, etc. (non-free
-  licenses are rejected by default).
-- **Overlays** modify the package set. This one:
-  - adds new packages that don't exist upstream: `nordpass`, `waterfox`
-    (built from `pkgs/nordpass/` and `pkgs/waterfox/`);
-  - **pins specific packages to `nixpkgs-unstable`**: `waybar`, `swww`, `slack`,
-    `steam`, `go`, `dunst`, `_1password-gui`, `nwg-look`, etc. — so those follow
-    bleeding-edge while the rest of the system tracks the main `nixpkgs`.
-
-This overlaid `pkgs` is then **passed by hand** into the builder
-(`inherit pkgs`). That's why every module downstream sees the same package set
-with the same overlays — they don't each re-import nixpkgs.
+This overlaid `pkgs` is **passed by hand** into the builder (`inherit pkgs`), so
+every module sees the same package set — they don't each re-import nixpkgs.
 
 ### Step 4 — `mkSys` assembles the module list
 
-`lib/mksys.nix` is short and worth reading in full:
+`lib/mksys.nix` (abridged):
 
 ```nix
 name: { pkgs, nixpkgs, lib, home-manager, system, user, hyprland, xremap-flake }:
@@ -224,29 +215,26 @@ overlays and applies only inside this system.
 ### Step 6 — Nix builds the toplevel
 
 The merged config has an attribute `config.system.build.toplevel`. Nix
-**realises** it: it builds (or downloads from a binary cache) every store path
-needed — the kernel, every package, generated config files under `/etc`, systemd
-units — and produces one top-level store path representing the whole system. This
-is the step that can take a while and print lots of `building '/nix/store/…'`
-lines. If anything fails to build, nothing is activated and your current system is
-untouched.
+**realises** it — builds or downloads every store path needed (kernel, packages,
+generated `/etc` files, systemd units) — and links it as `./result`. If anything
+fails to build, nothing is activated and your current system is untouched.
 
 ### Step 7 — Activation
 
-Once the toplevel is built, `nixos-rebuild switch` runs its **activation script**:
+Once the toplevel is built, the two `sudo` lines activate it:
 
-1. Repoints `/run/current-system` at the new store path (this is the atomic
-   switch — a new **generation**).
-2. Writes a new **systemd-boot** entry (bootloader config comes from
-   `boot.loader.systemd-boot.enable = true` in `nixos.nix`).
-3. Reloads/restarts changed **systemd services** — e.g. if you changed the
-   PipeWire or docker config, those units restart now.
-4. Runs the **home-manager activation** for user `mattias` (because home-manager
-   is wired in as a NixOS module via `home-manager.nixosModules.home-manager`).
-   This is what writes/updates the user's dotfiles and per-user profile.
+1. `nix-env -p /nix/var/nix/profiles/system --set ./result` records a new
+   **generation** of the system profile (what rollback and the boot menu use).
+2. `switch-to-configuration switch` then:
+   - repoints `/run/current-system` at the new store path (the atomic switch);
+   - writes a new **systemd-boot** entry (`boot.loader.systemd-boot.enable` in
+     `nixos.nix`);
+   - reloads/restarts changed **systemd services** (e.g. PipeWire, docker);
+   - runs the **home-manager activation** for `mattias` (home-manager is wired
+     in as a NixOS module), writing dotfiles and the per-user profile.
 
-After this, most system changes are live immediately. Changes that only apply at
-login or boot (your Hyprland session, kernel params) take effect next time.
+Most changes are live immediately; login/boot-time ones (the Hyprland session,
+kernel params) take effect next time.
 
 ### Step 8 — Boot and login: how the desktop actually starts
 
@@ -285,28 +273,29 @@ Two subtle points:
 ## Part 4 — How home-manager plugs in
 
 **NixOS** manages the system (services, users, kernel). **home-manager** manages a
-user's `$HOME` (dotfiles, per-user packages, shell). In this repo home-manager
-runs *inside* NixOS as a module, so a single `make switch` applies both.
+user's `$HOME` (dotfiles, per-user packages, shell). Here home-manager runs
+*inside* NixOS as a module, so one `make switch` applies both.
 
-`users/default/home-manager.nix` is the profile. Its cleverness is that the
-**same file serves both NixOS and macOS**, gated by platform:
+`users/default/home-manager.nix` is the profile, and the **same file serves both
+NixOS and macOS**, gated by platform (abridged):
 
 ```nix
 imports = [
   # --- shared on every platform ---
   ../../modules/shell/git.nix
   ../../modules/shell/zsh.nix
+  ../../modules/shell/direnv-hm.nix
+  # ../../modules/editors/nvim/nvim.nix   (currently disabled)
   ../../modules/archive-downloads/archive-downloads.nix
+  ../../pkgs/default.nix               # → core.nix + dev.nix + kube.nix
   ../../darwin/modules/kitty/kitty.nix
   ../../darwin/modules/ghostty/ghostty.nix
-  ../../pkgs/default.nix               # → core.nix + dev.nix + kube.nix
 ]
-++ lib.optionals pkgs.stdenv.isDarwin [
-  ../../darwin/modules/sketchybar/sketchybar.nix
-  ../../darwin/modules/yabai/yabai.nix
-  ../../pkgs/macos.nix                 # colima, lima
+++ lib.optionals pkgs.stdenv.hostPlatform.isDarwin [
+  # sketchybar, yabai, skhd, vscode, claude-code-bootstrap, …
+  ../../pkgs/macos.nix                 # colima, lima, docker plugins
 ]
-++ lib.optionals pkgs.stdenv.isLinux [
+++ lib.optionals pkgs.stdenv.hostPlatform.isLinux [
   ../../modules/desktop/hyprland/home.nix
   ../../modules/desktop/hyprland/extras.nix
   ../../modules/desktop/dunst/dunst.nix
@@ -337,17 +326,20 @@ They're imported as home-manager modules that each *contribute to*
 - `pkgs/nixos.nix` — **Linux GUI apps installed via Nix** (spotify, slack,
   1password-gui, chrome, nordpass, waterfox…)
 
-> Note the difference from macOS: on Linux, GUI apps are installed **declaratively
-> via Nix** (`pkgs/nixos.nix`). On macOS the same apps come from **Homebrew
-> casks** in `darwin/configuration.nix`.
+On macOS the same GUI apps come from **Homebrew casks** in
+`darwin/configuration.nix` instead.
+
+> **Known issue:** `pkgs/nixos.nix` still lists `waterfox`, but the flake no
+> longer has an overlay providing it (the derivation in `pkgs/waterfox/` isn't
+> wired in) and nixpkgs has no `waterfox` attribute, so the desktop evaluation
+> fails until that's fixed. `nordpass` now resolves from nixpkgs.
 
 ---
 
 ## Part 5 — Anatomy of a single module (`modules/shell/zsh.nix`)
 
-To make "a module contributes options" concrete, here's what one real module
-does. `modules/shell/zsh.nix` configures zsh **and** demonstrates two patterns
-you'll see across the repo:
+`modules/shell/zsh.nix` (abridged) configures zsh and shows two patterns used
+across the repo:
 
 ```nix
 { config, pkgs, ... }:
@@ -387,19 +379,21 @@ Two techniques worth knowing:
 
 ## Part 6 — Overlays and the unstable pin (why some packages are newer)
 
-You'll see the same package name in several places; here's the precedence:
+The same package can be touched in several places; precedence:
 
-1. **Base `nixpkgs`** (pinned to `nixos-unstable` in `flake.nix` inputs) — the
-   default source for most packages.
-2. **Flake-level overlay** (in `flake.nix`) — adds `nordpass`/`waterfox` and
-   **repoints** a handful of packages (`waybar`, `swww`, `slack`, `steam`, `go`,
-   …) at `nixpkgs-unstable.legacyPackages`. This is how you keep *those specific*
-   packages bleeding-edge without moving everything.
-3. **In-system overlay** (in `users/default/nixos.nix`) — rebuilds `waybar` again
-   with `-Dexperimental=true` to enable extra features.
+1. **Base `nixpkgs`** (`nixos-unstable` in the `flake.nix` inputs) — the default
+   source.
+2. **Flake-level overlays** (in `flake.nix`, applied to the shared x86_64 `pkgs`):
+   - **repoint** a handful of packages (`waybar`, `swww`, `_1password-gui`,
+     `dunst`, `slack`, `nwg-look`, `cartridges`, `steam`, `lutris`,
+     `looking-glass`, `go`) at `nixpkgs-unstable.legacyPackages`. Both inputs
+     currently track `nixos-unstable`, so this pin only matters when their
+     locked revisions differ;
+   - override `onnxruntime` with `openvinoSupport = false` (Immich ML on polaris).
+3. **In-system overlay** (in `users/default/nixos.nix`) — rebuilds `waybar` with
+   `-Dexperimental=true`.
 
-If you ever wonder "why is my waybar different from stock nixpkgs?", it's these
-two overlays stacking.
+Darwin and `server-arm64` / `polaris-vm` import nixpkgs without these overlays.
 
 ---
 
@@ -412,13 +406,13 @@ two overlays stacking.
 | Change a Hyprland keybind | Edit `modules/desktop/hyprland/home.nix`, `make switch`, restart session |
 | Enable a system service | Add `services.foo.enable = true;` to `users/default/nixos.nix` |
 | Add a whole new host | Create `hardware/<name>.nix` + `machines/<name>.nix`, add a builder call in `flake.nix` |
-| Try a build without activating | `make build-server`, or `nixos-rebuild build --flake .#desktop --impure` |
-| Roll back a bad change | Reboot and pick the previous generation in systemd-boot, or `nixos-rebuild switch --rollback` |
+| Try a build without activating | `nix build .#nixosConfigurations.desktop.config.system.build.toplevel --impure` (`make build-server` does the same for `server`) |
+| Roll back a bad change | Reboot and pick the previous generation in systemd-boot, or `sudo nixos-rebuild switch --rollback` |
 | Update all packages | `make update` (runs `nix flake update`) then `make switch` |
 
-**There is no test suite, linter, or CI.** "Verification" means a successful
-`nixos-rebuild build`/`switch`. If it builds and activates, it's correct by
-construction.
+**There is no linter or CI.** Verification means a successful build/switch.
+(The only flake check is `checks.x86_64-linux.polaris-zfs`, a VM test of the
+polaris ZFS pool script.)
 
 ---
 
@@ -437,8 +431,8 @@ Same flake, same module library, different glue:
 | Containers | docker + libvirt/KVM | docker | colima/lima VM |
 | Apply command | `make switch NIXNAME=desktop` | `make switch NIXNAME=server` | `make switch NIXNAME=macbook-m1` |
 
-`machines/shared.nix` is imported by **all** of them (including Darwin), which is
-why nix GC and flake settings are consistent everywhere.
+`machines/shared.nix` is imported by **all** of them (including Darwin), so nix
+GC and flake settings are consistent everywhere.
 
 ---
 
@@ -460,11 +454,10 @@ why nix GC and flake settings are consistent everywhere.
   `/run/current-system`; selectable at boot for rollback.
 - **toplevel** — `config.system.build.toplevel`, the single store path
   representing the entire built system.
-- **Activation** — the script that switches the running system to a new
-  generation (symlink, bootloader, systemd, home-manager).
+- **Activation** — `switch-to-configuration`, which switches the running system
+  to a new generation (symlink, bootloader, systemd, home-manager).
 
 ---
 
-*Generated as a reading aid for this repo. The authoritative source is always the
-`.nix` files themselves — when in doubt, follow the `imports` chain starting at
-`flake.nix`.*
+*A reading aid; the `.nix` files are authoritative — when in doubt, follow the
+`imports` chain from `flake.nix`.*

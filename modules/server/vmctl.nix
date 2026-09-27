@@ -4,17 +4,14 @@
 # not thread flake inputs into modules).
 { pkgs, lib, config, vmctlPackages, ... }:
 let
-  vmRoot = "/srv/scratch/vms"; # scratch pool native mountpoint (confirm on-host)
+  vmRoot = "/srv/scratch/vms"; # on the scratch pool (mountpoint /srv/scratch)
   nixosBase = "${vmctlPackages.nixos-base}/nixos.qcow2";
-  # Ubuntu 24.04 LTS cloud image — pin URL + sha256 (fill sha on first fetch).
+  # Ubuntu 24.04 LTS cloud image (docs/polaris/vmctl-runbook.md A.4 pins the sha).
   ubuntuURL = "https://cloud-images.ubuntu.com/releases/24.04/release/ubuntu-24.04-server-cloudimg-amd64.img";
   ubuntuSHA = ""; # TODO(on-host): set to the pinned image's sha256
-  # NOTE(on-host risk): vmctlPackages.vmctl is already wrapped (PATH deps) by
-  # its own flake. Chaining another wrapProgram over it here via symlinkJoin
-  # should work (wrapper scripts compose), but this hasn't been verified on a
-  # real nix build. If VMCTL_* env vars don't take effect at runtime, this is
-  # the first place to look — check `cat $(which vmctl)` on-host to confirm
-  # both wrapper layers are present and the --set flags survived.
+  # vmctlPackages.vmctl is already wrapped (PATH deps) by its own flake; this
+  # adds a second wrapProgram layer for the VMCTL_* env. If those vars don't
+  # take effect, check `cat $(which vmctl)` for both layers (runbook B.8).
   vmctlWrapped = pkgs.symlinkJoin {
     name = "vmctl-wrapped";
     paths = [ vmctlPackages.vmctl ];

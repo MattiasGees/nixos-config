@@ -1,11 +1,7 @@
 #
-# Direnv
+# Direnv (NixOS system-level variant)
 #
-# create a shell.nix
-# create a .envrc and add use nix shell.nix
-# direnv allow
-# add direnv package to emacs
-# add 'eval "$(direnv hook zsh)"' to .zshrc (and same for bash)
+# Not currently imported; home-manager profiles use ./direnv-hm.nix instead.
 #
 
 { config, lib, pkgs, ... }:

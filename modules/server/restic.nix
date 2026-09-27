@@ -1,28 +1,18 @@
-# Offsite backup of the irreplaceable data on polaris: the whole /srv/data
-# dataset, swept in one pass. That covers the Immich photo/video library and
-# its own built-in DB dumps (/srv/data/immich/backups/), the cluster-wide
-# pg_dumpall (/srv/data/postgres-backup/, see modules/server/postgresql.nix),
-# and any future tenant that stores its data under /srv/data — each rides this
-# same sweep offsite for free, with no per-service wiring here.
+# Offsite backup (Hetzner object storage) of polaris' irreplaceable data. One
+# sweep covers everything under /srv/data (Immich library + its built-in DB
+# dumps, the cluster pg_dumpall, filebrowser files, …) and /srv/fast/appdata,
+# so new tenants storing there are covered with no wiring here.
 #
-# Ordering: the nightly dumps land before restic runs — ~02:00 Immich dump →
-# 02:30 pg_dumpall → 03:00 restic — so restic always sweeps fresh dumps rather
-# than racing them. Confirm in Immich → Admin → Settings → Backup that its
-# built-in dump stays enabled — restic has no opinion on the DB itself, it
-# just backs up whatever dump is on disk when it runs.
+# Ordering: nightly dumps land first — ~02:00 Immich, 02:30 pg_dumpall, 02:45
+# karakeep SQLite — then restic at 03:00. Restic only copies whatever dump is
+# on disk, so keep Immich's built-in DB backup enabled (Admin → Settings →
+# Backup).
 #
-# Excludes: `thumbs/` and `encoded-video/` are derived from the originals —
-# Immich regenerates both on demand — so skipping them keeps the offsite copy
-# to the irreplaceable `library/`, `upload/`, `profile/`, and `backups/`
-# (roughly halving size/egress against Hetzner).
+# Excludes: Immich's thumbs/ and encoded-video/ are regenerated on demand from
+# the originals; skipping them roughly halves size/egress.
 #
-# `Persistent = true`: if polaris is off at 03:00, the missed run fires at
-# next boot instead of silently being skipped until the following day.
-#
-# Secrets: `passwordFile` and `environmentFile` below are rendered at deploy
-# time by op-secrets from op://polaris/restic/* and op://polaris/restic-backend/*
-# in 1Password — see modules/server/op-secrets.nix; this module only ever
-# references their rendered paths.
+# Secrets are rendered by op-secrets from op://polaris/restic/* and
+# op://polaris/restic-backend/*.
 { ... }:
 {
   opSecrets.restic-repo = {
@@ -40,13 +30,10 @@
     repository = "s3:https://nbg1.your-objectstorage.com/backups-polaris";
     passwordFile = "/var/lib/secrets/restic-repo.pass";
     environmentFile = "/var/lib/secrets/restic-backend.env";
-    # /srv/data = the irreplaceable data dataset (Immich + DB dumps + any tenant
-    # storing under it). /srv/fast/appdata = every service's config/SQLite DB on
-    # the fast mirror (the *arr stack, bazarr, plex, karakeep, …) — small, awkward
-    # to recreate by hand, so it rides the same offsite sweep. NOTE: those app DBs
-    # are copied live; the only one with a point-in-time-consistent export is
-    # karakeep (its 02:45 .backup/.dump in modules/services/karakeep.nix). Adding
-    # per-app SQLite dumps for the *arr stack is a possible future improvement.
+    # /srv/fast/appdata = per-service config/SQLite (the *arrs, plex, karakeep,
+    # outline, …): small but tedious to recreate. NOTE: those DBs are copied
+    # live; only karakeep has a consistent export (karakeep.nix). Per-app
+    # SQLite dumps for the *arr stack would be a possible improvement.
     paths = [ "/srv/data" "/srv/fast/appdata" ];
     exclude = [
       "/srv/data/immich/thumbs"
@@ -56,7 +43,7 @@
     pruneOpts = [ "--keep-daily 7" "--keep-weekly 4" "--keep-monthly 6" ];
     timerConfig = {
       OnCalendar = "03:00";
-      Persistent = true;
+      Persistent = true; # run at next boot if polaris was off at 03:00
     };
   };
 }

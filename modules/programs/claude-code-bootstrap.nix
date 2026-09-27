@@ -6,9 +6,8 @@
 # Claude Code owns its own config files, so we can't manage plugins/marketplaces
 # /MCP with read-only Nix symlinks (they break Claude Code's own writes).
 # Instead we drive Claude Code's own CLI, which persists the changes. This
-# home-manager activation entry
-# just runs that script for you as part of `make switch`, so a new machine sets
-# itself up without a manual step.
+# home-manager activation entry runs that script as part of `make switch`, so a
+# new machine sets itself up without a manual step.
 #
 # It runs at most once per script version: the marker is keyed to the script's
 # store hash, so editing bootstrap-claude-code.sh (e.g. adding a plugin)

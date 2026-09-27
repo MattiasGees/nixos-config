@@ -1,10 +1,10 @@
 # op-secrets — render 1Password-backed secrets onto the host at deploy time.
 #
-# Each service declares `opSecrets.<name>` with a git-committed `.env.tpl`
-# template (holding only `{{ op://vault/item/field }}` references) and an output
+# Each service declares `opSecrets.<name>` with a git-committed `.tpl` template
+# (plain text around `{{ op://vault/item/field }}` references) and an output
 # path under /var/lib/secrets. A single service-account token at /etc/op/token
-# unlocks 1Password; `op inject` renders each template during `nixos-rebuild
-# switch`. Rendering is atomic (temp + mv) and last-good-preserving: any failure
+# unlocks 1Password; `op inject` renders each template on every switch and at
+# boot. Rendering is atomic (temp + mv) and last-good-preserving: any failure
 # (no token, 1P unreachable, timeout, bad reference) warns and leaves the
 # existing file untouched, so a deploy or boot never blocks on 1Password.
 #
@@ -71,18 +71,14 @@ in
 
     environment.systemPackages = [ pkgs._1password-cli ];
 
-    # Runs during nixos-rebuild switch (and boot activation). deps = [ "users" ]
-    # so the file owners exist before chown (the "users" script creates users
-    # and groups). The dir is created here (not via tmpfiles) to avoid
-    # activation-ordering races on a fresh switch.
+    # deps = [ "users" ] so file owners exist before the chown. The dir is
+    # created here, not via tmpfiles, to avoid activation-ordering races on a
+    # fresh switch.
     #
-    # Mode 0711 (not 0700): most consumers read their secret via systemd
-    # (EnvironmentFile / LoadCredential), which runs as root and doesn't care.
-    # Outline is the exception — it reads secretKeyFile/utilsSecretFile/etc.
-    # directly in its service script running as the unprivileged `outline` user,
-    # so that user must be able to *traverse* this dir to reach the 0600 file it
-    # owns. 0711 grants traverse (o+x) without listing (no o+r), and the files
-    # themselves stay 0600 owner-only — so nothing here becomes world-readable.
+    # Mode 0711, not 0700: most consumers read secrets via systemd
+    # (EnvironmentFile / LoadCredential) as root, but Outline reads its files
+    # directly as the unprivileged `outline` user, so it needs traverse (o+x).
+    # No o+r means no listing, and the files themselves stay 0600.
     system.activationScripts.opSecrets = {
       deps = [ "users" ];
       text = ''

@@ -7,11 +7,10 @@
 #   - the hetzner kubectl context active (`kubectl get pods -n miniflux` works)
 #   - SSH access to polaris ($POLARIS_HOST)
 #
-# Prerequisites (must be done first — see design doc §6):
-#   1. /etc/miniflux/admin.env placed on polaris (design doc §7).
-#   2. `make switch NIXNAME=polaris` deployed — miniflux is up (empty) on polaris.
+# Prerequisite: `make switch NIXNAME=polaris` deployed with the op-secrets token
+# in place (renders the admin credentials) — miniflux is up (empty) on polaris.
 #
-# Flow: count source -> scale k8s to 0 -> pg_dump (custom fmt) streamed to
+# Flow: scale k8s to 0 -> count source -> pg_dump (custom fmt) streamed to
 #       /tmp/miniflux.dump on polaris -> stop/drop/create/restore/start ->
 #       re-count -> PASS/FAIL on row-count equality.
 #

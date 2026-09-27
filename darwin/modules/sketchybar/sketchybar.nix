@@ -6,6 +6,7 @@ let
 in
 
 {
-  # Config and widgets ------------------------------------------------------------------------- {{{
+  # Out-of-store symlink: edits under ./config apply without a rebuild, but the
+  # repo must be checked out at ~/Documents/git/nixos-config.
   xdg.configFile."sketchybar".source = mkOutOfStoreSymlink "${nixConfigDir}/darwin/modules/sketchybar/config";
 }

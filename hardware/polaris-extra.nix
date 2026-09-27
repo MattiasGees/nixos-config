@@ -1,15 +1,12 @@
-# Hand-maintained polaris hardware config that must SURVIVE regenerating
-# hardware/polaris.nix. Wired in via flake.nix `extraModules` (NOT imported by
-# hardware/polaris.nix or machines/polaris.nix), so:
-#   - hardware/polaris.nix stays pure nixos-generate-config output (overwrite it
-#     wholesale — see docs/polaris/setup.md Part 1), and
-#   - the aarch64 polaris-vm variant does NOT inherit any of this (the NVIDIA
-#     driver and real ZFS pools don't belong on a throwaway aarch64 VM).
+# Hand-maintained polaris hardware config. Wired in via flake.nix
+# `extraModules` (not imported by hardware/ or machines/polaris.nix) so that:
+#   - hardware/polaris.nix stays pure nixos-generate-config output and can be
+#     overwritten wholesale (docs/polaris/setup.md Part 1), and
+#   - the aarch64 polaris-vm doesn't inherit the NVIDIA driver or real pools.
 { lib, ... }:
 {
   imports = [
-    # NVIDIA RTX 3080 driver (host-side NVENC/CUDA). x86_64-only — which is
-    # exactly why it lives here and not in machines/polaris.nix.
+    # NVIDIA RTX 3080 driver (x86_64-only, hence here).
     ../modules/server/nvidia.nix
   ];
 
@@ -17,22 +14,19 @@
   #   head -c4 /dev/urandom | od -An -tx4 | tr -d ' '
   networking.hostId = "8207d6f3";
 
-  # Import the manually-created pools BY NAME (stable across reinstalls — you
-  # never recreate them). ZFS mounts their datasets at the /srv native
-  # mountpoints stored in the pool.
+  # Import the pools by name (stable across reinstalls). Datasets mount at the
+  # /srv mountpoints stored in the pools themselves.
   boot.zfs.extraPools = [ "tank" "fast" "scratch" ];
 
-  # Encrypted swap: a fresh random key each boot means no stable filesystem UUID,
-  # so reference the partition by its GPT partlabel. This merges with the
-  # `swapDevices = [ ]` that generate-config writes into hardware/polaris.nix.
+  # Encrypted swap: a fresh random key each boot means no stable filesystem
+  # UUID, so reference the GPT partlabel. Merges with generate-config's
+  # `swapDevices = [ ]`.
   swapDevices = [
     { device = "/dev/disk/by-partlabel/swap"; randomEncryption.enable = true; }
   ];
 
   # Lock down the ESP so systemd-boot's random-seed isn't world-readable.
-  # mkForce REPLACES generate-config's `fmask=0022 dmask=0022` (0755 = world
-  # readable) rather than merging with it — a merge would produce contradictory,
-  # order-dependent mount options. Kept here so it survives regenerating
-  # hardware/polaris.nix.
+  # mkForce REPLACES generate-config's world-readable `fmask=0022 dmask=0022`;
+  # merging would yield contradictory, order-dependent mount options.
   fileSystems."/boot".options = lib.mkForce [ "umask=0077" ];
 }

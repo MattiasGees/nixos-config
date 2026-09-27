@@ -1,15 +1,4 @@
-#
-#  Hardware
-#
-#  flake.nix
-#   ├─ ./hosts
-#   │   └─ ./<host>
-#   │       └─ default.nix
-#   └─ ./modules
-#       └─ ./hardware
-#           └─ default.nix *
-#               └─ ...
-#
+# Legacy list of hardware modules; not imported anywhere.
 [
   ./bluetooth.nix
 ]

@@ -4,9 +4,7 @@
 # dnsproxy DoH forwarder so upstream resolution leaves over 443 (DoH) instead of
 # plaintext :53, which the ISP transparently intercepts.
 #
-# Pi-hole is not packaged in nixpkgs (it's an FTL + lighttpd + PHP installer
-# bundle), so it runs as a container via virtualisation.oci-containers on the
-# Docker backend modules/server/virtualisation.nix already enables.
+# Pi-hole isn't packaged in nixpkgs, so it runs via oci-containers on Docker.
 #
 # Networking: BOTH containers use host networking, exactly like the Pi. A Docker
 # bridge would SNAT inbound queries to the docker0 gateway, so Pi-hole would log
@@ -20,9 +18,8 @@
 # the Ansible repo either). Only the DoH upstreams, forwarder wiring and admin
 # password are declared here.
 #
-# Secret: the web/API admin password is rendered from op://polaris/pihole by
-# op-secrets to /var/lib/secrets/pihole.env and fed in as an env-file. Reuses the
-# Pi's existing password value.
+# Secret: the web/API admin password (same value as the Pi's) is rendered by
+# op-secrets and passed as an env-file.
 { ... }:
 let
   # DoH upstreams, mirrored from roles/dnsproxy: Cloudflare + Google, IP-literal
@@ -41,8 +38,8 @@ in
     owner = "root";
   };
 
-  # Docker, not the NixOS-default podman — matches virtualisation.docker.enable
-  # in modules/server/virtualisation.nix. polaris is the only oci-containers user.
+  # Docker, not the NixOS-default podman, matching virtualisation.nix.
+  # filebrowser.nix sets the same value with mkDefault.
   virtualisation.oci-containers.backend = "docker";
 
   virtualisation.oci-containers.containers = {
@@ -77,9 +74,9 @@ in
     };
   };
 
-  # Persisted state dirs (gravity DB + dnsmasq config). Docker would auto-create
-  # the bind-mount sources, but declaring them keeps it reproducible and in-repo
-  # (same pattern as plex.nix/immich.nix).
+  # Persisted state (gravity DB + dnsmasq config). Docker would auto-create
+  # these, but declaring them keeps it reproducible. On the OS disk, so not
+  # backed up by restic.
   systemd.tmpfiles.rules = [
     "d /var/lib/pihole 0755 root root - -"
     "d /var/lib/pihole/pihole 0755 root root - -"

@@ -1,14 +1,4 @@
-#
-#  Editors
-#
-#  flake.nix
-#   ├─ ./hosts
-#   │   └─ ./home.nix
-#   └─ ./modules
-#       └─ ./services
-#           └─ default.nix *
-#               └─ ...
-#
+# Legacy list of editor modules; not imported anywhere.
 
 [
   ./nvim

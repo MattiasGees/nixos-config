@@ -10,8 +10,8 @@
     ../modules/server/data-nfs-backup.nix
     ../modules/server/mattias-nfs.nix
     ../modules/server/op-secrets.nix
-    # NVIDIA lives in hardware/polaris-extra.nix (x86_64-only; the aarch64
-    # polaris-vm variant inherits this file, so it must stay driver-free).
+    # No nvidia.nix here: polaris-vm (aarch64) inherits this file, so the
+    # driver is wired via hardware/polaris-extra.nix instead.
     ../modules/media/common.nix
     ../modules/media/plex.nix
     ../modules/media/sonarr.nix
@@ -34,35 +34,33 @@
 
   networking.hostName = "polaris";
 
-  # Stable kernel (NOT linuxPackages_latest — keep ZFS compatibility).
+  # Stable kernel, not linuxPackages_latest: ZFS often lags the newest kernel.
   boot.kernelPackages = pkgs.linuxPackages;
   boot.loader.systemd-boot.enable = true;
   boot.loader.efi.canTouchEfiVariables = true;
 
   # IOMMU passthrough mode, ready for future GPU passthrough. IOMMU itself is
-  # enabled by the BIOS + AMD kernel default — `amd_iommu=on` is NOT a valid
-  # option ("AMD-Vi: Unknown option - 'on'" in dmesg), so we only set iommu=pt.
+  # on via BIOS + the AMD kernel default; `amd_iommu=on` is NOT a valid option
+  # ("AMD-Vi: Unknown option - 'on'" in dmesg), so only iommu=pt is set.
   boot.kernelParams = [ "iommu=pt" ];
 
-  # Static IP on enp6s0 (confirmed via `ip -o link` on this machine).
-  # nixos-server.nix enables NetworkManager; disable it here so it doesn't
-  # fight the declarative static interface config below.
+  # Static networking. nixos-server.nix enables NetworkManager; force it off so
+  # it doesn't fight the declarative config below.
   networking.networkmanager.enable = lib.mkForce false;
   networking.useDHCP = lib.mkDefault false;
-  # Bridge enp6s0 so KVM guests (vmctl) get first-class LAN addresses. The
-  # host's static IP moves onto br0; enp6s0 becomes a bridge port with no IP.
+  # Bridge the NIC (enp6s0) so KVM guests (vmctl) get first-class LAN
+  # addresses: the host's static IP lives on br0, enp6s0 is an IP-less port.
   networking.bridges.br0.interfaces = [ "enp6s0" ];
   networking.interfaces.br0.ipv4.addresses = [
     { address = "192.168.1.50"; prefixLength = 24; }
   ];
   networking.defaultGateway = "192.168.1.1";
-  # Resolve via 192.168.1.86 with Google DNS (8.8.8.8) as fallback. The router
-  # (192.168.1.1) was returning SERVFAIL for some public domains, which silently
-  # broke Karakeep's crawler (ESERVFAIL -> "Failed to resolve hostname").
-  # resolv.conf tries these in order.
+  # Pi-hole on the Pi first, Google as fallback (tried in order). Not the
+  # router: it returned SERVFAIL for some public domains, which silently broke
+  # Karakeep's crawler ("Failed to resolve hostname").
   networking.nameservers = [ "192.168.1.86" "8.8.8.8" ];
 
-  # SSH: key-only. Keys from github.com/mattiasgees.keys (2x ecdsa, 2x ed25519).
+  # SSH: key-only. Keys from github.com/mattiasgees.keys.
   users.users.mattias.openssh.authorizedKeys.keys = [
     "ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBKkdI6stPG4bOv3p72OsEDxs9o3jrg3Lacsook0VGkzaUcDYC2jXE4gvJtfP7UwTmVxsRJD4YJ8NGxuuRustJh0="
     "ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBFtGUiGsLHfTl/Jb5TvKK7ReZ+qa6eT8+Jd3ZbKyE+nYstbN1ZKimi8ojjlrR+NREqV4J3aG8K0e1Pmi2MfkpSk="
@@ -75,8 +73,7 @@
   # same bootstrap the Mac uses (claude-code itself comes from pkgs/dev.nix).
   home-manager.users.mattias.imports = [ ../modules/programs/claude-code-bootstrap.nix ];
 
-  # Ship terminfo for common terminals (kitty, alacritty, foot, wezterm, …) so
-  # SSHing in doesn't error with "can't find terminal definition for
-  # xterm-kitty" and TUIs render correctly.
+  # Terminfo for kitty/alacritty/foot/wezterm/… so SSH sessions from those
+  # terminals don't fail with "can't find terminal definition for xterm-kitty".
   environment.enableAllTerminfo = true;
 }

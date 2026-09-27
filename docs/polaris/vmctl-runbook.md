@@ -1,59 +1,42 @@
 # vmctl on-host runbook (polaris)
 
-Purpose: install and verify `vmctl` on polaris — the `vmctl` flake input,
-`modules/server/vmctl.nix`, and the polaris `extraModules` wiring — none of
-which could be nix-built in the authoring environment (no `nix` there). This is
-the ordered, copy-pasteable checklist to run **on polaris** to build it, apply
-it, and verify the things static review could not: the double-wrapped `vmctl`
+Purpose: verify `vmctl` on polaris — the `vmctl` flake input,
+`modules/server/vmctl.nix`, and the polaris `extraModules` wiring in `flake.nix`
+— and run the on-host checks static review couldn't: the double-wrapped `vmctl`
 binary and full VM lifecycle against real KVM.
 
-## Deployment order — TWO PRs (bridge is separate)
+**Current state:** the `br0` bridge (`machines/polaris.nix`) and the `vmctl`
+module are both in the polaris config and the `vmctl` input is locked in
+`flake.lock`. Still open: `ubuntuSHA` in `modules/server/vmctl.nix` is `""`
+(**A.4**). Steps marked *(done)* are kept for a from-scratch redeploy.
 
-The `br0` bridge is deliberately split into its **own** PR (branch
-`feat/polaris-br0`) so you can deploy the bridge and smoke-test `vmctl`
-**before** installing it declaratively. Do it in this order:
+The `vmctl` input is a **private** repo fetched over
+`git+ssh://git@github.com/MattiasGees/vmctl?ref=main`. Build as your user (with
+GitHub SSH access), never with `sudo nixos-rebuild` — see
+[updating.md](updating.md).
 
-1. **Deploy the bridge PR first** (`feat/polaris-br0`) — it converts the static
-   IP on `enp6s0` into `br0`. This is the network-risky change; apply it with a
-   **console session** and verify connectivity (that PR has its own steps; the
-   `br0` verification checks are also in **C.9a** below).
-2. **Smoke-test `vmctl` manually** against the now-live bridge, WITHOUT the
-   NixOS module (**C.9b**) — build/run the binary and set the `VMCTL_*` env by
-   hand.
-3. **Only then merge + apply THIS PR** to install `vmctl` declaratively
-   (**C.9c**), and run the full tier-5 E2E (**D**).
-
-Run the sections in order (A → E). The bridge cutover (its own PR) and the
-manual smoke test (C.9b) both require a console session — do not skip A.1.
+Run the sections in order (A → E).
 
 ---
 
 ## A. Pre-flight (before building)
 
-**A.1 — Get an out-of-band session to polaris.**
-Open an IPMI/iDRAC/iLO console session, or sit at the physical machine. Do not
-proceed past section C over SSH-only access — the `br0` bridge change in
-`machines/polaris.nix` moves the host's static IP off `enp6s0` and onto the
-new bridge, and if that goes wrong you need a way in that isn't the network
-interface being changed.
+**A.1 — Get an out-of-band session to polaris (only for network changes).**
+Open an IPMI/iDRAC/iLO console session, or sit at the physical machine, before
+any change to the `br0` bridge in `machines/polaris.nix` — it carries the host's
+static IP, and if a change goes wrong you need a way in that isn't the interface
+being changed. Pure `vmctl` checks can run over SSH.
 
 *Good:* you have a console prompt open and can see boot/systemd output
 independent of the SSH session.
 
-**A.2 — Update the `flake.lock` for the `vmctl` input.**
-The input already points at `github:MattiasGees/vmctl` (vmctl PR #1 is merged to
-`main`, which carries the flake — with `proxyVendor` and a real `vendorHash`, so
-there's no hash to fill anymore). The lock just needs the `vmctl` node, which was
-not committed from the authoring environment (no `nix` there):
+**A.2 — (done) Lock the `vmctl` input.**
+`flake.lock` has a `vmctl` node. To pull a newer `vmctl` later:
 
 ```bash
-nix flake lock --update-input vmctl
-git add flake.lock && git commit -m "flake.lock: lock vmctl input"
+nix flake update vmctl
+git add flake.lock && git commit -m "flake.lock: update vmctl"
 ```
-
-*Good:* `flake.lock` gains a `vmctl` node (a `narHash` for the `main` commit).
-The `nix build .#vmctl` upstream already passes, so **B.6** won't fail on the
-vendor hash.
 
 **A.3 — Confirm the scratch mountpoint.**
 
@@ -168,44 +151,41 @@ this is the first thing to fix before touching real VMs.
 
 ---
 
-## C. Install vmctl (bridge already deployed via its own PR)
+## C. Bridge + install checks
 
-The `br0` bridge is deployed + verified via the separate bridge PR
-(`feat/polaris-br0`) — do that first, with a console session. This section
-confirms the bridge is live, smoke-tests `vmctl` by hand, then installs the
-module. Keep the console session from A.1 for C.9a.
+Confirms the bridge is healthy, optionally smoke-tests `vmctl` without the
+module, then confirms the declarative install.
 
-**C.9a — Confirm the `br0` bridge is live** (from the bridge PR).
+**C.9a — Confirm the `br0` bridge is live.**
 
-From the **console**:
+From the **console** (or SSH, if the host is already reachable):
 
 ```bash
 ip -o addr show br0        # expect 192.168.1.50/24
 ip -o addr show enp6s0     # expect NO inet address, but present as bridge member
 bridge link show           # enp6s0 should show master br0
 ip route                   # default via 192.168.1.1 should be present
-resolvectl status || cat /etc/resolv.conf   # DNS resolves via 192.168.1.1
+cat /etc/resolv.conf       # nameservers 192.168.1.86, then 8.8.8.8
 ssh mattias@192.168.1.50 -o ConnectTimeout=5 true   # from another machine
 cat /proc/sys/net/ipv4/conf/br0/rp_filter           # not strict (1) for bridged guests
 ```
 
-If the bridge PR's cutover went wrong (no IP on `br0`, no default route, SSH
-unreachable), fix that in the bridge PR before continuing — do not proceed to
-vmctl until the host's own networking is healthy.
+If the host's own networking is unhealthy (no IP on `br0`, no default route, SSH
+unreachable), fix that from the console before continuing.
 
 *Good:* `br0` carries `192.168.1.50/24`, `enp6s0` is a member with no IP,
 default route + DNS work, SSH reachable.
 
-**C.9b — Smoke-test `vmctl` manually, BEFORE installing the module.**
+**C.9b — (optional) Smoke-test `vmctl` without the module.**
 
-With the bridge live, run `vmctl` straight from the flake (no NixOS module yet)
-— this is the "test before install" step. The flake package wraps
+Run `vmctl` straight from its flake, bypassing the NixOS module — useful when
+testing an unreleased `vmctl` change. The flake package wraps
 `virsh`/`virt-install`/`qemu-img`/`cloud-localds` onto PATH, and most `VMCTL_*`
 now default sensibly (bridge `br0`, gateway/DNS derived from the IP, Ubuntu
 image + your SSH keys), so you only override where you want a non-default:
 
 ```bash
-VMCTL=github:MattiasGees/vmctl
+VMCTL='git+ssh://git@github.com/MattiasGees/vmctl?ref=main'
 nix run $VMCTL#vmctl -- --help
 
 # Only these differ from the defaults for a scratch-backed run as mattias:
@@ -224,18 +204,14 @@ nix run $VMCTL#vmctl -- destroy t-smoke --force
 on `192.168.1.201`, you can SSH in, and `destroy` cleans it up — so you've
 validated the tool + the bridge before committing to the declarative install.
 
-**C.9c — Install `vmctl` declaratively (this PR).**
-
-Merge this PR into `mattias` (or build the branch), then:
+**C.9c — Confirm the declarative install.**
 
 ```bash
 make switch NIXNAME=polaris
 ```
 
-`vmctl` is now on PATH system-wide with the `VMCTL_*` env baked in by the module
-(you no longer set them by hand). This switch should NOT touch networking — the
-bridge already came from the bridge PR — so re-running the C.9a checks after the
-switch should show no change.
+`vmctl` is on PATH system-wide with the `VMCTL_*` env baked in by the module
+(you no longer set them by hand).
 
 *Good:* `vmctl list` works with no `VMCTL_*` exported in your shell (the wrapper
 supplies them), and the bridge is unchanged.
@@ -348,10 +324,8 @@ seed ISO, and nothing is left behind in `disks`/`seeds` for either VM.
 ## E. Wrap-up
 
 **E.16 — (done) Flake input tracks `vmctl` `main`.**
-[vmctl PR #1](https://github.com/MattiasGees/vmctl/pull/1) is merged, and
-`flake.nix` already points at `github:MattiasGees/vmctl` (no branch pin). The
-only remaining action is committing the `flake.lock` update from **A.2** — keep
-`vmctl` current later with `nix flake update vmctl` when you want a newer build.
+`flake.nix` points at `git+ssh://git@github.com/MattiasGees/vmctl?ref=main` and
+the lock is committed; refresh with `nix flake update vmctl` (A.2).
 
 **E.17 — Cut the first vmctl release.**
 Once this runbook passes end-to-end, tag a release in the `vmctl` repo so

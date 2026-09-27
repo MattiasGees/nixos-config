@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Install home-manager configuration for existing user
 # Usage: Run as the mattias user
-#   curl -L https://raw.githubusercontent.com/YOUR_REPO/master/install-home-manager.sh | bash
+#   curl -L https://raw.githubusercontent.com/mattiasgees/nixos-config/master/install-home-manager.sh | bash
 
 set -e
 
@@ -45,7 +45,6 @@ EOF
 if [ ! -d ~/.config/nixos-config ]; then
     echo "==> Cloning nixos-config repository"
     mkdir -p ~/.config
-    # TODO: Update this with your actual repository URL
     git clone https://github.com/mattiasgees/nixos-config.git ~/.config/nixos-config
 else
     echo "==> Updating nixos-config repository"
