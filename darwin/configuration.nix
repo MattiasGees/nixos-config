@@ -30,6 +30,10 @@ in
       autoUpdate = false;
       upgrade = false;
       cleanup = "zap";                    # Uninstall not listed packages and casks
+      # Activation runs brew in a scrubbed env; session vars don't reach it.
+      extraEnv = {
+        HOMEBREW_NO_REQUIRE_TAP_TRUST = "1";
+      };
     };
     taps = [
       "FelixKratz/formulae"
@@ -145,6 +149,9 @@ in
         window_border_width = 5;
       };
       extraConfig = ''
+        # The SA lives in Dock and dies with it; reload it when Dock restarts.
+        yabai -m signal --add event=dock_did_restart action="sudo ${config.services.yabai.package}/bin/yabai --load-sa"
+
         yabai -m rule --add app='^Emacs$' manage=on
         yabai -m rule --add title='Preferences' manage=off layer=above
         yabai -m rule --add title='Library' manage=off layer=above
