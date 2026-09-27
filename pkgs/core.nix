@@ -14,7 +14,7 @@ with pkgs;
     # toolchain on PATH and break native compiles (SbarLua, sketchybar's C
     # event providers) because GNU gcc drives the Nix ld, which cannot parse
     # the macOS SDK's .tbd stubs. Apple's clang (/usr/bin) is used instead.
-    ++ lib.optionals stdenv.isLinux [ gcc ];
+    ++ lib.optionals stdenv.hostPlatform.isLinux [ gcc ];
   };
   
 }
