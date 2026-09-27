@@ -32,11 +32,7 @@ in
       autoUpdate = false;                 # Auto update packages
       upgrade = false;
       cleanup = "zap";                    # Uninstall not listed packages and casks
-      # Injected onto the activation `brew bundle` command line. A shell
-      # session var can't do this: darwin-rebuild runs brew under `sudo … env`
-      # (scrubbed environment), so only vars nix-darwin places here reach it.
-      # Skips the third-party tap-trust prompt (FelixKratz / theseal taps) that
-      # would otherwise block `make switch`.
+      # Activation runs brew in a scrubbed env; session vars don't reach it.
       extraEnv = {
         HOMEBREW_NO_REQUIRE_TAP_TRUST = "1";
       };
@@ -155,13 +151,7 @@ in
         window_border_width = 5;
       };
       extraConfig = ''
-        # Reload the scripting addition whenever Dock restarts. The SA payload
-        # lives inside the Dock process and dies with it (crash, display change,
-        # logout/login), silently breaking space focus and moving windows across
-        # spaces until the SA is reloaded. The org.nixos.yabai-sa boot daemon
-        # only loads it once at startup, so add this signal to auto-recover.
-        # The sudoers NOPASSWD rule is sha256-keyed to this exact binary, so the
-        # store-path invocation runs without a password prompt.
+        # The SA lives in Dock and dies with it; reload it when Dock restarts.
         yabai -m signal --add event=dock_did_restart action="sudo ${config.services.yabai.package}/bin/yabai --load-sa"
 
         yabai -m rule --add app='^Emacs$' manage=on

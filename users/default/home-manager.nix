@@ -35,13 +35,9 @@ in {
   home = {
     stateVersion = "23.05";
 
-    # Interactive shells only. This does NOT reach activation-time brew:
-    # darwin-rebuild runs `brew bundle` under `sudo … env` (scrubbed environment,
-    # only PATH preserved), so the activation path relies on
-    # homebrew.onActivation.extraEnv in darwin/configuration.nix instead.
     sessionVariables = lib.optionalAttrs isDarwin {
-      # Skip Homebrew's third-party tap-trust prompt (FelixKratz / koekeishiya /
-      # theseal taps) so manual brew installs don't need trust each time.
+      # Skip Homebrew's third-party tap-trust prompt in interactive shells
+      # (activation is covered by homebrew.onActivation.extraEnv).
       HOMEBREW_NO_REQUIRE_TAP_TRUST = "1";
     };
   };
