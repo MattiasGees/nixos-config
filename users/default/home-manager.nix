@@ -35,18 +35,14 @@ in {
   home = {
     stateVersion = "23.05";
 
-    # Skip Homebrew's third-party tap-trust prompt (FelixKratz / koekeishiya /
-    # theseal taps). A shell session var can't do this: darwin-rebuild runs
-    # `brew bundle` with a scrubbed environment (sudo env HOMEBREW_...), so only
-    # brew.env files - which brew sources itself - reach it. Without
-    # XDG_CONFIG_HOME (activation) brew reads ~/.homebrew/brew.env; with it
-    # (interactive shells) ~/.config/homebrew/brew.env. Cover both.
-    file = lib.mkIf isDarwin {
-      ".homebrew/brew.env".text = "HOMEBREW_NO_REQUIRE_TAP_TRUST=1\n";
+    # Interactive shells only. This does NOT reach activation-time brew:
+    # darwin-rebuild runs `brew bundle` under `sudo … env` (scrubbed environment,
+    # only PATH preserved), so the activation path relies on
+    # homebrew.onActivation.extraEnv in darwin/configuration.nix instead.
+    sessionVariables = lib.optionalAttrs isDarwin {
+      # Skip Homebrew's third-party tap-trust prompt (FelixKratz / koekeishiya /
+      # theseal taps) so manual brew installs don't need trust each time.
+      HOMEBREW_NO_REQUIRE_TAP_TRUST = "1";
     };
-  };
-
-  xdg.configFile = lib.mkIf isDarwin {
-    "homebrew/brew.env".text = "HOMEBREW_NO_REQUIRE_TAP_TRUST=1\n";
   };
 }

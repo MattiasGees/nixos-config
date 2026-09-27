@@ -32,6 +32,14 @@ in
       autoUpdate = false;                 # Auto update packages
       upgrade = false;
       cleanup = "zap";                    # Uninstall not listed packages and casks
+      # Injected onto the activation `brew bundle` command line. A shell
+      # session var can't do this: darwin-rebuild runs brew under `sudo … env`
+      # (scrubbed environment), so only vars nix-darwin places here reach it.
+      # Skips the third-party tap-trust prompt (FelixKratz / theseal taps) that
+      # would otherwise block `make switch`.
+      extraEnv = {
+        HOMEBREW_NO_REQUIRE_TAP_TRUST = "1";
+      };
     };
     taps = [
       "FelixKratz/formulae"
