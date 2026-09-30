@@ -2,6 +2,7 @@ local icons = require("icons")
 local colors = require("colors")
 local settings = require("settings")
 local hover = require("helpers.hover")
+local popup = require("helpers.popup")
 
 local battery = sbar.add("item", "widgets.battery", {
   position = "right",
@@ -16,25 +17,13 @@ local battery = sbar.add("item", "widgets.battery", {
   popup = { align = "center" }
 })
 
-local remaining_time = sbar.add("item", {
-  position = "popup." .. battery.name,
-  icon = {
-    string = "Time remaining:",
-    width = 100,
-    align = "left"
-  },
-  label = {
-    string = "??:??h",
-    width = 100,
-    align = "right"
-  },
-})
-
-local charging_wattage = sbar.add("item", {
-  position = "popup." .. battery.name,
-  icon = { string = "Charging:", width = 100, align = "left" },
-  label = { string = "—", width = 100, align = "right" },
-})
+local c = colors.popup
+local header = popup.header(battery, { glyph = popup.glyph.battery, title = "Battery", state = "…", state_mono = true })
+local header_sep = popup.separator(battery)
+local source_line = popup.row(battery, "Power source")
+local remaining_time = popup.row(battery, "Time remaining", { mono = true })
+local charging_wattage = popup.row(battery, "Charger", { mono = true, value = "—" })
+local bottom = popup.spacer(battery)
 
 battery:subscribe({"routine", "power_source_change", "system_woke"}, function()
   sbar.exec("pmset -g batt", function(batt_info)
@@ -86,8 +75,19 @@ end)
 local function battery_open()
   battery:set({ popup = { drawing = true } })
   sbar.exec("pmset -g batt", function(batt_info)
+    local on_ac = batt_info:find("AC Power") ~= nil
+    local charge = batt_info:match("(%d+)%%")
+    local charging = batt_info:find("; charging") ~= nil
+    header:set({ label = charge and (charge .. "%") or "—" })
+    source_line:set({ label = on_ac and "Power adapter" or "Battery" })
     local found, _, remaining = batt_info:find(" (%d+:%d+) remaining")
-    remaining_time:set({ label = found and remaining .. "h" or "No estimate" })
+    local done = on_ac and not charging
+    remaining_time:set({
+      drawing = not done,
+      icon = charging and "Until full" or "Time remaining",
+      label = found and { string = remaining, color = c.text, font = popup.font.mono }
+        or { string = "Calculating…", color = c.secondary, font = popup.font.body },
+    })
   end)
   sbar.exec("pmset -g batt | grep -q 'AC Power' && system_profiler SPPowerDataType 2>/dev/null | awk -F': ' '/Wattage \\(W\\)/{print $2; found=1} END{if(!found) print \"\"}'", function(w)
     w = (w or ""):gsub("%s+", "")
@@ -101,8 +101,7 @@ local battery_hover = hover(
 )
 battery:subscribe("mouse.entered", battery_hover.enter)
 battery:subscribe("mouse.exited", battery_hover.leave)
-battery_hover.bind(remaining_time)
-battery_hover.bind(charging_wattage)
+popup.bind(battery_hover, { header, header_sep, source_line, remaining_time, charging_wattage, bottom })
 
 sbar.add("bracket", "widgets.battery.bracket", { battery.name }, {
   background = { color = colors.bg1 }

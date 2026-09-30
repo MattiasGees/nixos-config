@@ -1,6 +1,7 @@
 local colors = require("colors")
 local settings = require("settings")
 local hover = require("helpers.hover")
+local popup = require("helpers.popup")
 
 local ICON = "󱃾"
 local MAXLEN = 12
@@ -15,32 +16,25 @@ local kube = sbar.add("item", "kube", {
   popup = { align = "center" },
 })
 
-local ctx_line = sbar.add("item", {
-  position = "popup." .. kube.name,
-  icon = { string = "Context:", width = 80, align = "left" },
-  label = { string = "…", width = 220, align = "right", max_chars = 30 },
-})
-local status_line = sbar.add("item", {
-  position = "popup." .. kube.name,
-  icon = { string = "Status:", width = 80, align = "left" },
-  label = { string = "…", width = 220, align = "right" },
-})
-local server_line = sbar.add("item", {
-  position = "popup." .. kube.name,
-  icon = { string = "Server:", width = 80, align = "left" },
-  label = { string = "…", width = 220, align = "right", max_chars = 30 },
-})
+local c = colors.popup
+local header = popup.header(kube, { glyph = popup.glyph.kube, title = "Kubernetes", state = "…" })
+local header_sep = popup.separator(kube)
+local ctx_line = popup.row(kube, "Context")
+local server_line = popup.row(kube, "API server", { mono = true })
+local bottom = popup.spacer(kube)
 
 local function refresh()
   sbar.exec(ENV .. "kubectl config current-context 2>/dev/null", function(ctx)
     ctx = (ctx or ""):gsub("%s+$", "")
     if ctx == "" then
       kube:set({ icon = { color = colors.grey }, label = { string = "none", color = colors.grey } })
-      ctx_line:set({ label = "None" }); status_line:set({ label = "No context" }); server_line:set({ drawing = false })
+      header:set({ label = { string = "No context", color = c.secondary } })
+      ctx_line:set({ label = { string = "None", color = c.secondary } })
+      server_line:set({ drawing = false })
       return
     end
     local short = ctx:sub(1, MAXLEN) .. (#ctx > MAXLEN and "…" or "")
-    ctx_line:set({ label = ctx })
+    ctx_line:set({ label = { string = ctx, color = c.text } })
     sbar.exec(ENV .. "kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}' 2>/dev/null", function(server)
       server = (server or ""):gsub("%s+$", "")
       server_line:set({ drawing = server ~= "", label = server })
@@ -49,7 +43,7 @@ local function refresh()
       local ok = (health or ""):gsub("%s+", "") == "ok"
       local color = ok and colors.green or colors.red
       kube:set({ icon = { color = color }, label = { string = short, color = colors.grey } })
-      status_line:set({ label = ok and "Connected" or "Disconnected", color = color })
+      header:set({ label = { string = ok and "Connected" or "Unreachable", color = ok and c.green or c.red } })
     end)
   end)
 end
@@ -62,9 +56,7 @@ local kube_hover = hover(
 )
 kube:subscribe("mouse.entered", kube_hover.enter)
 kube:subscribe("mouse.exited", kube_hover.leave)
-kube_hover.bind(ctx_line)
-kube_hover.bind(status_line)
-kube_hover.bind(server_line)
+popup.bind(kube_hover, { header, header_sep, ctx_line, server_line, bottom })
 
 sbar.add("bracket", "kube.bracket", { kube.name }, { background = { color = colors.bg1 } })
 sbar.add("item", "kube.padding", { position = "right", width = settings.group_paddings })

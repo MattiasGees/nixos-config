@@ -1,5 +1,6 @@
 local icons = require("icons")
 local colors = require("colors")
+local settings = require("settings")
 local hover = require("helpers.hover")
 
 local whitelist = { ["Spotify"] = true,
@@ -54,24 +55,31 @@ local media_title = sbar.add("item", {
   },
 })
 
-local media_back = sbar.add("item", {
-  position = "popup." .. media_cover.name,
-  icon = { string = icons.media.back },
-  label = { drawing = false },
-  click_script = "nowplaying-cli previous",
-})
-local media_playpause = sbar.add("item", {
-  position = "popup." .. media_cover.name,
-  icon = { string = icons.media.play_pause },
-  label = { drawing = false },
-  click_script = "nowplaying-cli togglePlayPause",
-})
-local media_forward = sbar.add("item", {
-  position = "popup." .. media_cover.name,
-  icon = { string = icons.media.forward },
-  label = { drawing = false },
-  click_script = "nowplaying-cli next",
-})
+-- Transport controls: round buttons that light up under the pointer.
+local function control(icon, size, script, pad_l, pad_r)
+  return sbar.add("item", {
+    position = "popup." .. media_cover.name,
+    padding_left = pad_l or 0,
+    padding_right = pad_r or 0,
+    icon = {
+      string = icon,
+      font = { family = settings.font.text, style = settings.font.style_map["Regular"], size = size },
+      color = colors.popup.text,
+      width = 40,
+      align = "center",
+      padding_left = 0,
+      padding_right = 0,
+      background = { drawing = true, color = colors.transparent, height = 34, corner_radius = 17 },
+    },
+    label = { drawing = false },
+    background = { drawing = true, color = colors.transparent, height = 46, border_width = 0 },
+    click_script = script,
+  })
+end
+
+local media_back = control(icons.media.back, 15.0, "nowplaying-cli previous", 8, 2)
+local media_playpause = control(icons.media.play_pause, 19.0, "nowplaying-cli togglePlayPause", 2, 2)
+local media_forward = control(icons.media.forward, 15.0, "nowplaying-cli next", 2, 8)
 
 local interrupt = 0
 local function animate_detail(detail)
@@ -117,6 +125,11 @@ media_cover:subscribe("mouse.exited", function(env)
   media_hover.leave()
 end)
 
-media_hover.bind(media_back)
-media_hover.bind(media_playpause)
-media_hover.bind(media_forward)
+local function lit(on)
+  return function(env)
+    sbar.set(env.NAME, { icon = { background = { color = on and colors.popup.hover or colors.transparent } } })
+  end
+end
+for _, control_item in ipairs({ media_back, media_playpause, media_forward }) do
+  media_hover.bind(control_item, lit(true), lit(false))
+end

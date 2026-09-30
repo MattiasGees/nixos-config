@@ -14,9 +14,18 @@ return {
     bg = 0xf02c2e34,
     border = 0xff2c2e34,
   },
+  -- macOS-style dark menu material (semantic label colours, system accents)
   popup = {
-    bg = 0xc02c2e34,
-    border = 0xff7f8490
+    bg = 0xeb1e1e21,
+    border = 0x2effffff,
+    separator = 0x1fffffff,
+    hover = 0x1fffffff,
+    text = 0xfff2f2f7,
+    secondary = 0x9aebebf5,
+    tertiary = 0x66ebebf5,
+    accent = 0xff0a84ff,
+    green = 0xff30d158,
+    red = 0xffff453a,
   },
   bg1 = 0xff363944,
   bg2 = 0xff414550,

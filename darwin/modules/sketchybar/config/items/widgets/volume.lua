@@ -2,8 +2,10 @@ local colors = require("colors")
 local icons = require("icons")
 local settings = require("settings")
 local hover = require("helpers.hover")
+local popup = require("helpers.popup")
 
-local popup_width = 250
+local c = colors.popup
+local SLIDER_INSET = 16
 
 local volume_percent = sbar.add("item", "widgets.volume1", {
   position = "right",
@@ -51,23 +53,37 @@ sbar.add("item", "widgets.volume.padding", {
   width = settings.group_paddings
 })
 
-local volume_slider = sbar.add("slider", popup_width, {
+local header = popup.header(volume_bracket, { glyph = popup.glyph.sound, title = "Sound", state = "…", state_mono = true })
+local header_sep = popup.separator(volume_bracket)
+
+-- Slim native track: accent fill with a white knob.
+local volume_slider = sbar.add("slider", popup.WIDTH - 2 * SLIDER_INSET, {
   position = "popup." .. volume_bracket.name,
+  padding_left = SLIDER_INSET,
+  padding_right = SLIDER_INSET,
+  icon = { drawing = false },
+  label = { drawing = false },
   slider = {
-    highlight_color = colors.blue,
+    highlight_color = c.accent,
     background = {
       height = 6,
       corner_radius = 3,
-      color = colors.bg2,
+      color = 0x33ffffff,
     },
-    knob= {
+    knob = {
       string = "􀀁",
       drawing = true,
+      color = 0xffffffff,
+      font = { family = settings.font.text, style = settings.font.style_map["Regular"], size = 17.0 },
+      shadow = { drawing = true, color = 0x66000000, distance = 1 },
     },
   },
-  background = { color = colors.bg1, height = 2, y_offset = -20 },
+  background = { drawing = true, color = colors.transparent, height = 34, border_width = 0 },
   click_script = 'osascript -e "set volume output volume $PERCENTAGE"'
 })
+
+local output_sep = popup.separator(volume_bracket)
+local output_head = popup.section(volume_bracket, "Output")
 
 local function set_volume(volume)
   if not volume then return end
@@ -90,6 +106,7 @@ local function set_volume(volume)
   volume_icon:set({ label = icon })
   volume_percent:set({ label = lead .. volume .. "%" })
   volume_slider:set({ slider = { percentage = volume } })
+  header:set({ label = volume .. "%" })
 end
 
 -- The volume_change event only fires on subsequent changes, so query the
@@ -128,26 +145,21 @@ local function volume_toggle_details(env)
     sbar.exec("SwitchAudioSource -t output -c", function(result)
       current_audio_device = result:sub(1, -2)
       sbar.exec("SwitchAudioSource -a -t output", function(available)
-        current = current_audio_device
-        local color = colors.grey
         local counter = 0
 
         for device in string.gmatch(available, '[^\r\n]+') do
-          local color = colors.grey
-          if current == device then
-            color = colors.white
-          end
-          local dev = sbar.add("item", "volume.device." .. counter, {
-            position = "popup." .. volume_bracket.name,
-            width = popup_width,
-            align = "center",
-            label = { string = device, color = color },
-            click_script = 'SwitchAudioSource -s "' .. device .. '" && sketchybar --set /volume.device\\.*/ label.color=' .. colors.grey .. ' --set $NAME label.color=' .. colors.white
-
+          local dev = popup.choice(volume_bracket, device, {
+            name = "volume.device." .. counter,
+            checked = device == current_audio_device,
+            click_script = 'SwitchAudioSource -s "' .. device .. '" && sketchybar'
+              .. ' --set "/volume\\.device\\.[0-9]+/" icon.color=' .. colors.transparent
+              .. ' --set $NAME icon.color=' .. c.accent,
           })
-          volume_hover.bind(dev)
+          popup.bind(volume_hover, { dev }, true)
           counter = counter + 1
         end
+        -- Named like the devices so the collapse regex cleans it up too.
+        popup.bind(volume_hover, { popup.spacer(volume_bracket, "volume.device.end") })
       end)
     end)
   else
@@ -178,7 +190,7 @@ volume_icon:subscribe("mouse.entered", volume_hover.enter)
 volume_percent:subscribe("mouse.entered", volume_hover.enter)
 volume_icon:subscribe("mouse.exited", volume_hover.leave)
 volume_percent:subscribe("mouse.exited", volume_hover.leave)
-volume_hover.bind(volume_slider)
+popup.bind(volume_hover, { header, header_sep, volume_slider, output_sep, output_head })
 volume_icon:subscribe("mouse.clicked", volume_prefs)
 volume_percent:subscribe("mouse.clicked", volume_prefs)
 volume_icon:subscribe("mouse.scrolled", volume_scroll)
