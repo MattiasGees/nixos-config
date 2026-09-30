@@ -5,7 +5,7 @@ local popup = require("helpers.popup")
 
 local CACHE = "/tmp/sketchybar_location_cache"
 
-local rain = sbar.add("graph", "widgets.rain", 96, {
+local rain = sbar.add("graph", "widgets.rain", 64, {
   position = "right",
   graph = { color = colors.blue, fill_color = colors.with_alpha(colors.blue, 0.3), line_width = 2 },
   background = { height = 22, color = { alpha = 0 }, border_color = { alpha = 0 }, drawing = true },
@@ -64,7 +64,7 @@ local function refresh()
       header:set({ label = { string = "No location", color = c.secondary } })
       loc_line:set({ label = { string = "Unavailable", color = c.secondary } })
       max_line:set({ label = "—" }); upd_line:set({ label = os.date("%H:%M") })
-      for _ = 1, 96 do rain:push({ 0.0 }) end
+      for _ = 1, 64 do rain:push({ 0.0 }) end
       return
     end
     local city, vals = out:match("^([^|]*)|(.*)$")
@@ -75,7 +75,7 @@ local function refresh()
       local v = precip[i] or 0
       if v > maxr then maxr = v end
       local lvl = bucket(v)
-      for _ = 1, 3 do rain:push({ lvl }) end
+      for _ = 1, 2 do rain:push({ lvl }) end
     end
     local color = colors.yellow
     if maxr > 0.8 then color = colors.red elseif maxr > 0.3 then color = colors.orange elseif maxr >= 0.1 then color = colors.green end
