@@ -8,7 +8,7 @@ local CACHE = "/tmp/sketchybar_location_cache"
 local rain = sbar.add("graph", "widgets.rain", 96, {
   position = "right",
   graph = { color = colors.blue, fill_color = colors.with_alpha(colors.blue, 0.3), line_width = 2 },
-  background = { height = 22, color = { alpha = 0 }, drawing = true },
+  background = { height = 22, color = { alpha = 0 }, border_color = { alpha = 0 }, drawing = true },
   icon = { string = "󰖗", color = colors.blue, padding_left = 8, font = { family = "JetBrainsMono Nerd Font", style = "Bold", size = 16.0 } },
   label = { drawing = false },
   update_freq = 120,
