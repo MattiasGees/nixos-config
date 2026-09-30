@@ -25,9 +25,9 @@ local c = colors.popup
 
 local header = popup.header(tailscale, { glyph = popup.glyph.tailscale, title = "Tailscale", state = "…" })
 local header_sep = popup.separator(tailscale)
-local tailnet_line = popup.row(tailscale, "Tailnet", { max_chars = 20 })
+local tailnet_line = popup.row(tailscale, "Tailnet")
 local ip_line = popup.row(tailscale, "IP address", { mono = true })
-local exit_line = popup.row(tailscale, "Exit node", { max_chars = 20 })
+local exit_line = popup.row(tailscale, "Exit node")
 local bottom = popup.spacer(tailscale)
 
 -- Current exit node, remembered for the picker's checkmark.

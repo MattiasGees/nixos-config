@@ -56,7 +56,7 @@ sbar.add("item", "widgets.volume.padding", {
 local header = popup.header(volume_bracket, { glyph = popup.glyph.sound, title = "Sound", state = "…", state_mono = true })
 local header_sep = popup.separator(volume_bracket)
 
--- Control Center style: a thick capsule with a white fill and knob.
+-- Slim native track: accent fill with a white knob.
 local volume_slider = sbar.add("slider", popup.WIDTH - 2 * SLIDER_INSET, {
   position = "popup." .. volume_bracket.name,
   padding_left = SLIDER_INSET,
@@ -64,21 +64,21 @@ local volume_slider = sbar.add("slider", popup.WIDTH - 2 * SLIDER_INSET, {
   icon = { drawing = false },
   label = { drawing = false },
   slider = {
-    highlight_color = 0xf2ffffff,
+    highlight_color = c.accent,
     background = {
-      height = 22,
-      corner_radius = 11,
-      color = 0x2effffff,
+      height = 6,
+      corner_radius = 3,
+      color = 0x33ffffff,
     },
     knob = {
       string = "􀀁",
       drawing = true,
       color = 0xffffffff,
-      font = { family = settings.font.text, style = settings.font.style_map["Regular"], size = 22.0 },
-      shadow = { drawing = true, color = 0x59000000, distance = 1 },
+      font = { family = settings.font.text, style = settings.font.style_map["Regular"], size = 17.0 },
+      shadow = { drawing = true, color = 0x66000000, distance = 1 },
     },
   },
-  background = { drawing = true, color = colors.transparent, height = 38, border_width = 0 },
+  background = { drawing = true, color = colors.transparent, height = 34, border_width = 0 },
   click_script = 'osascript -e "set volume output volume $PERCENTAGE"'
 })
 

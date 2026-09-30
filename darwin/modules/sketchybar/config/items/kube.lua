@@ -19,8 +19,8 @@ local kube = sbar.add("item", "kube", {
 local c = colors.popup
 local header = popup.header(kube, { glyph = popup.glyph.kube, title = "Kubernetes", state = "…" })
 local header_sep = popup.separator(kube)
-local ctx_line = popup.row(kube, "Context", { max_chars = 20 })
-local server_line = popup.row(kube, "API server", { mono = true, max_chars = 20 })
+local ctx_line = popup.row(kube, "Context")
+local server_line = popup.row(kube, "API server", { mono = true })
 local bottom = popup.spacer(kube)
 
 local function refresh()

@@ -19,11 +19,11 @@ local c = colors.popup
 
 local M = {}
 
-M.WIDTH = 272
+M.WIDTH = 280
 local INSET = 6                    -- row inset from the popup edge (hover pill)
 local PAD = 10                     -- text inset inside a row
 local ROW_W = M.WIDTH - 2 * INSET
-local KEY_W = 112                  -- key column of key/value rows
+local KEY_W = 100                  -- key column of key/value rows
 local CHECK_W = 22                 -- checkmark column of choice rows
 local HEADER_H = 34
 local ROW_H = 24
@@ -159,7 +159,9 @@ function M.row(parent, key, opts)
       padding_left = 0,
       padding_right = PAD,
       align = "right",
-      max_chars = opts.max_chars or 22,
+      -- ~158pt value column: fits 24 chars of SF Pro 13 / 21 of SF Mono 12;
+      -- anything longer scrolls instead of overflowing into the key.
+      max_chars = opts.max_chars or (opts.mono and 21 or 24),
     },
     background = cell(ROW_H),
   })

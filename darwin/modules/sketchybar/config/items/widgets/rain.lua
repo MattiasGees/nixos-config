@@ -19,7 +19,7 @@ local rain = sbar.add("graph", "widgets.rain", 128, {
 local c = colors.popup
 local header = popup.header(rain, { glyph = popup.glyph.rain, title = "Rain", state = "…" })
 local header_sep = popup.separator(rain)
-local loc_line = popup.row(rain, "Location", { max_chars = 20 })
+local loc_line = popup.row(rain, "Location")
 local max_line = popup.row(rain, "Peak, next 8h", { mono = true })
 local upd_line = popup.row(rain, "Updated", { mono = true })
 local bottom = popup.spacer(rain)
