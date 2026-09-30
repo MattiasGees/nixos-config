@@ -13,6 +13,8 @@
 #  everything else alone. We bind to this Mac's Tailscale IP (resolved at
 #  activation) so the daemon is reachable across the tailnet for direct
 #  connections but invisible on untrusted networks — unlike a 0.0.0.0 bind.
+#  Hosts that set paseo.listenOnTailscale = false are pinned to localhost
+#  instead (actively rewritten, so a previous Tailscale bind is undone).
 #
 #  Adapted from ChaosInTheCRD/nixos-config darwin/guest-paseo.nix, dropping the
 #  VM-guest NAT-PMP publishing (Tailscale reaches a physical Mac directly) and
@@ -20,7 +22,7 @@
 #  rather than an inline heredoc: shell heredoc terminators do not survive
 #  Nix's '' indentation stripping.
 #
-{ lib, pkgs, user, ... }:
+{ config, lib, pkgs, user, ... }:
 
 let
   # Seed ~/.paseo/config.json if absent, else surgically set only daemon.listen.
@@ -49,7 +51,13 @@ let
   '';
 in
 {
-  system.activationScripts.postActivation.text = lib.mkAfter ''
+  options.paseo.listenOnTailscale = lib.mkOption {
+    type = lib.types.bool;
+    default = true;
+    description = "Bind the Paseo daemon to this Mac's Tailscale IP; when false, bind to localhost only.";
+  };
+
+  config.system.activationScripts.postActivation.text = lib.mkAfter (if config.paseo.listenOnTailscale then ''
     PASEO_CFG="/Users/${user}/.paseo/config.json"
 
     # Locate the tailscale CLI (installed via the cask, not nix).
@@ -68,5 +76,7 @@ in
         sudo -u ${user} ${pkgs.python3}/bin/python3 ${setListen} "$PASEO_CFG" "$TS_IP:6767"
       fi
     fi
-  '';
+  '' else ''
+    sudo -u ${user} ${pkgs.python3}/bin/python3 ${setListen} "/Users/${user}/.paseo/config.json" "127.0.0.1:6767"
+  '');
 }
