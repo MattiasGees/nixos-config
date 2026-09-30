@@ -13,6 +13,7 @@
 --   item:subscribe("mouse.entered", h.enter)
 --   item:subscribe("mouse.exited",  h.leave)
 --   h.bind(popup_child)                  -- for every popup item you can mouse onto
+--   h.bind(row, on_enter, on_exit)       -- optionally with extra hover callbacks
 --
 -- When several bar items share one popup (volume/wifi), reuse the same `h` on
 -- each so they share the over-state.
@@ -44,9 +45,17 @@ return function(open_fn, close_fn)
   local api = { enter = enter, leave = leave }
 
   -- Keep the popup alive while the pointer is over one of its own items.
-  function api.bind(item)
-    item:subscribe("mouse.entered", function() over = true end)
-    item:subscribe("mouse.exited", leave)
+  -- Optional on_enter/on_exit(env) run alongside (e.g. a row highlight);
+  -- SbarLua keeps one callback per item+event, so they must share this one.
+  function api.bind(item, on_enter, on_exit)
+    item:subscribe("mouse.entered", function(env)
+      over = true
+      if on_enter then on_enter(env) end
+    end)
+    item:subscribe("mouse.exited", function(env)
+      leave()
+      if on_exit then on_exit(env) end
+    end)
   end
 
   return api

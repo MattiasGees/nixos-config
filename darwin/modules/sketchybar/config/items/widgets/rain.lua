@@ -1,6 +1,7 @@
 local colors = require("colors")
 local settings = require("settings")
 local hover = require("helpers.hover")
+local popup = require("helpers.popup")
 
 local CACHE = "/tmp/sketchybar_location_cache"
 
@@ -15,14 +16,13 @@ local rain = sbar.add("graph", "widgets.rain", 128, {
   popup = { align = "center" },
 })
 
-local loc_line = sbar.add("item", { position = "popup." .. rain.name,
-  icon = { string = "Location:", width = 90, align = "left" }, label = { string = "…", width = 160, align = "right", max_chars = 22 } })
-local cond_line = sbar.add("item", { position = "popup." .. rain.name,
-  icon = { string = "Conditions:", width = 90, align = "left" }, label = { string = "…", width = 160, align = "right" } })
-local max_line = sbar.add("item", { position = "popup." .. rain.name,
-  icon = { string = "Max (8h):", width = 90, align = "left" }, label = { string = "…", width = 160, align = "right" } })
-local upd_line = sbar.add("item", { position = "popup." .. rain.name,
-  icon = { string = "Updated:", width = 90, align = "left" }, label = { string = "…", width = 160, align = "right" } })
+local c = colors.popup
+local header = popup.header(rain, { glyph = popup.glyph.rain, title = "Rain", state = "…" })
+local header_sep = popup.separator(rain)
+local loc_line = popup.row(rain, "Location", { max_chars = 20 })
+local max_line = popup.row(rain, "Peak, next 8h", { mono = true })
+local upd_line = popup.row(rain, "Updated", { mono = true })
+local bottom = popup.spacer(rain)
 
 -- Shell pipeline: resolve location (CoreLocationCLI -> cache) then Open-Meteo,
 -- emit "CITY|<32 space-separated precip values>" or "NOLOC" on stdout.
@@ -61,8 +61,9 @@ local function refresh()
     out = out or ""
     if out:find("NOLOC") then
       rain:set({ icon = { color = colors.grey }, graph = { color = colors.grey, fill_color = colors.with_alpha(colors.grey, 0.3) } })
-      loc_line:set({ label = "Unavailable" }); cond_line:set({ label = "Unknown" })
-      max_line:set({ label = "—" }); upd_line:set({ label = os.date("%H:%M:%S") })
+      header:set({ label = { string = "No location", color = c.secondary } })
+      loc_line:set({ label = { string = "Unavailable", color = c.secondary } })
+      max_line:set({ label = "—" }); upd_line:set({ label = os.date("%H:%M") })
       for _ = 1, 128 do rain:push({ 0.0 }) end
       return
     end
@@ -80,10 +81,10 @@ local function refresh()
     if maxr > 0.8 then color = colors.red elseif maxr > 0.3 then color = colors.orange elseif maxr >= 0.1 then color = colors.green end
     local raining = (precip[1] or 0) >= 0.1
     rain:set({ icon = { color = color }, graph = { color = color, fill_color = colors.with_alpha(color, 0.3) } })
-    loc_line:set({ label = (city ~= "" and city or "Unknown") })
-    cond_line:set({ label = raining and "Raining" or (maxr >= 0.1 and "Rain soon" or "Dry") })
+    header:set({ label = { string = raining and "Raining" or (maxr >= 0.1 and "Rain soon" or "Dry"), color = c.secondary } })
+    loc_line:set({ label = { string = (city ~= "" and city or "Unknown"), color = c.text } })
     max_line:set({ label = string.format("%.2f mm", maxr) })
-    upd_line:set({ label = os.date("%H:%M:%S") })
+    upd_line:set({ label = os.date("%H:%M") })
   end)
 end
 
@@ -95,10 +96,7 @@ local rain_hover = hover(
 )
 rain:subscribe("mouse.entered", rain_hover.enter)
 rain:subscribe("mouse.exited", rain_hover.leave)
-rain_hover.bind(loc_line)
-rain_hover.bind(cond_line)
-rain_hover.bind(max_line)
-rain_hover.bind(upd_line)
+popup.bind(rain_hover, { header, header_sep, loc_line, max_line, upd_line, bottom })
 
 sbar.add("bracket", "widgets.rain.bracket", { rain.name }, { background = { color = colors.bg1 } })
 sbar.add("item", "widgets.rain.padding", { position = "right", width = settings.group_paddings })

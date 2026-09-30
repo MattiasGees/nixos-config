@@ -1,6 +1,7 @@
 local colors = require("colors")
 local settings = require("settings")
 local hover = require("helpers.hover")
+local popup = require("helpers.popup")
 
 local TS = "/Applications/Tailscale.app/Contents/MacOS/Tailscale"
 local COLOR_ON = 0xff08f7fe   -- cyan
@@ -20,28 +21,17 @@ local tailscale = sbar.add("item", "tailscale", {
   popup = { align = "center" },
 })
 
-local POPUP = "popup." .. tailscale.name
+local c = colors.popup
 
-local status_line = sbar.add("item", {
-  position = POPUP,
-  icon = { string = "Status:", width = 90, align = "left" },
-  label = { string = "…", width = 160, align = "right" },
-})
-local tailnet_line = sbar.add("item", {
-  position = POPUP,
-  icon = { string = "Tailnet:", width = 90, align = "left" },
-  label = { string = "…", width = 160, align = "right" },
-})
-local ip_line = sbar.add("item", {
-  position = POPUP,
-  icon = { string = "IP:", width = 90, align = "left" },
-  label = { string = "…", width = 160, align = "right" },
-})
-local exit_line = sbar.add("item", {
-  position = POPUP,
-  icon = { string = "Exit node:", width = 90, align = "left" },
-  label = { string = "…", width = 160, align = "right", max_chars = 22 },
-})
+local header = popup.header(tailscale, { glyph = popup.glyph.tailscale, title = "Tailscale", state = "…" })
+local header_sep = popup.separator(tailscale)
+local tailnet_line = popup.row(tailscale, "Tailnet", { max_chars = 20 })
+local ip_line = popup.row(tailscale, "IP address", { mono = true })
+local exit_line = popup.row(tailscale, "Exit node", { max_chars = 20 })
+local bottom = popup.spacer(tailscale)
+
+-- Current exit node, remembered for the picker's checkmark.
+local current_exit = nil
 
 -- Short display name for a peer DNSName ("hetzner-1.tailnet.ts.net." -> "hetzner-1")
 local function short_name(dns)
@@ -68,67 +58,100 @@ local function refresh()
     if running then
       local glyph = exit_active and GLYPH_EXIT or GLYPH_SHIELD
       tailscale:set({ icon = { string = glyph, color = COLOR_ON } })
-      status_line:set({ label = "Connected" })
-      tailnet_line:set({ drawing = true, label = (out.CurrentTailnet and out.CurrentTailnet.Name) or "?" })
+      header:set({ label = { string = "Connected", color = c.green } })
+      header_sep:set({ drawing = true })
+      tailnet_line:set({ drawing = true, label = (out.CurrentTailnet and out.CurrentTailnet.Name) or "Unknown" })
       local ip = out.TailscaleIPs and out.TailscaleIPs[1]
       ip_line:set({ drawing = ip ~= nil, label = ip or "" })
-      exit_line:set({ drawing = true, label = exit_active and exit_name or "None" })
+      exit_line:set({
+        drawing = true,
+        label = { string = exit_active and exit_name or "None", color = exit_active and c.text or c.secondary },
+      })
+      current_exit = exit_active and exit_name or nil
     else
       tailscale:set({ icon = { string = GLYPH_SHIELD, color = COLOR_OFF } })
-      status_line:set({ label = "Off" })
+      header:set({ label = { string = "Off", color = c.secondary } })
+      header_sep:set({ drawing = false })
       tailnet_line:set({ drawing = false })
       ip_line:set({ drawing = false })
       exit_line:set({ drawing = false })
+      current_exit = nil
     end
   end)
 end
 
 local ts_hover = hover(
-  function() tailscale:set({ popup = { drawing = true } }); refresh() end,
+  function()
+    bottom:set({ drawing = true })
+    tailscale:set({ popup = { drawing = true } })
+    refresh()
+  end,
   function() tailscale:set({ popup = { drawing = false } }); sbar.remove('/tailscale.exit\\..*/') end
 )
 
--- Build the right-click exit-node picker. Own nodes first (★), then one
--- representative Mullvad server for Belgium / UK / USA, plus "None".
+-- Build the right-click exit-node picker below the status rows: "None" and
+-- own nodes, then one representative Mullvad server for Belgium / UK / USA.
+-- The active node gets a checkmark (Mullvad matched by country prefix).
+local MULLVAD = {
+  { prefix = "be", label = "Belgium" },
+  { prefix = "gb", label = "United Kingdom" },
+  { prefix = "us", label = "United States" },
+}
+
 local function show_exit_picker()
   sbar.remove('/tailscale.exit\\..*/')
+  bottom:set({ drawing = false })
 
   local idx = 0
-  local function add_entry(label, exit_arg)
+  local function add_entry(label, exit_arg, checked)
     idx = idx + 1
-    local entry = sbar.add("item", "tailscale.exit." .. idx, {
-      position = POPUP,
-      icon = { string = label, align = "left", padding_left = 8, padding_right = 8 },
-      label = { drawing = false },
+    local entry = popup.choice(tailscale, label, {
+      name = "tailscale.exit." .. idx,
+      checked = checked,
       click_script = TS .. " set --exit-node='" .. exit_arg .. "' >/dev/null 2>&1; "
         .. "sketchybar --set " .. tailscale.name .. " popup.drawing=off "
         .. "--remove '/tailscale.exit\\..*/' --trigger tailscale_update",
     })
-    ts_hover.bind(entry)
+    popup.bind(ts_hover, { entry }, true)
   end
+  local function add_static(item) popup.bind(ts_hover, { item }) end
 
-  add_entry("None (direct)", "")
+  add_static(popup.separator(tailscale, "tailscale.exit.sep1"))
+  add_static(popup.section(tailscale, "Exit node", "tailscale.exit.head1"))
+  add_entry("None", "", current_exit == nil)
 
   sbar.exec(TS .. " exit-node list 2>/dev/null", function(out)
-    if type(out) ~= "string" then return end
-    local be, gb, us
+    if type(out) ~= "string" then
+      add_static(popup.spacer(tailscale, "tailscale.exit.end"))
+      return
+    end
+    local mullvad = {}
     for line in out:gmatch("[^\r\n]+") do
       local ip, host = line:match("^%s*(%S+)%s+(%S+)")
       if ip and host and ip:match("^%d") and host ~= "HOSTNAME" then
+        local name = short_name(host)
         if not host:find("mullvad") then
-          add_entry("★ " .. short_name(host), ip)
-        elseif not be and host:find("^be%-") then
-          be = ip
-        elseif not gb and host:find("^gb%-") then
-          gb = ip
-        elseif not us and host:find("^us%-") then
-          us = ip
+          add_entry(name, ip, name == current_exit)
+        else
+          local cc = host:match("^(%a%a)%-")
+          if cc and not mullvad[cc] then mullvad[cc] = ip end
         end
       end
     end
-    if be then add_entry("Mullvad: Belgium", be) end
-    if gb then add_entry("Mullvad: UK", gb) end
-    if us then add_entry("Mullvad: USA", us) end
+
+    local cur_cc = current_exit and current_exit:match("^(%a%a)%-.*wg")
+    local any = false
+    for _, m in ipairs(MULLVAD) do
+      if mullvad[m.prefix] then
+        if not any then
+          add_static(popup.separator(tailscale, "tailscale.exit.sep2"))
+          add_static(popup.section(tailscale, "Mullvad", "tailscale.exit.head2"))
+          any = true
+        end
+        add_entry(m.label, mullvad[m.prefix], cur_cc == m.prefix)
+      end
+    end
+    add_static(popup.spacer(tailscale, "tailscale.exit.end"))
   end)
 
   tailscale:set({ popup = { drawing = true } })
@@ -139,7 +162,7 @@ local function toggle_connection()
   sbar.exec(TS .. " status --json 2>/dev/null", function(out)
     local running = type(out) == "table" and out.BackendState == "Running"
     local cmd = running and (TS .. " down") or (TS .. " up")
-    status_line:set({ label = running and "Disconnecting…" or "Connecting…" })
+    header:set({ label = { string = running and "Disconnecting…" or "Connecting…", color = c.secondary } })
     sbar.exec(cmd .. " 2>/dev/null", function() sbar.delay(1, refresh) end)
   end)
 end
@@ -148,10 +171,7 @@ tailscale:subscribe({ "routine", "forced", "system_woke", "tailscale_update" }, 
 
 tailscale:subscribe("mouse.entered", ts_hover.enter)
 tailscale:subscribe("mouse.exited", ts_hover.leave)
-ts_hover.bind(status_line)
-ts_hover.bind(tailnet_line)
-ts_hover.bind(ip_line)
-ts_hover.bind(exit_line)
+popup.bind(ts_hover, { header, header_sep, tailnet_line, ip_line, exit_line, bottom })
 
 tailscale:subscribe("mouse.clicked", function(env)
   if env.BUTTON == "right" then

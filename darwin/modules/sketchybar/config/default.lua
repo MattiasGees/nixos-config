@@ -38,13 +38,15 @@ sbar.default({
   },
   popup = {
     background = {
-      border_width = 2,
-      corner_radius = 9,
+      border_width = 1,
+      corner_radius = 13,
       border_color = colors.popup.border,
       color = colors.popup.bg,
-      shadow = { drawing = true },
+      shadow = { drawing = true, color = 0x66000000, distance = 4 },
     },
-    blur_radius = 50,
+    blur_radius = 60,
+    y_offset = 4,
+    height = 9, -- minimum cell height; popup rows size themselves
   },
   padding_left = 5,
   padding_right = 5,
