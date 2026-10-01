@@ -8,4 +8,7 @@
     hostName = lib.mkForce "PaceSetter";
   };
 
+  # Keep the Paseo daemon off the tailnet on this machine.
+  paseo.listenOnTailscale = false;
+
 }
