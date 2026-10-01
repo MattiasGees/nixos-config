@@ -40,6 +40,7 @@ M.glyph = {
   sound = "􀊩",
   battery = "􀛨",
   copied = "􀉄",
+  cpu = "􀫥",
 }
 
 local function font(style, size, family)
@@ -138,24 +139,27 @@ function M.section(parent, title, name)
   })
 end
 
--- Key/value row. opts: value, mono, max_chars, value_color, name.
+-- Key/value row. opts: value, mono, max_chars, value_color, name, and
+-- key_width + key_max_chars for rows whose key is the long part (process names).
 function M.row(parent, key, opts)
   opts = opts or {}
+  local key_w = opts.key_width or KEY_W
   return base(parent, opts.name, {
     icon = {
       string = key,
       font = M.font.body,
       color = c.secondary,
-      width = KEY_W,
+      width = key_w,
       padding_left = PAD,
       padding_right = 0,
       align = "left",
+      max_chars = opts.key_max_chars,
     },
     label = {
       string = opts.value or "…",
       font = opts.mono and M.font.mono or M.font.body,
       color = opts.value_color or c.text,
-      width = ROW_W - KEY_W,
+      width = ROW_W - key_w,
       padding_left = 0,
       padding_right = PAD,
       align = "right",
