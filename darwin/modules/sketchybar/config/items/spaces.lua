@@ -11,13 +11,13 @@ for i = 1, 10, 1 do
     icon = {
       font = { family = settings.font.numbers },
       string = i,
-      padding_left = 15,
-      padding_right = 8,
+      padding_left = 10,
+      padding_right = 6,
       color = colors.white,
       highlight_color = colors.red,
     },
     label = {
-      padding_right = 20,
+      padding_right = 12,
       color = colors.grey,
       highlight_color = colors.white,
       font = "sketchybar-app-font:Regular:16.0",
@@ -47,10 +47,14 @@ for i = 1, 10, 1 do
   })
 
   -- Padding space
+  -- No item paddings: the gap between spaces is just group_paddings, keeping
+  -- all 10 spaces + front_app left of the MacBook notch.
   sbar.add("space", "space.padding." .. i, {
     space = i,
     script = "",
     width = settings.group_paddings,
+    padding_left = 0,
+    padding_right = 0,
   })
 
   local space_popup = sbar.add("item", {
