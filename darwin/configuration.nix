@@ -10,8 +10,8 @@ let
 
   # Ghostty uses native macOS tabs, which the AX API reports as separate
   # windows, so yabai tiles every new tab as a new window (half-screen split).
-  # On a new Ghostty window, if the window focused just before it is a Ghostty
-  # window that is now hidden, the new one is a tab of that group: stack it onto
+  # On a new Ghostty window, if the window we came from (focused or most recent)
+  # is a Ghostty window that is now hidden, the new one is a tab of that group: stack it onto
   # that tab's node so the group keeps one tile. A real new window (Cmd+N)
   # leaves the previous one visible and is tiled normally. Closing a tab just
   # drops it from the stack, so nothing is re-laid-out or swapped.
@@ -20,14 +20,18 @@ let
     jq=${pkgs.jq}/bin/jq
     new="$YABAI_WINDOW_ID"
     # macOS hides the previous tab just after creating the new one; retry briefly.
+    # Focus may not have moved to the new tab yet when the signal fires, so the
+    # tab we came from is either the focused window or the most recent one.
     for _ in 1 2 3 4 5 6 7 8 9 10; do
-      prev=$($yabai -m query --windows --window recent 2>/dev/null | $jq -r --argjson new "$new" '
-        select(.app == "Ghostty" and .id != $new and ."is-visible" == false
-               and ."is-minimized" == false and ."is-floating" == false) | .id')
-      if [ -n "$prev" ]; then
-        $yabai -m window "$new" --stack "$prev"
-        exit 0
-      fi
+      for sel in "" recent; do
+        prev=$($yabai -m query --windows --window $sel 2>/dev/null | $jq -r --argjson new "$new" '
+          select(.app == "Ghostty" and .id != $new and ."is-visible" == false
+                 and ."is-minimized" == false and ."is-floating" == false) | .id')
+        if [ -n "$prev" ]; then
+          $yabai -m window "$new" --stack "$prev"
+          exit 0
+        fi
+      done
       sleep 0.05
     done
   '';
