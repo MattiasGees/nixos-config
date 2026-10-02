@@ -267,7 +267,7 @@ in
         NSAutomaticSpellingCorrectionEnabled = false;
         NSAutomaticWindowAnimationsEnabled = false;
         _HIHideMenuBar = true;
-        "com.apple.swipescrolldirection" = false;
+        "com.apple.swipescrolldirection" = true;   # natural scrolling
         AppleTemperatureUnit = "Celsius";
 
       };
