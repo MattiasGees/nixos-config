@@ -302,13 +302,16 @@ in
       sudo chsh -s ${pkgs.zsh}/bin/zsh
       # Reload yabai scripting addition after rebuild
       sudo /run/current-system/sw/bin/yabai --load-sa 2>/dev/null || true
-      SBARLUA_DIR="$HOME/.local/share/sketchybar_lua"
+      # SbarLua: postActivation runs as root ($HOME=/var/root), but sketchybar
+      # runs as the user and loads it from the USER's ~/.local/share. Clone and
+      # `make install` as the user (-H sets HOME) so it lands where it's read.
+      SBARLUA_DIR="/Users/${user}/.local/share/sketchybar_lua"
       if [ ! -f "$SBARLUA_DIR/sketchybar.so" ]; then
         echo "Installing SbarLua..."
-        TMP=$(mktemp -d)
-        ${pkgs.git}/bin/git clone --depth 1 https://github.com/FelixKratz/SbarLua.git "$TMP/SbarLua" || true
+        TMP=$(sudo -u ${user} mktemp -d)
+        sudo -u ${user} ${pkgs.git}/bin/git clone --depth 1 https://github.com/FelixKratz/SbarLua.git "$TMP/SbarLua" || true
         if [ -d "$TMP/SbarLua" ]; then
-          ( cd "$TMP/SbarLua" && /usr/bin/make install ) || echo "SbarLua build failed; run 'make install' in SbarLua manually"
+          ( cd "$TMP/SbarLua" && sudo -u ${user} -H /usr/bin/make install ) || echo "SbarLua build failed; run 'make install' in SbarLua manually"
         fi
         rm -rf "$TMP"
       fi
