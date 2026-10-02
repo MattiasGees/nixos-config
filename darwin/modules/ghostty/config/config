@@ -69,7 +69,10 @@ palette = 18=#E98074
 
 # Performance
 shell-integration = detect
-shell-integration-features = no-cursor
+# ssh-terminfo installs Ghostty's terminfo on hosts that lack it (first connect,
+# then cached); ssh-env falls back to TERM=xterm-256color if that fails. Without
+# these, remote shells print "can't find terminal definition for xterm-ghostty".
+shell-integration-features = no-cursor,ssh-env,ssh-terminfo
 
 # Behavior
 copy-on-select = clipboard
