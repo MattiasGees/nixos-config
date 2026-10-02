@@ -70,7 +70,6 @@ in
       "corelocationcli"
       "beeper"
       "launchcontrol"
-      "orbstack"
       "kitty"
       "gpg-suite"
       "google-chrome"
