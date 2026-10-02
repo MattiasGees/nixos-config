@@ -7,6 +7,30 @@
 { config, pkgs, user, system, ... }:
 let
   wallpaper = ../wallpapers/Sienna.jpg;   # Desktop background, set in postActivation
+
+  # Ghostty uses native macOS tabs, which the AX API reports as separate
+  # windows, so yabai tiles every new tab as a new window (half-screen split).
+  # On a new Ghostty window, if the window focused just before it is a Ghostty
+  # window that is now hidden, the new one is a tab of that group: stack it onto
+  # that tab's node so the group keeps one tile. A real new window (Cmd+N)
+  # leaves the previous one visible and is tiled normally. Closing a tab just
+  # drops it from the stack, so nothing is re-laid-out or swapped.
+  yabaiGhosttyTabStack = pkgs.writeShellScript "yabai-ghostty-tab-stack" ''
+    yabai=${config.services.yabai.package}/bin/yabai
+    jq=${pkgs.jq}/bin/jq
+    new="$YABAI_WINDOW_ID"
+    # macOS hides the previous tab just after creating the new one; retry briefly.
+    for _ in 1 2 3 4 5 6 7 8 9 10; do
+      prev=$($yabai -m query --windows --window recent 2>/dev/null | $jq -r --argjson new "$new" '
+        select(.app == "Ghostty" and .id != $new and ."is-visible" == false
+               and ."is-minimized" == false and ."is-floating" == false) | .id')
+      if [ -n "$prev" ]; then
+        $yabai -m window "$new" --stack "$prev"
+        exit 0
+      fi
+      sleep 0.05
+    done
+  '';
 in
 {
   security.pam.services.sudo_local.touchIdAuth = true;
@@ -150,11 +174,8 @@ in
         # The SA lives in Dock and dies with it; reload it when Dock restarts.
         yabai -m signal --add event=dock_did_restart action="sudo ${config.services.yabai.package}/bin/yabai --load-sa"
 
-        # Ghostty's native tabs are separate windows to the AX API, so yabai tiles
-        # a new tab as a new window (half-screen split). Re-applying the layout
-        # folds the tab group back into one tile. https://ghostty.org/docs/help/macos-tiling-wms
-        yabai -m signal --add app='^Ghostty$' event=window_created action='yabai -m space --layout bsp'
-        yabai -m signal --add app='^Ghostty$' event=window_destroyed action='yabai -m space --layout bsp'
+        # Stack new Ghostty tabs onto their tab group (see yabaiGhosttyTabStack).
+        yabai -m signal --add label=ghostty_tab_stack app='^Ghostty$' event=window_created action='${yabaiGhosttyTabStack}'
 
         yabai -m rule --add app='^Emacs$' manage=on
         yabai -m rule --add title='Preferences' manage=off layer=above
