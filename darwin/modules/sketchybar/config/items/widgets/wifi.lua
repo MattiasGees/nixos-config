@@ -77,8 +77,6 @@ local ip = popup.row(wifi_bracket, "IP address", { mono = true })
 local mask = popup.row(wifi_bracket, "Subnet mask", { mono = true })
 local router = popup.row(wifi_bracket, "Router", { mono = true })
 local signal = popup.row(wifi_bracket, "Signal")
-local speed_sep = popup.separator(wifi_bracket)
-local speedtest = popup.row(wifi_bracket, "Speed test", { value = "Run", value_color = c.accent })
 local bottom = popup.spacer(wifi_bracket)
 
 -- RSSI for the current network only: the first "Signal / Noise" line precedes
@@ -101,27 +99,7 @@ local function refresh_signal()
   end)
 end
 
-local function run_speedtest()
-  speedtest:set({ label = { string = "Testing…", color = c.secondary, font = popup.font.body } })
-  sbar.exec("networkQuality 2>/dev/null | awk '/Downlink capacity/{d=$3} /Uplink capacity/{u=$3} END{printf \"%s|%s\", d, u}'", function(out)
-    local dl, ul = (out or ""):match("^([^|]*)|(.*)$")
-    if dl and dl ~= "" then
-      speedtest:set({ label = {
-        string = string.format("↓%.0f  ↑%.0f Mbps", tonumber(dl) or 0, tonumber(ul) or 0),
-        color = c.text,
-        font = popup.font.mono,
-      } })
-    else
-      speedtest:set({ label = { string = "Failed, retry", color = c.accent, font = popup.font.body } })
-    end
-  end)
-end
-
-speedtest:subscribe("mouse.clicked", run_speedtest)
-
--- Populate on startup so nothing needs a manual run.
 refresh_signal()
-run_speedtest()
 
 sbar.add("item", { position = "right", width = settings.group_paddings })
 
@@ -155,7 +133,6 @@ wifi:subscribe({"wifi_change", "system_woke"}, function(env)
     })
   end)
   refresh_signal()
-  run_speedtest()
 end)
 
 local function hide_details()
@@ -186,7 +163,7 @@ local function toggle_details()
   end
 end
 
--- Hover reveals the network details popup (which also holds the speed test).
+-- Hover reveals the network details popup.
 local function wifi_open_details()
   hide_details()
   toggle_details()
@@ -198,9 +175,9 @@ wifi:subscribe("mouse.entered", wifi_hover.enter)
 wifi_up:subscribe("mouse.exited", wifi_hover.leave)
 wifi_down:subscribe("mouse.exited", wifi_hover.leave)
 wifi:subscribe("mouse.exited", wifi_hover.leave)
-popup.bind(wifi_hover, { header, header_sep, signal, speed_sep, bottom })
--- Addresses copy on click; the speed test runs on click.
-popup.bind(wifi_hover, { ip, mask, router, speedtest }, true)
+popup.bind(wifi_hover, { header, header_sep, signal, bottom })
+-- Addresses copy on click.
+popup.bind(wifi_hover, { ip, mask, router }, true)
 
 local function copy_label_to_clipboard(env)
   local label = sbar.query(env.NAME).label.value
