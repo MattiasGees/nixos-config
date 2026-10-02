@@ -150,6 +150,12 @@ in
         # The SA lives in Dock and dies with it; reload it when Dock restarts.
         yabai -m signal --add event=dock_did_restart action="sudo ${config.services.yabai.package}/bin/yabai --load-sa"
 
+        # Ghostty's native tabs are separate windows to the AX API, so yabai tiles
+        # a new tab as a new window (half-screen split). Re-applying the layout
+        # folds the tab group back into one tile. https://ghostty.org/docs/help/macos-tiling-wms
+        yabai -m signal --add app='^Ghostty$' event=window_created action='yabai -m space --layout bsp'
+        yabai -m signal --add app='^Ghostty$' event=window_destroyed action='yabai -m space --layout bsp'
+
         yabai -m rule --add app='^Emacs$' manage=on
         yabai -m rule --add title='Preferences' manage=off layer=above
         yabai -m rule --add title='Library' manage=off layer=above
