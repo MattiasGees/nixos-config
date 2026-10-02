@@ -75,7 +75,6 @@ in
       "google-chrome"
       # "now-tv-player"
       "plex"
-      "steam"
       "ghostty"
       # "alacritty"
       "slack"
