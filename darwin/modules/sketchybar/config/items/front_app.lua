@@ -9,6 +9,9 @@ local front_app = sbar.add("item", "front_app", {
       style = settings.font.style_map["Black"],
       size = 12.0,
     },
+    -- Cap the width so long app names scroll instead of running under the
+    -- MacBook notch (bar has scroll_texts = true).
+    max_chars = 13,
   },
   updates = true,
 })
