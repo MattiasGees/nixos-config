@@ -2,9 +2,12 @@
 { pkgs, ... }:
 
 {
+  # Runs `colima start -f` as a launchd agent at login. With no `settings`, it
+  # keeps using the existing ~/.colima/default/colima.yaml.
+  services.colima.enable = true;
+
   home = {
     packages = with pkgs; [
-      colima
       lima
       docker-buildx
       docker-compose
