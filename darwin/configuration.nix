@@ -58,7 +58,6 @@ in
       "coreutils"
       "mosh"
       "lua"
-      "nowplaying-cli"
       # Brew-only CLIs (not provided / not cleanly on darwin via nixpkgs)
       "vitobotta/tap/hetzner_k3s"
     ];

@@ -1,5 +1,7 @@
 require("items.widgets.battery")
 require("items.widgets.volume")
+require("items.media")
 require("items.widgets.wifi")
+require("items.tailscale")
 require("items.widgets.cpu")
 require("items.widgets.rain")

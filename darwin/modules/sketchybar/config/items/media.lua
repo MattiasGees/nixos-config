@@ -2,27 +2,48 @@ local icons = require("icons")
 local colors = require("colors")
 local settings = require("settings")
 local hover = require("helpers.hover")
+local popup = require("helpers.popup")
 
-local whitelist = { ["Spotify"] = true,
-                    ["Music"] = true    };
+local c = colors.popup
+
+-- Spotify now-playing. sketchybar's media_change event no longer fires on
+-- recent macOS, so state comes from Spotify's AppleScript dictionary
+-- (helpers/spotify.applescript), refreshed on Spotify's own playback
+-- notification and once a second while the popup is open.
+
+local QUERY = 'osascript "$CONFIG_DIR/helpers/spotify.applescript"'
+local function spotify(cmd)
+  return "osascript -e 'tell application \"Spotify\" to " .. cmd .. "'"
+end
+
+local ART_PX = 640            -- Spotify artwork urls are 640x640
+local BAR_COVER = 24
+local COVER = 56
+local INSET = 6               -- matches helpers/popup.lua
+local PAD = 10
+local ROW_W = popup.ROW_W
+local TEXT_X = PAD + COVER + 12
+local BAR_INSET = 16          -- progress bar / times inset, like the volume slider
+local BAR_W = popup.WIDTH - 2 * BAR_INSET
+local CONTROLS_W = 168
+
+local tmp = os.getenv("TMPDIR") or "/tmp"
+if not tmp:match("/$") then tmp = tmp .. "/" end
+local ART_DIR = tmp .. "sketchybar-spotify"
+
+sbar.add("event", "spotify_change", "com.spotify.client.PlaybackStateChanged")
 
 local media_cover = sbar.add("item", {
   position = "right",
   background = {
-    image = {
-      string = "media.artwork",
-      scale = 0.85,
-    },
+    image = { scale = BAR_COVER / ART_PX, corner_radius = 5 },
     color = colors.transparent,
   },
   label = { drawing = false },
   icon = { drawing = false },
   drawing = false,
   updates = true,
-  popup = {
-    align = "center",
-    horizontal = true,
-  }
+  popup = { align = "center" },
 })
 
 local media_artist = sbar.add("item", {
@@ -55,31 +76,127 @@ local media_title = sbar.add("item", {
   },
 })
 
--- Transport controls: round buttons that light up under the pointer.
-local function control(icon, size, script, pad_l, pad_r)
-  return sbar.add("item", {
-    position = "popup." .. media_cover.name,
-    padding_left = pad_l or 0,
-    padding_right = pad_r or 0,
-    icon = {
-      string = icon,
-      font = { family = settings.font.text, style = settings.font.style_map["Regular"], size = size },
-      color = colors.popup.text,
-      width = 40,
-      align = "center",
-      padding_left = 0,
-      padding_right = 0,
-      background = { drawing = true, color = colors.transparent, height = 34, corner_radius = 17 },
-    },
-    label = { drawing = false },
-    background = { drawing = true, color = colors.transparent, height = 46, border_width = 0 },
-    click_script = script,
-  })
+local media_padding = sbar.add("item", {
+  position = "right",
+  drawing = false,
+  width = settings.group_paddings,
+})
+
+-- Popup rows, top to bottom: cover + title/artist, progress bar, times,
+-- transport controls.
+local in_popup = "popup." .. media_cover.name
+
+-- Cover is the row's background image (drawn at its left edge); the title
+-- (icon) and artist (label) sit to its right, stacked via y_offset. A fixed
+-- text width is the text's whole length (paddings are only a draw offset),
+-- so the zero-width icon takes no room and both start TEXT_X in.
+local track_row = sbar.add("item", {
+  position = in_popup,
+  width = ROW_W,
+  padding_left = INSET,
+  padding_right = INSET,
+  icon = {
+    font = popup.font.title,
+    color = c.text,
+    width = 0,
+    align = "left",
+    padding_left = TEXT_X,
+    padding_right = 0,
+    y_offset = 9,
+    max_chars = 24,       -- ~ROW_W - TEXT_X - PAD of SF Pro 13
+  },
+  label = {
+    font = popup.font.body,
+    color = c.secondary,
+    width = ROW_W,
+    align = "left",
+    padding_left = TEXT_X,
+    padding_right = 0,
+    y_offset = -9,
+    max_chars = 24,       -- ~ROW_W - TEXT_X - PAD of SF Pro 13
+  },
+  background = {
+    drawing = true,
+    color = colors.transparent,
+    height = COVER + 20,
+    border_width = 0,
+    image = { scale = COVER / ART_PX, corner_radius = 6, border_width = 0, padding_left = PAD },
+  },
+})
+
+-- Click to seek.
+local progress = sbar.add("slider", BAR_W, {
+  position = in_popup,
+  padding_left = BAR_INSET,
+  padding_right = BAR_INSET,
+  icon = { drawing = false },
+  label = { drawing = false },
+  slider = {
+    highlight_color = c.secondary,
+    background = { height = 4, corner_radius = 2, color = 0x33ffffff },
+    knob = { drawing = false },
+  },
+  background = { drawing = true, color = colors.transparent, height = 16, border_width = 0 },
+})
+
+local times = sbar.add("item", {
+  position = in_popup,
+  width = BAR_W,
+  padding_left = BAR_INSET,
+  padding_right = BAR_INSET,
+  icon = {
+    font = popup.font.mono,
+    color = c.tertiary,
+    width = BAR_W / 2,
+    align = "left",
+    padding_left = 0,
+    padding_right = 0,
+  },
+  label = {
+    font = popup.font.mono,
+    color = c.tertiary,
+    width = BAR_W / 2,
+    align = "right",
+    padding_left = 0,
+    padding_right = 0,
+  },
+  background = { drawing = true, color = colors.transparent, height = 16, border_width = 0 },
+})
+
+-- Popup items each own a full row, so three side-by-side buttons are one
+-- invisible slider: the click's PERCENTAGE picks the third that was hit.
+-- The glyphs are a zero-width icon (so the slider starts at the same x),
+-- centred over the slider: center-aligned on its own length, which counts
+-- the paddings, so padding_left = CONTROLS_W lands it mid-slider.
+local function controls_glyphs(playing)
+  local em = " "
+  return icons.media.back .. em .. em .. (playing and icons.media.pause or icons.media.play)
+    .. em .. em .. icons.media.forward
 end
 
-local media_back = control(icons.media.back, 15.0, "nowplaying-cli previous", 8, 2)
-local media_playpause = control(icons.media.play_pause, 19.0, "nowplaying-cli togglePlayPause", 2, 2)
-local media_forward = control(icons.media.forward, 15.0, "nowplaying-cli next", 2, 8)
+local controls = sbar.add("slider", CONTROLS_W, {
+  position = in_popup,
+  padding_left = (popup.WIDTH - CONTROLS_W) / 2,
+  padding_right = (popup.WIDTH - CONTROLS_W) / 2,
+  icon = {
+    string = controls_glyphs(false),
+    font = { family = settings.font.text, style = settings.font.style_map["Regular"], size = 18.0 },
+    color = c.text,
+    width = 0,
+    align = "center",
+    padding_left = CONTROLS_W,
+    padding_right = 0,
+  },
+  label = { drawing = false },
+  slider = {
+    highlight_color = colors.transparent,
+    background = { height = 30, color = colors.transparent },
+    knob = { drawing = false },
+  },
+  background = { drawing = true, color = colors.transparent, height = 40, border_width = 0 },
+})
+
+local bottom = popup.spacer(media_cover, nil, 6)
 
 local interrupt = 0
 local function animate_detail(detail)
@@ -92,26 +209,108 @@ local function animate_detail(detail)
   end)
 end
 
-media_cover:subscribe("media_change", function(env)
-  if whitelist[env.INFO.app] then
-    local drawing = (env.INFO.state == "playing")
-    media_artist:set({ drawing = drawing, label = env.INFO.artist, })
-    media_title:set({ drawing = drawing, label = env.INFO.title, })
-    media_cover:set({ drawing = drawing })
+local function clock(s)
+  return string.format("%d:%02d", s // 60, s % 60)
+end
 
-    if drawing then
+-- Artwork is fetched once per track into a per-track file (sketchybar caches
+-- images by path) and the previous track's file is removed.
+local art_track
+local function load_artwork(id, url)
+  if id == art_track then return end
+  art_track = id
+  if url == "" then return end
+
+  local file = ART_DIR .. "/" .. id:gsub("[^%w]", "_") .. ".jpg"
+  sbar.exec("mkdir -p '" .. ART_DIR .. "' && find '" .. ART_DIR .. "' -name '*.jpg' ! -path '" .. file .. "' -delete; "
+    .. "[ -s '" .. file .. "' ] || { curl -sfL --max-time 10 -o '" .. file .. ".part' '" .. url .. "' && mv '" .. file .. ".part' '" .. file .. "'; }; "
+    .. "[ -s '" .. file .. "' ] && echo ok", function(out)
+    if art_track ~= id or not (out or ""):match("ok") then return end
+    media_cover:set({ background = { image = { string = file } } })
+    track_row:set({ background = { image = { string = file } } })
+  end)
+end
+
+local track
+local duration = 0
+local open_gen = 0 -- bumped when the popup closes; stops the refresh loop
+local function render(out)
+  local f = {}
+  for line in (((type(out) == "string" and out) or "") .. "\n"):gmatch("(.-)\n") do f[#f + 1] = line end
+  local state = f[1]
+
+  if state ~= "playing" and state ~= "paused" then
+    track = nil
+    open_gen = open_gen + 1
+    for _, item in ipairs({ media_cover, media_artist, media_title, media_padding }) do
+      item:set({ drawing = false })
+    end
+    media_cover:set({ popup = { drawing = false } })
+    return
+  end
+
+  local title, artist, url, id = f[2] or "", f[3] or "", f[4] or "", f[7] or ""
+  local position = tonumber(f[5]) or 0
+  duration = tonumber(f[6]) or 0
+
+  media_cover:set({ drawing = true })
+  media_padding:set({ drawing = true })
+  media_artist:set({ drawing = true, label = artist })
+  media_title:set({ drawing = true, label = title })
+  track_row:set({ icon = title, label = artist })
+  controls:set({ icon = controls_glyphs(state == "playing") })
+  progress:set({ slider = { percentage = duration > 0 and math.floor(position * 100 / duration) or 0 } })
+  times:set({ icon = clock(position), label = clock(duration) })
+  load_artwork(id, url)
+
+  -- Flash the title/artist in the bar when a new track starts.
+  if id ~= track then
+    track = id
+    if state == "playing" then
       animate_detail(true)
       interrupt = interrupt + 1
       sbar.delay(5, animate_detail)
-    else
-      media_cover:set({ popup = { drawing = false } })
     end
   end
+end
+
+local function refresh()
+  sbar.exec(QUERY, render)
+end
+
+media_cover:subscribe("spotify_change", refresh)
+refresh()
+
+progress:subscribe("mouse.clicked", function(env)
+  local pct = tonumber(env.PERCENTAGE)
+  if not pct or duration <= 0 then return end
+  sbar.exec(spotify("set player position to " .. math.floor(duration * pct / 100)), refresh)
 end)
 
+controls:subscribe("mouse.clicked", function(env)
+  local pct = tonumber(env.PERCENTAGE) or 50
+  local cmd = pct < 100 / 3 and "previous track" or pct < 200 / 3 and "playpause" or "next track"
+  sbar.exec(spotify(cmd), refresh)
+end)
+
+-- Keep the progress bar moving while the popup is open.
+local function tick(gen)
+  if gen ~= open_gen then return end
+  refresh()
+  sbar.delay(1, function() tick(gen) end)
+end
+
 local media_hover = hover(
-  function() media_cover:set({ popup = { drawing = true } }) end,
-  function() media_cover:set({ popup = { drawing = false } }) end
+  function()
+    if media_cover:query().popup.drawing == "on" then return end
+    open_gen = open_gen + 1
+    media_cover:set({ popup = { drawing = true } })
+    tick(open_gen)
+  end,
+  function()
+    open_gen = open_gen + 1
+    media_cover:set({ popup = { drawing = false } })
+  end
 )
 
 media_cover:subscribe("mouse.entered", function(env)
@@ -125,11 +324,4 @@ media_cover:subscribe("mouse.exited", function(env)
   media_hover.leave()
 end)
 
-local function lit(on)
-  return function(env)
-    sbar.set(env.NAME, { icon = { background = { color = on and colors.popup.hover or colors.transparent } } })
-  end
-end
-for _, control_item in ipairs({ media_back, media_playpause, media_forward }) do
-  media_hover.bind(control_item, lit(true), lit(false))
-end
+popup.bind(media_hover, { track_row, progress, times, controls, bottom })

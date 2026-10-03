@@ -39,6 +39,8 @@ local icons = {
       back = "􀊊",
       forward = "􀊌",
       play_pause = "􀊈",
+      play = "􀊄",
+      pause = "􀊆",
     },
   },
 
@@ -81,6 +83,8 @@ local icons = {
       back = "",
       forward = "",
       play_pause = "",
+      play = "",
+      pause = "",
     },
   },
 }
