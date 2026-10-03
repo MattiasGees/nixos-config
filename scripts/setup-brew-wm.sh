@@ -90,7 +90,6 @@ yabai -m rule --add title='Preferences' manage=off sub-layer=above
 yabai -m rule --add title='Library' manage=off sub-layer=above
 yabai -m rule --add app='^System Preferences$' manage=off sub-layer=above
 yabai -m rule --add app='Activity Monitor' manage=off sub-layer=above
-yabai -m rule --add app='Finder' manage=off sub-layer=above
 yabai -m rule --add app='^System Information$' manage=off sub-layer=above
 EOF
 
