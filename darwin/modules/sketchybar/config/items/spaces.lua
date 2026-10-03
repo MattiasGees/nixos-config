@@ -17,7 +17,7 @@ for i = 1, 10, 1 do
       highlight_color = colors.red,
     },
     label = {
-      padding_right = 12,
+      padding_right = 11,
       color = colors.grey,
       highlight_color = colors.white,
       font = "sketchybar-app-font:Regular:16.0",
@@ -107,8 +107,8 @@ local spaces_indicator = sbar.add("item", {
   padding_left = -3,
   padding_right = 0,
   icon = {
-    padding_left = 8,
-    padding_right = 9,
+    padding_left = 6,
+    padding_right = 6,
     color = colors.grey,
     string = icons.switch.on,
   },
@@ -126,18 +126,13 @@ local spaces_indicator = sbar.add("item", {
 })
 
 space_window_observer:subscribe("space_windows_change", function(env)
-  local icon_line = ""
-  local no_app = true
+  -- Space-separated, with no leading space: the icon's padding already
+  -- separates them from the space number.
+  local app_glyphs = {}
   for app, count in pairs(env.INFO.apps) do
-    no_app = false
-    local lookup = app_icons[app]
-    local icon = ((lookup == nil) and app_icons["default"] or lookup)
-    icon_line = icon_line .. " " .. icon
+    app_glyphs[#app_glyphs + 1] = app_icons[app] or app_icons["default"]
   end
-
-  if (no_app) then
-    icon_line = " —"
-  end
+  local icon_line = #app_glyphs > 0 and table.concat(app_glyphs, " ") or "—"
   sbar.animate("tanh", 10, function()
     spaces[env.INFO.space]:set({ label = icon_line })
   end)
