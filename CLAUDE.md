@@ -48,7 +48,7 @@ NixOS builders import `hardware/<name>.nix`, `machines/<name>.nix` and `machines
   - `nixos.nix` / `nixos-server.nix` — system-level user + services (desktop vs. SSH/mosh/docker server).
   - `home-manager.nix` — desktop/Mac profile; platform-specific imports are gated with `lib.optionals pkgs.stdenv.hostPlatform.isDarwin` / `isLinux`.
   - `home-manager-server.nix` — stripped headless profile (servers, polaris, standalone).
-- `darwin/configuration.nix` — Homebrew (declarative, `cleanup = "zap"`: anything unlisted is uninstalled), yabai/skhd/jankyborders (configured inline here — the only place they're configured), `system.defaults`. `darwin/paseo.nix` binds the Paseo daemon to the Tailscale IP.
+- `darwin/configuration.nix` — Homebrew (declarative, `cleanup = "zap"`: anything unlisted is uninstalled), yabai/skhd/jankyborders (configured inline here; `scripts/setup-brew-wm.sh` is a Homebrew-only copy for the nix-less work laptop — keep in sync), `system.defaults`. `darwin/paseo.nix` binds the Paseo daemon to the Tailscale IP.
 - `pkgs/` — package lists imported as **home-manager modules**, not derivations. `pkgs/default.nix` bundles `core.nix` + `dev.nix` + `kube.nix` for the desktop/Mac profile; the server profile imports those three directly. `linux.nix`, `nixos.nix`, `macos.nix` are platform-specific.
 - `modules/` — reusable pieces, always imported explicitly (nothing is auto-discovered):
   - `shell/`, `editors/`, `desktop/`, `programs/`, `archive-downloads/`, `vm/` — home-manager / workstation.
