@@ -280,7 +280,13 @@ in
         showhidden = true;
         mru-spaces = false;
         show-recents = false;
-        static-only = true;
+        # static-only hides every pinned item, folders included. Instead pin no
+        # apps (running apps still show) and only the Downloads stack.
+        static-only = false;
+        persistent-apps = [ ];
+        persistent-others = [
+          { folder = { path = "/Users/${user}/Downloads"; arrangement = "date-added"; }; }
+        ];
         tilesize = 40;
       };
       finder = {
