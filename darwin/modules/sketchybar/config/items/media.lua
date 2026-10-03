@@ -26,6 +26,8 @@ local TEXT_X = PAD + COVER + 12
 local BAR_INSET = 16          -- progress bar / times inset, like the volume slider
 local BAR_W = popup.WIDTH - 2 * BAR_INSET
 local CONTROLS_W = 168
+local TEXT_PAD = 3            -- padding_left of the bar's title/artist items
+local ARTIST_COLOR = colors.with_alpha(colors.white, 0.6)
 
 local tmp = os.getenv("TMPDIR") or "/tmp"
 if not tmp:match("/$") then tmp = tmp .. "/" end
@@ -46,17 +48,20 @@ local media_cover = sbar.add("item", {
   popup = { align = "center" },
 })
 
+-- Title and artist are both zero-width so they stack on top of each other;
+-- media_padding reserves room for the wider of the two while they're shown
+-- (see animate_detail).
 local media_artist = sbar.add("item", {
   position = "right",
   drawing = false,
-  padding_left = 3,
+  padding_left = TEXT_PAD,
   padding_right = 0,
   width = 0,
   icon = { drawing = false },
   label = {
     width = 0,
     font = { size = 9 },
-    color = colors.with_alpha(colors.white, 0.6),
+    color = ARTIST_COLOR,
     max_chars = 18,
     y_offset = 6,
   },
@@ -65,8 +70,9 @@ local media_artist = sbar.add("item", {
 local media_title = sbar.add("item", {
   position = "right",
   drawing = false,
-  padding_left = 3,
+  padding_left = TEXT_PAD,
   padding_right = 0,
+  width = 0,
   icon = { drawing = false },
   label = {
     font = { size = 11 },
@@ -79,7 +85,7 @@ local media_title = sbar.add("item", {
 local media_padding = sbar.add("item", {
   position = "right",
   drawing = false,
-  width = settings.group_paddings,
+  width = settings.group_paddings + TEXT_PAD,
 })
 
 -- Popup rows, top to bottom: cover + title/artist, progress bar, times,
@@ -198,14 +204,43 @@ local controls = sbar.add("slider", CONTROLS_W, {
 
 local bottom = popup.spacer(media_cover, nil, 6)
 
+local function drawn_width(item)
+  local w = 0
+  for _, rect in pairs(item:query().bounding_rects or {}) do
+    w = math.max(w, rect.size[1])
+  end
+  return w
+end
+
+-- sketchybar can't measure text, but a drawn label's bounding rect is its
+-- width. While hidden the labels are revealed transparently to measure them;
+-- the items are zero-width, so nothing else moves.
+local shown = false
+local function text_width()
+  if not shown then
+    for _, item in ipairs({ media_artist, media_title }) do
+      item:set({ label = { width = "dynamic", color = colors.transparent } })
+    end
+  end
+  local w = math.max(drawn_width(media_artist), drawn_width(media_title))
+  if not shown then
+    media_artist:set({ label = { width = 0, color = ARTIST_COLOR } })
+    media_title:set({ label = { width = 0, color = colors.white } })
+  end
+  return w
+end
+
 local interrupt = 0
 local function animate_detail(detail)
   if (not detail) then interrupt = interrupt - 1 end
   if interrupt > 0 and (not detail) then return end
 
+  local reserve = detail and text_width() or 0
+  shown = detail
   sbar.animate("tanh", 30, function()
     media_artist:set({ label = { width = detail and "dynamic" or 0 } })
     media_title:set({ label = { width = detail and "dynamic" or 0 } })
+    media_padding:set({ width = settings.group_paddings + TEXT_PAD + reserve })
   end)
 end
 
