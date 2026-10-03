@@ -125,46 +125,15 @@ fetch_volume()
 
 local volume_hover -- forward declaration; assigned after the detail helpers
 
+-- Bumped on every open/close so a device lookup that finishes after the
+-- pointer has left (or after a newer open) is dropped instead of drawn.
+local open_gen = 0
+
 local function volume_collapse_details()
-  local drawing = volume_bracket:query().popup.drawing == "on"
-  if not drawing then return end
+  open_gen = open_gen + 1
+  if volume_bracket:query().popup.drawing ~= "on" then return end
   volume_bracket:set({ popup = { drawing = false } })
   sbar.remove('/volume.device\\.*/')
-end
-
-local current_audio_device = "None"
-local function volume_toggle_details(env)
-  if env.BUTTON == "right" then
-    sbar.exec("open /System/Library/PreferencePanes/Sound.prefpane")
-    return
-  end
-
-  local should_draw = volume_bracket:query().popup.drawing == "off"
-  if should_draw then
-    volume_bracket:set({ popup = { drawing = true } })
-    sbar.exec("SwitchAudioSource -t output -c", function(result)
-      current_audio_device = result:sub(1, -2)
-      sbar.exec("SwitchAudioSource -a -t output", function(available)
-        local counter = 0
-
-        for device in string.gmatch(available, '[^\r\n]+') do
-          local dev = popup.choice(volume_bracket, device, {
-            name = "volume.device." .. counter,
-            checked = device == current_audio_device,
-            click_script = 'SwitchAudioSource -s "' .. device .. '" && sketchybar'
-              .. ' --set "/volume\\.device\\.[0-9]+/" icon.color=' .. colors.transparent
-              .. ' --set $NAME icon.color=' .. c.accent,
-          })
-          popup.bind(volume_hover, { dev }, true)
-          counter = counter + 1
-        end
-        -- Named like the devices so the collapse regex cleans it up too.
-        popup.bind(volume_hover, { popup.spacer(volume_bracket, "volume.device.end") })
-      end)
-    end)
-  else
-    volume_collapse_details()
-  end
 end
 
 local function volume_scroll(env)
@@ -173,10 +142,39 @@ local function volume_scroll(env)
 end
 
 -- Hover reveals the output-device switcher; right-click opens Sound prefs.
+-- The device rows are built before the popup is drawn, so it appears at its
+-- final size instead of growing as they arrive. Re-entering while it is open
+-- (icon <-> percent, or back from the popup) leaves it untouched.
 local function volume_open_details()
   fetch_volume()
-  volume_collapse_details()
-  volume_toggle_details({})
+  if volume_bracket:query().popup.drawing == "on" then return end
+
+  open_gen = open_gen + 1
+  local gen = open_gen
+  sbar.exec("SwitchAudioSource -t output -c", function(result)
+    local current_audio_device = result:sub(1, -2)
+    sbar.exec("SwitchAudioSource -a -t output", function(available)
+      if gen ~= open_gen then return end
+      sbar.remove('/volume.device\\.*/')
+
+      local counter = 0
+      for device in string.gmatch(available, '[^\r\n]+') do
+        local dev = popup.choice(volume_bracket, device, {
+          name = "volume.device." .. counter,
+          checked = device == current_audio_device,
+          click_script = 'SwitchAudioSource -s "' .. device .. '" && sketchybar'
+            .. ' --set "/volume\\.device\\.[0-9]+/" icon.color=' .. colors.transparent
+            .. ' --set $NAME icon.color=' .. c.accent,
+        })
+        popup.bind(volume_hover, { dev }, true)
+        counter = counter + 1
+      end
+      -- Named like the devices so the collapse regex cleans it up too.
+      popup.bind(volume_hover, { popup.spacer(volume_bracket, "volume.device.end") })
+
+      volume_bracket:set({ popup = { drawing = true } })
+    end)
+  end)
 end
 
 local function volume_prefs(env)
