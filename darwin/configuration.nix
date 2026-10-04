@@ -150,12 +150,11 @@ in
         yabai -m signal --add event=dock_did_restart action="sudo ${config.services.yabai.package}/bin/yabai --load-sa"
 
         yabai -m rule --add app='^Emacs$' manage=on
-        yabai -m rule --add title='Preferences' manage=off layer=above
-        yabai -m rule --add title='Library' manage=off layer=above
-        yabai -m rule --add app='^System Preferences$' manage=off layer=above
-        yabai -m rule --add app='Activity Monitor' manage=off layer=above
-        yabai -m rule --add app='Finder' manage=off layer=above
-        yabai -m rule --add app='^System Information$' manage=off layer=above
+        yabai -m rule --add title='Preferences' manage=off sub-layer=above
+        yabai -m rule --add title='Library' manage=off sub-layer=above
+        yabai -m rule --add app='^System Preferences$' manage=off sub-layer=above
+        yabai -m rule --add app='Activity Monitor' manage=off sub-layer=above
+        yabai -m rule --add app='^System Information$' manage=off sub-layer=above
       '';                                 # Specific rules for what is managed and layered.
     };
     skhd = {
