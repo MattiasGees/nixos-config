@@ -116,6 +116,8 @@ in
     ];
   };
 
+  # scripts/setup-brew-wm.sh mirrors yabai/skhd/jankyborders for Macs without
+  # nix-darwin (work laptop) — keep the two in sync.
   services = {
     yabai = {                             # Tiling window manager
       enable = true;
