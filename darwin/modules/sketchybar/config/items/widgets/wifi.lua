@@ -5,8 +5,8 @@ local hover = require("helpers.hover")
 local popup = require("helpers.popup")
 
 -- Execute the event provider binary which provides the event "network_update"
--- for the network interface "en0", which is fired every 2.0 seconds.
-sbar.exec("killall network_load >/dev/null; $CONFIG_DIR/helpers/event_providers/network_load/bin/network_load en0 network_update 2.0")
+-- for the network interface "en0", which is fired every 5.0 seconds.
+sbar.exec("killall network_load >/dev/null; $CONFIG_DIR/helpers/event_providers/network_load/bin/network_load en0 network_update 5.0")
 
 local wifi_up = sbar.add("item", "widgets.wifi1", {
   position = "right",
@@ -135,40 +135,39 @@ wifi:subscribe({"wifi_change", "system_woke"}, function(env)
   refresh_signal()
 end)
 
+-- Tracked here rather than queried: a query is a blocking round trip to
+-- sketchybar.
+local is_open = false
+
 local function hide_details()
+  is_open = false
   wifi_bracket:set({ popup = { drawing = false } })
 end
 
-local function toggle_details()
-  local should_draw = wifi_bracket:query().popup.drawing == "off"
-  if should_draw then
-    wifi_bracket:set({ popup = { drawing = true }})
-    sbar.exec("ipconfig getifaddr en0", function(result)
-      result = (result or ""):gsub("%s+$", "")
-      local connected = result ~= ""
-      header:set({ label = {
-        string = connected and "Connected" or "Not connected",
-        color = connected and c.green or c.secondary,
-      } })
-      ip:set({ label = connected and result or "—" })
-    end)
-    sbar.exec("networksetup -getinfo Wi-Fi | awk -F 'Subnet mask: ' '/^Subnet mask: / {print $2}'", function(result)
-      mask:set({ label = result })
-    end)
-    sbar.exec("networksetup -getinfo Wi-Fi | awk -F 'Router: ' '/^Router: / {print $2}'", function(result)
-      router:set({ label = result })
-    end)
-  else
-    hide_details()
-  end
+-- Hover reveals the network details popup. Moving between the up/down/wifi
+-- items while it is open leaves it untouched.
+local function show_details()
+  if is_open then return end
+  is_open = true
+  wifi_bracket:set({ popup = { drawing = true }})
+  sbar.exec("ipconfig getifaddr en0", function(result)
+    result = (result or ""):gsub("%s+$", "")
+    local connected = result ~= ""
+    header:set({ label = {
+      string = connected and "Connected" or "Not connected",
+      color = connected and c.green or c.secondary,
+    } })
+    ip:set({ label = connected and result or "—" })
+  end)
+  sbar.exec("networksetup -getinfo Wi-Fi | awk -F 'Subnet mask: ' '/^Subnet mask: / {print $2}'", function(result)
+    mask:set({ label = result })
+  end)
+  sbar.exec("networksetup -getinfo Wi-Fi | awk -F 'Router: ' '/^Router: / {print $2}'", function(result)
+    router:set({ label = result })
+  end)
 end
 
--- Hover reveals the network details popup.
-local function wifi_open_details()
-  hide_details()
-  toggle_details()
-end
-local wifi_hover = hover(wifi_open_details, hide_details)
+local wifi_hover = hover(show_details, hide_details)
 wifi_up:subscribe("mouse.entered", wifi_hover.enter)
 wifi_down:subscribe("mouse.entered", wifi_hover.enter)
 wifi:subscribe("mouse.entered", wifi_hover.enter)

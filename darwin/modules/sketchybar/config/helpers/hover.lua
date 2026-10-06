@@ -23,6 +23,18 @@ local CLOSE_DELAY = 0.35
 
 return function(open_fn, close_fn)
   local over = false
+  -- sbar.delay can't be cancelled, so only the most recently scheduled timer
+  -- acts; sweeping the pointer along the bar would otherwise run open/close
+  -- once per item crossed.
+  local latest = 0
+
+  local function schedule(delay, fn)
+    latest = latest + 1
+    local id = latest
+    sbar.delay(delay, function()
+      if id == latest then fn() end
+    end)
+  end
 
   local function try_open()
     if over then open_fn() end
@@ -34,12 +46,12 @@ return function(open_fn, close_fn)
 
   local function enter()
     over = true
-    sbar.delay(OPEN_DELAY, try_open)
+    schedule(OPEN_DELAY, try_open)
   end
 
   local function leave()
     over = false
-    sbar.delay(CLOSE_DELAY, try_close)
+    schedule(CLOSE_DELAY, try_close)
   end
 
   local api = { enter = enter, leave = leave }
