@@ -230,12 +230,16 @@ local function text_width()
   return w
 end
 
+-- Measured once per track in render(): each measurement is several blocking
+-- round trips to sketchybar, too many for every hover.
+local detail_width = 0
+
 local interrupt = 0
 local function animate_detail(detail)
   if (not detail) then interrupt = interrupt - 1 end
   if interrupt > 0 and (not detail) then return end
 
-  local reserve = detail and text_width() or 0
+  local reserve = detail and detail_width or 0
   shown = detail
   sbar.animate("tanh", 30, function()
     media_artist:set({ label = { width = detail and "dynamic" or 0 } })
@@ -269,6 +273,7 @@ end
 local track
 local duration = 0
 local open_gen = 0 -- bumped when the popup closes; stops the refresh loop
+local popup_open = false -- tracked here rather than queried (a blocking round trip)
 local function render(out)
   local f = {}
   for line in (((type(out) == "string" and out) or "") .. "\n"):gmatch("(.-)\n") do f[#f + 1] = line end
@@ -280,6 +285,7 @@ local function render(out)
     for _, item in ipairs({ media_cover, media_artist, media_title, media_padding }) do
       item:set({ drawing = false })
     end
+    popup_open = false
     media_cover:set({ popup = { drawing = false } })
     return
   end
@@ -301,6 +307,7 @@ local function render(out)
   -- Flash the title/artist in the bar when a new track starts.
   if id ~= track then
     track = id
+    detail_width = text_width()
     if state == "playing" then
       animate_detail(true)
       interrupt = interrupt + 1
@@ -337,12 +344,14 @@ end
 
 local media_hover = hover(
   function()
-    if media_cover:query().popup.drawing == "on" then return end
+    if popup_open then return end
+    popup_open = true
     open_gen = open_gen + 1
     media_cover:set({ popup = { drawing = true } })
     tick(open_gen)
   end,
   function()
+    popup_open = false
     open_gen = open_gen + 1
     media_cover:set({ popup = { drawing = false } })
   end

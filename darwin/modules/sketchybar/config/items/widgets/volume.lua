@@ -128,10 +128,14 @@ local volume_hover -- forward declaration; assigned after the detail helpers
 -- Bumped on every open/close so a device lookup that finishes after the
 -- pointer has left (or after a newer open) is dropped instead of drawn.
 local open_gen = 0
+-- Tracked here rather than queried: a query is a blocking round trip to
+-- sketchybar, and this runs on every hover exit.
+local is_open = false
 
 local function volume_collapse_details()
   open_gen = open_gen + 1
-  if volume_bracket:query().popup.drawing ~= "on" then return end
+  if not is_open then return end
+  is_open = false
   volume_bracket:set({ popup = { drawing = false } })
   sbar.remove('/volume.device\\.*/')
 end
@@ -147,7 +151,7 @@ end
 -- (icon <-> percent, or back from the popup) leaves it untouched.
 local function volume_open_details()
   fetch_volume()
-  if volume_bracket:query().popup.drawing == "on" then return end
+  if is_open then return end
 
   open_gen = open_gen + 1
   local gen = open_gen
@@ -172,6 +176,7 @@ local function volume_open_details()
       -- Named like the devices so the collapse regex cleans it up too.
       popup.bind(volume_hover, { popup.spacer(volume_bracket, "volume.device.end") })
 
+      is_open = true
       volume_bracket:set({ popup = { drawing = true } })
     end)
   end)

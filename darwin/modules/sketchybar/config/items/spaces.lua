@@ -138,10 +138,12 @@ space_window_observer:subscribe("space_windows_change", function(env)
   end)
 end)
 
+-- Tracked here rather than queried (a blocking round trip to sketchybar).
+local switch_on = true
 spaces_indicator:subscribe("swap_menus_and_spaces", function(env)
-  local currently_on = spaces_indicator:query().icon.value == icons.switch.on
+  switch_on = not switch_on
   spaces_indicator:set({
-    icon = currently_on and icons.switch.off or icons.switch.on
+    icon = switch_on and icons.switch.on or icons.switch.off
   })
 end)
 

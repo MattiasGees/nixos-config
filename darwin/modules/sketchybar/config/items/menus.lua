@@ -58,9 +58,11 @@ end
 
 menu_watcher:subscribe("front_app_switched", update_menus)
 
+-- Tracked here rather than queried (a blocking round trip to sketchybar).
+local menus_shown = false
 space_menu_swap:subscribe("swap_menus_and_spaces", function(env)
-  local drawing = menu_items[1]:query().geometry.drawing == "on"
-  if drawing then
+  menus_shown = not menus_shown
+  if not menus_shown then
     menu_watcher:set( { updates = false })
     sbar.set("/menu\\..*/", { drawing = false })
     sbar.set("/space\\..*/", { drawing = true })
