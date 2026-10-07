@@ -4,7 +4,7 @@ local hover = require("helpers.hover")
 local popup = require("helpers.popup")
 
 local ICON = "󱃾"
-local MAXLEN = 12
+local MAXLEN = 10 -- leftmost right-side item: any wider and it slides under the notch
 local ENV = 'export KUBECONFIG="${KUBECONFIG:-$HOME/.kube/config}"; '
   .. 'export PATH="/etc/profiles/per-user/mattias/bin:/opt/homebrew/bin:${KREW_ROOT:-$HOME/.krew}/bin:$PATH"; '
 
