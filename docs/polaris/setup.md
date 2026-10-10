@@ -269,7 +269,6 @@ place by hand is the service-account token — once, **before the first
        op://polaris/filebrowser/admin-password \
        op://polaris/pihole/password \
        op://polaris/conductor/ha_token \
-       op://polaris/conductor/rail_api_key \
        op://polaris/conductor/tfl_app_key; do \
        printf "%s -> " "$r"; \
        nix run --impure nixpkgs#_1password-cli -- read "$r" >/dev/null && echo OK || echo FAIL; \

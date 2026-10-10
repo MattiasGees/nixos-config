@@ -9,7 +9,7 @@
 # No login, so never add it to the public tunnel.
 #
 # Config: one YAML file, rendered by op-secrets from the 1Password item
-# `conductor` (fields ha_token, rail_api_key, tfl_app_key) to
+# `conductor` (fields ha_token, tfl_app_key; rail_api_key once that key exists) to
 # /var/lib/secrets/conductor.yaml, 0600 owned by conductor. The template is
 # deploy/polaris.config.yaml.tpl in the conductor repo (private: it describes
 # the house), taken from the pinned input, so a config change ships with a

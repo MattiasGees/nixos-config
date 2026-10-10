@@ -15,7 +15,7 @@ vmctl: never evaluate as root).
 | Service | `conductor.service`, user `conductor`, listens on `127.0.0.1:8420`; Caddy proxies the board, `/api`, the WebSocket and `/metrics` |
 | Version | `flake.nix` pins `?ref=refs/tags/vX.Y.Z`; `/api/health` reports that release's commit (in a conductor clone: `git rev-parse --short=7 'vX.Y.Z^{commit}'`; the `^{commit}` matters for annotated tags) |
 | Config | `deploy/polaris.config.yaml.tpl` in the conductor repo, taken from the pinned release → `/var/lib/secrets/conductor.yaml` (`0600 conductor`), rendered by op-secrets |
-| Secrets | 1Password item `conductor`, vault `polaris`: `ha_token`, `rail_api_key`, `tfl_app_key` |
+| Secrets | 1Password item `conductor`, vault `polaris`: `ha_token`, `tfl_app_key`; `rail_api_key` once the Rail Data Marketplace key arrives |
 | Database | `conductor` on the shared PostgreSQL, owned by the `conductor` role, peer auth over `/run/postgresql`. Best effort: conductor runs without it |
 | Logs | `journalctl -u conductor` (JSON lines) |
 
@@ -26,29 +26,24 @@ config template from the input); the vhost and its access guard are in
 
 ## First deploy
 
-1. **1Password.** In the `polaris` vault, create the item `conductor` with three
-   fields: `ha_token` (the long-lived token of the Conductor HA user),
-   `rail_api_key` (the Rail Data Marketplace key) and `tfl_app_key` (optional).
-   Leave the rail and TfL fields empty until their keys arrive. **Never type a
-   placeholder**: a made-up TfL key breaks the tube status (which works without
-   a key), and a made-up rail key turns "no api_key configured" into auth
-   errors.
+1. **1Password.** In the `polaris` vault, create the item `conductor` with the
+   fields `ha_token` (the long-lived token of the Conductor HA user) and
+   `tfl_app_key` (the TfL Primary key). There is no rail field until the Rail
+   Data Marketplace key arrives: the template's rail `api_key` is `""` until
+   then (rail shows as down, everything else works). **Never type a
+   placeholder**: a made-up key turns "no key" into auth errors.
 2. **Check the references** the template uses (see setup.md § op-secrets for
    the full list):
 
    ```bash
    sudo sh -c 'export OP_SERVICE_ACCOUNT_TOKEN="$(cat /etc/op/token)"; export NIXPKGS_ALLOW_UNFREE=1; \
-     for f in ha_token rail_api_key tfl_app_key; do printf "%s -> " "$f"; \
+     for f in ha_token tfl_app_key; do printf "%s -> " "$f"; \
        nix run --impure nixpkgs#_1password-cli -- read "op://polaris/conductor/$f" >/dev/null && echo OK || echo FAIL; done'
    ```
 
-   All three must print `OK`: one `FAIL` fails the whole render, and on a first
-   deploy that leaves no config file, so conductor keeps restarting. If
-   1Password won't keep an empty field (`FAIL` for `rail_api_key` or
-   `tfl_app_key`), the fix is in the conductor repo: replace that reference in
-   `deploy/polaris.config.yaml.tpl` with `""`, and deploy a release with that
-   change. Put the reference back (another release) once the key is in
-   1Password.
+   Both must print `OK`: one `FAIL` fails the whole render, and on a first
+   deploy that leaves no config file, so conductor keeps restarting. Never
+   leave a field empty that the template references: 1Password may drop it.
 3. **Deploy:** `git pull`, then `make switch NIXNAME=polaris`.
 4. **Check** (read-only). The first certificate takes about a minute (DNS-01;
    `journalctl -u caddy`):
@@ -127,8 +122,12 @@ nix job on its pull request shows that.
   `journalctl -u conductor`. After the switch, check
   `journalctl -b | grep op-secrets` for a `WARNING` on `conductor-config`: a
   failed render keeps the old file, so the change wouldn't take effect.
-- **A secret** (new HA token, the rail key arriving): edit the 1Password item,
+- **A secret** (a new HA token or TfL key): edit the 1Password item,
   `make switch` (re-renders the file), then `sudo systemctl restart conductor`.
+- **The rail key arriving:** add the field `rail_api_key` to the `conductor`
+  item, then in the conductor repo point the template's rail `api_key` at it
+  (written like `ha_token`'s reference) and release; `make update-conductor`,
+  then `make switch NIXNAME=polaris`.
 
 ## Troubleshooting
 
