@@ -24,7 +24,8 @@ NIX_CONFIG="experimental-features = nix-command flakes" \
 ```
 
 - `--impure` is required: `homeConfigurations` reads `builtins.getEnv "USER"` / `"HOME"`.
-- The `vmctl` input is a **private** `git+ssh` repo. Evaluate as a user with GitHub SSH access, never as root — this is why `make switch` on Linux builds unprivileged and only uses sudo to activate.
+- The `vmctl` and `conductor` inputs are **private** `git+ssh` repos. Evaluate as a user with GitHub SSH access, never as root — this is why `make switch` on Linux builds unprivileged and only uses sudo to activate.
+- `conductor` (the home dashboard) is pinned to a release tag (`?ref=refs/tags/vX.Y.Z`); `make update-conductor [TAG=…]` (`scripts/update-conductor.sh`) moves it, and `make switch NIXFLAGS="--override-input conductor '…'"` tries a branch without touching the pin. Its config template (the house layout) is in the conductor repo, `deploy/polaris.config.yaml.tpl`, not here: this repo is public. Runbook: `docs/polaris/conductor.md`.
 - The only flake check is `checks.x86_64-linux.polaris-zfs` (a NixOS VM test of `scripts/create-zfs-pools.sh`). No CI, linter or formatter.
 - PRs target the `mattias` branch.
 
@@ -34,7 +35,7 @@ NIX_CONFIG="experimental-features = nix-command flakes" \
 |---|---|---|
 | `nixosConfigurations.desktop` | `lib/mksys.nix` | Hyprland + xremap + full GUI home-manager. **Currently doesn't evaluate** (bit-rotted: removed NixOS options, `waterfox` isn't in nixpkgs and no overlay provides it) |
 | `nixosConfigurations.server` / `server-arm64` | `lib/mkserver.nix` | Generic headless box; both use `hardware/server.nix` + `machines/server.nix` |
-| `nixosConfigurations.polaris` | `lib/mkserver.nix` | Home server (ZFS, media stack, self-hosted services). `extraModules` adds `hardware/polaris-extra.nix` (NVIDIA, ZFS pools) and `modules/server/vmctl.nix` |
+| `nixosConfigurations.polaris` | `lib/mkserver.nix` | Home server (ZFS, media stack, self-hosted services). `extraModules` adds `hardware/polaris-extra.nix` (NVIDIA, ZFS pools), `modules/server/vmctl.nix`, and conductor (its flake's `nixosModules.default` + `modules/services/conductor.nix`) |
 | `nixosConfigurations.polaris-vm` | `lib/mkserver.nix` | aarch64 throwaway VM of polaris: `machines/polaris-vm.nix` imports `polaris.nix` and overrides networking/hostname |
 | `darwinConfigurations.macbook-m1` / `pacesetter` / `macbook-x86` | `lib/mkdarwin.nix` | `pacesetter` is `macbook-m1` with a different hostname |
 | `homeConfigurations.mattias[@<arch>-linux]` | inline | `users/default/home-manager-server.nix` for non-NixOS Linux |

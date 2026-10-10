@@ -45,6 +45,10 @@ nix flake update nixpkgs                  # newer syntax
 # older syntax: nix flake lock --update-input nixpkgs
 ```
 
+**conductor** is pinned to a release tag, so `make update` keeps it where it
+is. `make update-conductor` moves it to the newest release; see
+[conductor.md](conductor.md).
+
 ## Test before you switch, and rolling back
 
 ```bash

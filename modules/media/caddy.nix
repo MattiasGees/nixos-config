@@ -56,6 +56,15 @@ in
     virtualHosts."wiki.polaris.mattiasgees.be".extraConfig = proxy 3002;
     # Filebrowser (filebrowser.nix); LAN/tailnet only, no public tunnel.
     virtualHosts."files.polaris.mattiasgees.be".extraConfig = proxy 8083;
+    # conductor (services/conductor.nix): the home dashboard, its WebSocket and
+    # /metrics. It has no login and controls the house, so only LAN and tailnet
+    # clients (private ranges, Tailscale's 100.64.0.0/10 and fd7a:115c:a1e0::/48)
+    # get through; anything else gets a 403. Never on the public tunnel.
+    virtualHosts."conductor.polaris.mattiasgees.be".extraConfig = ''
+      @outside not remote_ip private_ranges 100.64.0.0/10 fd7a:115c:a1e0::/48
+      respond @outside 403
+      ${proxy 8420}
+    '';
   };
 
   # Route53 AWS credentials, rendered from op://polaris/caddy-route53/* by
