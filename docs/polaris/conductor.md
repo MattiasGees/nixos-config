@@ -11,7 +11,7 @@ vmctl: never evaluate as root).
 | Thing | Value |
 |-------|-------|
 | URL | `https://conductor.polaris.mattiasgees.be` (never the public tunnel: there is no login) |
-| Access | Caddy lets through LAN and tailnet clients only (`private_ranges`, `100.64.0.0/10`, `fd7a:115c:a1e0::/48`) and answers `403` to anything else |
+| Access | Like the other `*.polaris.mattiasgees.be` apps: the name resolves to the tailnet IP, and it's not on the public tunnel |
 | Service | `conductor.service`, user `conductor`, listens on `127.0.0.1:8420`; Caddy proxies the board, `/api`, the WebSocket and `/metrics` |
 | Version | `flake.nix` pins `?ref=refs/tags/vX.Y.Z`; `/api/health` reports that release's commit (in a conductor clone: `git rev-parse --short=7 'vX.Y.Z^{commit}'`; the `^{commit}` matters for annotated tags) |
 | Config | `deploy/polaris.config.yaml.tpl` in the conductor repo, taken from the pinned release → `/var/lib/secrets/conductor.yaml` (`0600 conductor`), rendered by op-secrets |
@@ -135,9 +135,6 @@ nix job on its pull request shows that.
 - **conductor keeps restarting:** `journalctl -u conductor -n 50`. "read config"
   means the file wasn't rendered: `journalctl -b | grep op-secrets` shows a
   `WARNING` for `conductor-config` (token, item or field name).
-- **`403` in the browser:** Caddy saw a source address outside the LAN and the
-  tailnet (for example a public IPv6 address). Connect over Tailscale or the
-  LAN's IPv4.
 - **`postgres` down in `/api/status`:** conductor keeps working, without the
   command log. Check the database owner:
   `sudo -u postgres psql -c '\l conductor'` must show `conductor` as the owner.

@@ -5,8 +5,8 @@
 # The service itself comes from the conductor flake's module, wired in
 # flake.nix for polaris only (like vmctl). It runs as the static user
 # `conductor` on 127.0.0.1:8420; Caddy fronts it at
-# conductor.polaris.mattiasgees.be for LAN and tailnet clients only
-# (caddy.nix). No login, so never add it to the public tunnel.
+# conductor.polaris.mattiasgees.be like the other tailnet apps (caddy.nix).
+# No login, so never add it to the public tunnel.
 #
 # Config: one YAML file, rendered by op-secrets from the 1Password item
 # `conductor` (fields ha_token, rail_api_key, tfl_app_key) to
