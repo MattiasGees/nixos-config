@@ -56,6 +56,9 @@ in
     virtualHosts."wiki.polaris.mattiasgees.be".extraConfig = proxy 3002;
     # Filebrowser (filebrowser.nix); LAN/tailnet only, no public tunnel.
     virtualHosts."files.polaris.mattiasgees.be".extraConfig = proxy 8083;
+    # conductor (services/conductor.nix); LAN/tailnet only, no public tunnel
+    # (it has no login).
+    virtualHosts."conductor.polaris.mattiasgees.be".extraConfig = proxy 8420;
   };
 
   # Route53 AWS credentials, rendered from op://polaris/caddy-route53/* by

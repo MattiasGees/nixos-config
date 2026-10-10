@@ -1,5 +1,5 @@
 # Mark targets that aren't files
-.PHONY: install update switch bootstrap build-server home-manager setup-home-manager help
+.PHONY: install update update-conductor switch bootstrap build-server home-manager setup-home-manager help
 
 # Get the path to this Makefile and directory
 MAKEFILE_DIR := $(patsubst %/,%,$(dir $(abspath $(lastword $(MAKEFILE_LIST)))))
@@ -21,6 +21,10 @@ NIX_INSTALL_SCRIPT := install-nix.sh
 
 NIX_CONFIG := experimental-features = nix-command flakes
 
+# Extra flags for the build in `make switch`, e.g. to try a conductor branch:
+#   make switch NIXNAME=polaris NIXFLAGS="--override-input conductor 'git+ssh://git@github.com/MattiasGees/conductor?ref=my-branch'"
+NIXFLAGS ?=
+
 install-brew:
 	@echo "Installing Homebrew..."
 	@/bin/bash -c "$$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
@@ -37,6 +41,10 @@ update:
 	@echo "Updating flake..."
 	nix flake update
 
+# Pin conductor to its newest release (or TAG=vX.Y.Z) and update flake.lock.
+update-conductor:
+	./scripts/update-conductor.sh $(TAG)
+
 switch:
 ifeq ($(UNAME), Darwin)
 	@echo "Building and switching Darwin configuration: $(NIXNAME)"
@@ -51,7 +59,7 @@ else
 # as the user uses that user's GitHub SSH access; sudo is only needed to activate
 # the already-built closure (no re-evaluation, no re-fetch). Mirrors the Darwin
 # path above: build as user, sudo only to switch.
-	NIX_CONFIG="$(NIX_CONFIG)" nix build ".#nixosConfigurations.${NIXNAME}.config.system.build.toplevel" --impure
+	NIX_CONFIG="$(NIX_CONFIG)" nix build ".#nixosConfigurations.${NIXNAME}.config.system.build.toplevel" --impure $(NIXFLAGS)
 	sudo nix-env -p /nix/var/nix/profiles/system --set ./result
 	sudo ./result/bin/switch-to-configuration switch
 endif
@@ -92,6 +100,7 @@ help:
 	@echo "Available targets:"
 	@echo "  install              - Install Nix package manager"
 	@echo "  update               - Run 'nix flake update'"
+	@echo "  update-conductor     - Pin conductor to its newest release (TAG=vX.Y.Z for another)"
 	@echo "  switch               - Apply the system configuration (Darwin or NixOS)"
 	@echo "  build-server         - Build server configuration (shell only, no GUI)"
 	@echo "  home-manager         - Apply home-manager config (auto-detects architecture)"

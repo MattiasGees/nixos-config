@@ -32,6 +32,14 @@
         inputs.nixpkgs.follows = "nixpkgs-unstable";
       };
 
+      conductor = {
+        # conductor (the home dashboard) is PRIVATE too, hence git+ssh. polaris
+        # runs a release: pin a tag, and `make update-conductor` moves the pin to
+        # the newest one (docs/polaris/conductor.md). No `follows`: conductor
+        # builds with its own pinned nixpkgs, as its CI tested it.
+        url = "git+ssh://git@github.com/MattiasGees/conductor?ref=refs/tags/v0.1.0";
+      };
+
       nixpkgs-wayland.inputs.nixpkgs.follows = "nixpkgs";
     };
 
@@ -121,6 +129,11 @@
            ./hardware/polaris-extra.nix
            ./modules/server/vmctl.nix
            { _module.args.vmctlPackages = inputs.vmctl.packages.${system}; }
+           # The conductor flake's module brings its own package (the tagged release);
+           # conductor.nix takes the house config template from the same input.
+           inputs.conductor.nixosModules.default
+           { _module.args.conductorSrc = inputs.conductor; }
+           ./modules/services/conductor.nix
          ];
       };
 

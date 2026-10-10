@@ -231,7 +231,8 @@ place by hand is the service-account token — once, **before the first
 
 1. **Create the `polaris` vault** in 1Password with the items/fields referenced in
    the verification below (`caddy-route53`, `miniflux`, `restic`, `restic-backend`,
-   `karakeep`, `cloudflared-polaris`, `outline`, `filebrowser`, `pihole`). The
+   `karakeep`, `cloudflared-polaris`, `outline`, `filebrowser`, `pihole`,
+   `conductor`). The
    `cloudflared-polaris` item is populated by the tunnel bootstrap (§4) and
    `outline` by its service bootstrap (documented in the wiki). On a rebuild
    these already exist and just re-render.
@@ -266,15 +267,18 @@ place by hand is the service-account token — once, **before the first
        op://polaris/outline/GOOGLE_CLIENT_SECRET \
        op://polaris/outline/SMTP_PASSWORD \
        op://polaris/filebrowser/admin-password \
-       op://polaris/pihole/password; do \
+       op://polaris/pihole/password \
+       op://polaris/conductor/ha_token \
+       op://polaris/conductor/tfl_app_key; do \
        printf "%s -> " "$r"; \
        nix run --impure nixpkgs#_1password-cli -- read "$r" >/dev/null && echo OK || echo FAIL; \
      done'
    ```
 
-   All sixteen must print `OK` before you `make switch`. A `FAIL` is a
+   All nineteen must print `OK` before you `make switch`. A `FAIL` is a
    vault/item/field-name mismatch or a scope problem. (If a template gains a new
-   reference, add it here: `grep -rho 'op://[^ }]*' modules`.)
+   reference, add it here: `grep -rho 'op://[^ }]*' modules`; conductor's
+   template is `deploy/polaris.config.yaml.tpl` in the conductor repo.)
 
 5. **After `make switch`, confirm the renders:** `journalctl -b | grep op-secrets`
    shows one `rendered <name> -> /var/lib/secrets/…` line per secret and no
@@ -371,6 +375,7 @@ A new public service = one `ingress` line plus one `tunnel route dns`.
 | Seerr (requests) | `https://requests.gees.dev` (Cloudflare tunnel) + `https://seerr.polaris.mattiasgees.be` (tailnet) → `:5055` |
 | Cloudflare tunnel | `polaris` tunnel (§4), creds `/var/lib/secrets/cloudflared-polaris.json` (`0600 root`) |
 | Outline (wiki) | `https://wiki.gees.dev` (Cloudflare tunnel) + `https://wiki.polaris.mattiasgees.be` (tailnet) → `:3002`, secrets `/var/lib/secrets/outline-*` |
+| conductor (home dashboard) | `https://conductor.polaris.mattiasgees.be` → `:8420`, config `/var/lib/secrets/conductor.yaml` (`0600 conductor`); runbook [conductor.md](conductor.md) |
 | Other tailnet apps | `{sonarr,radarr,prowlarr,bazarr,immich,chat,pihole,files}.polaris.mattiasgees.be` — ports in `modules/media/caddy.nix` |
 | App config | `/srv/fast/appdata/<app>` (fast NVMe mirror) |
 | Media roots | `/srv/media/{Series,Movies,Downloads}` (`media` group, setgid) |
