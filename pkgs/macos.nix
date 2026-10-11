@@ -11,6 +11,7 @@
       lima
       docker-buildx
       docker-compose
+      gnutar
     ];
 
     # The docker CLI (from pkgs/dev.nix) doesn't search the Nix profile for
