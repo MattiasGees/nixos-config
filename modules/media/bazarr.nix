@@ -8,7 +8,7 @@
   services.bazarr = {
     enable = true;
     dataDir = "/srv/fast/appdata/bazarr";
-    listenPort = 6767;
+    settings.general.port = 6767;
   };
 
   # media = read /srv/media and write sidecar subtitles next to each video.
