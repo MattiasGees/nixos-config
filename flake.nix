@@ -37,7 +37,7 @@
         # runs a release: pin a tag, and `make update-conductor` moves the pin to
         # the newest one (docs/polaris/conductor.md). No `follows`: conductor
         # builds with its own pinned nixpkgs, as its CI tested it.
-        url = "git+ssh://git@github.com/MattiasGees/conductor?ref=refs/tags/v0.2.0";
+        url = "git+ssh://git@github.com/MattiasGees/conductor?ref=refs/tags/v0.3.0";
       };
 
       nixpkgs-wayland.inputs.nixpkgs.follows = "nixpkgs";
