@@ -14,7 +14,7 @@
   virtualisation.oci-containers.backend = lib.mkDefault "docker";
 
   virtualisation.oci-containers.containers.filebrowser = {
-    image = "gtstef/filebrowser:2.0.6-beta";
+    image = "gtstef/filebrowser:2.1.1-beta";
     ports = [ "127.0.0.1:8083:80" ];
     # Config as a sibling of the data-dir volume, not nested inside it: runc
     # can't create a file mountpoint inside another bind mount's empty volume.

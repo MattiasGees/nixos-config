@@ -46,7 +46,7 @@ in
     # DoH forwarder. Loopback-only bind (:5053) — Pi-hole reaches it via the
     # shared host net namespace; the LAN never sees it.
     dnsproxy = {
-      image = "adguard/dnsproxy:v0.84.0";
+      image = "adguard/dnsproxy:v0.86.0";
       cmd = [ "--listen" "127.0.0.1" "--port" "5053" ]
         ++ map (u: "--upstream=${u}") dohUpstreams;
       extraOptions = [ "--network=host" ];
@@ -55,7 +55,7 @@ in
     # Pi-hole resolver + web UI. Host networking → binds :53 directly and sees
     # real client IPs. Upstream is the local DoH forwarder above.
     pihole = {
-      image = "pihole/pihole:2026.02.0";
+      image = "pihole/pihole:2026.09.0";
       dependsOn = [ "dnsproxy" ];
       environment = {
         TZ = "UTC";
