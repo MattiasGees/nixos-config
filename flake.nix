@@ -40,6 +40,14 @@
         url = "git+ssh://git@github.com/MattiasGees/conductor?ref=refs/tags/v0.3.0";
       };
 
+      # SSH public keys published on GitHub, authorized for login on the Macs
+      # and polaris. Pinned by hash in flake.lock; refresh after adding/removing
+      # a key on GitHub with `nix flake update github-keys` (or `make update`).
+      github-keys = {
+        url = "file+https://github.com/mattiasgees.keys";
+        flake = false;
+      };
+
       nixpkgs-wayland.inputs.nixpkgs.follows = "nixpkgs";
     };
 
@@ -49,6 +57,7 @@
       mkSys = import ./lib/mksys.nix;
       mkServer = import ./lib/mkserver.nix;
       user = "mattias";
+      githubKeys = inputs.github-keys;
       system = "x86_64-linux";
       pkgs  = import nixpkgs {
       inherit system; 
@@ -120,7 +129,7 @@
       };
 
       nixosConfigurations.polaris = mkServer "polaris" rec {
-         inherit home-manager user nixpkgs system pkgs;
+         inherit home-manager user nixpkgs githubKeys system pkgs;
          lib = pkgs.lib;
          # Hand-maintained hardware extras (GPU + ZFS/swap) kept separate so
          # hardware/polaris.nix can be overwritten wholesale from
@@ -138,7 +147,7 @@
       };
 
       nixosConfigurations.polaris-vm = mkServer "polaris-vm" rec {
-         inherit home-manager user nixpkgs;
+         inherit home-manager user nixpkgs githubKeys;
          system = "aarch64-linux";
          pkgs = import nixpkgs {
            system = "aarch64-linux";
@@ -182,7 +191,7 @@
         };
 
       darwinConfigurations.macbook-m1 = mkDarwin "macbook-m1" rec {
-        inherit darwin home-manager user;
+        inherit darwin home-manager user githubKeys;
         system = "aarch64-darwin";
         pkgs = import nixpkgs {
           inherit system;
@@ -192,7 +201,7 @@
       };
 
       darwinConfigurations.pacesetter = mkDarwin "pacesetter" rec {
-        inherit darwin home-manager user;
+        inherit darwin home-manager user githubKeys;
         system = "aarch64-darwin";
         pkgs = import nixpkgs {
           inherit system;
