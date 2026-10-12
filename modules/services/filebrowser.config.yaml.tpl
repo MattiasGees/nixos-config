@@ -21,10 +21,10 @@ server:
 frontend:
   name: "Polaris Files"
 auth:
-  # adminPassword is applied on every startup (declarative reset).
-  adminUsername: "admin"
-  adminPassword: "{{ op://polaris/filebrowser/admin-password }}"
   methods:
     password:
       enabled: true
       signup: false
+      # adminPassword is applied on every startup (declarative reset).
+      adminUsername: "admin"
+      adminPassword: "{{ op://polaris/filebrowser/admin-password }}"
