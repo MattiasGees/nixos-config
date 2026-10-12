@@ -1,10 +1,10 @@
 # This function creates a nix-darwin system.
-name: { darwin, pkgs, lib, home-manager, system, user }:
+name: { darwin, pkgs, lib, home-manager, system, user, githubKeys ? null }:
 
 darwin.lib.darwinSystem {
   inherit system;
 
-  specialArgs = { inherit system; inherit user; };
+  specialArgs = { inherit system user githubKeys; };
   modules = [
 
     ../machines/${name}.nix

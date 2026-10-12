@@ -173,6 +173,18 @@
         "type": "github"
       }
     },
+    "github-keys": {
+      "flake": false,
+      "locked": {
+        "narHash": "sha256-odZhNjK+GEhs1DAh9+QCyi2htQI5+DrLoZAw7BGptTk=",
+        "type": "file",
+        "url": "https://github.com/mattiasgees.keys"
+      },
+      "original": {
+        "type": "file",
+        "url": "https://github.com/mattiasgees.keys"
+      }
+    },
     "home-manager": {
       "inputs": {
         "nixpkgs": [
@@ -742,6 +754,7 @@
       "inputs": {
         "conductor": "conductor",
         "darwin": "darwin",
+        "github-keys": "github-keys",
         "home-manager": "home-manager",
         "hyprland": "hyprland",
         "nixpkgs": "nixpkgs_2",

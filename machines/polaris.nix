@@ -1,4 +1,4 @@
-{ config, pkgs, lib, ... }:
+{ config, pkgs, lib, githubKeys, ... }:
 {
   imports = [
     ../modules/server/zfs.nix
@@ -60,13 +60,9 @@
   # Karakeep's crawler ("Failed to resolve hostname").
   networking.nameservers = [ "192.168.1.86" "8.8.8.8" ];
 
-  # SSH: key-only. Keys from github.com/mattiasgees.keys.
-  users.users.mattias.openssh.authorizedKeys.keys = [
-    "ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBKkdI6stPG4bOv3p72OsEDxs9o3jrg3Lacsook0VGkzaUcDYC2jXE4gvJtfP7UwTmVxsRJD4YJ8NGxuuRustJh0="
-    "ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBFtGUiGsLHfTl/Jb5TvKK7ReZ+qa6eT8+Jd3ZbKyE+nYstbN1ZKimi8ojjlrR+NREqV4J3aG8K0e1Pmi2MfkpSk="
-    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBt3dIJVLAvj2IrWprwngbshWN0kwwmbB64GSQsHonqd"
-    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBKfSjZEPrxBJsLTkOiZ6yJiGnjwmVg+YN58J0o+a/29"
-  ];
+  # SSH: key-only, with the keys from github.com/mattiasgees.keys (the
+  # `github-keys` flake input).
+  users.users.mattias.openssh.authorizedKeys.keyFiles = [ githubKeys ];
   services.openssh.settings.PasswordAuthentication = false;
 
   # Claude Code plugins/marketplaces/MCP servers, set up on each switch by the
