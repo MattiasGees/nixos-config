@@ -46,8 +46,10 @@
       # the unit is permanently red and useless as a health signal). Ownership
       # doesn't matter on a browse-only mirror, so skip it and let a non-zero
       # exit mean a real failure.
+      # --no-perms: same story for the share root. The squashed user can't
+      # chmod it (777, NAS-owned) to /srv/data's 755, so `-a` still exited 23.
       ExecStart = ''
-        ${pkgs.rsync}/bin/rsync -a --delete --no-owner --no-group \
+        ${pkgs.rsync}/bin/rsync -a --delete --no-perms --no-owner --no-group \
           --exclude=/immich/thumbs \
           --exclude=/immich/encoded-video \
           /srv/data/ /mnt/polaris-nfs/
