@@ -15,7 +15,7 @@ vmctl: never evaluate as root).
 | Service | `conductor.service`, user `conductor`, listens on `127.0.0.1:8420`; Caddy proxies the board, `/api`, the WebSocket and `/metrics` |
 | Version | `flake.nix` pins `?ref=refs/tags/vX.Y.Z`; `/api/health` reports that release's commit (in a conductor clone: `git rev-parse --short=7 'vX.Y.Z^{commit}'`; the `^{commit}` matters for annotated tags) |
 | Config | `deploy/polaris.config.yaml.tpl` in the conductor repo, taken from the pinned release → `/var/lib/secrets/conductor.yaml` (`0600 conductor`), rendered by op-secrets |
-| Secrets | 1Password item `conductor`, vault `polaris`: `ha_token`, `tfl_app_key`; `rail_api_key` once the Rail Data Marketplace key arrives |
+| Secrets | 1Password item `conductor`, vault `polaris`: `ha_token`, `tfl_app_key`, `rail_api_key`, `google_calendar_key` |
 | Database | `conductor` on the shared PostgreSQL, owned by the `conductor` role, peer auth over `/run/postgresql`. Best effort: conductor runs without it |
 | Logs | `journalctl -u conductor` (JSON lines) |
 
@@ -27,21 +27,22 @@ config template from the input); the vhost and its access guard are in
 ## First deploy
 
 1. **1Password.** In the `polaris` vault, create the item `conductor` with the
-   fields `ha_token` (the long-lived token of the Conductor HA user) and
-   `tfl_app_key` (the TfL Primary key). There is no rail field until the Rail
-   Data Marketplace key arrives: the template's rail `api_key` is `""` until
-   then (rail shows as down, everything else works). **Never type a
-   placeholder**: a made-up key turns "no key" into auth errors.
+   fields `ha_token` (the long-lived token of the Conductor HA user),
+   `tfl_app_key` (the TfL Primary key), `rail_api_key` (the Rail Data
+   Marketplace consumer key for "LDBWS – Public"; not the consumer secret) and
+   `google_calendar_key` (the calendar service account's JSON key on one line,
+   `jq -c`). **Never type a placeholder**: a made-up key turns "no key" into
+   auth errors.
 2. **Check the references** the template uses (see setup.md § op-secrets for
    the full list):
 
    ```bash
    sudo sh -c 'export OP_SERVICE_ACCOUNT_TOKEN="$(cat /etc/op/token)"; export NIXPKGS_ALLOW_UNFREE=1; \
-     for f in ha_token tfl_app_key; do printf "%s -> " "$f"; \
+     for f in ha_token tfl_app_key rail_api_key google_calendar_key; do printf "%s -> " "$f"; \
        nix run --impure nixpkgs#_1password-cli -- read "op://polaris/conductor/$f" >/dev/null && echo OK || echo FAIL; done'
    ```
 
-   Both must print `OK`: one `FAIL` fails the whole render, and on a first
+   All must print `OK`: one `FAIL` fails the whole render, and on a first
    deploy that leaves no config file, so conductor keeps restarting. Never
    leave a field empty that the template references: 1Password may drop it.
 3. **Deploy:** `git pull`, then `make switch NIXNAME=polaris`.
@@ -56,10 +57,9 @@ config template from the input); the vhost and its access guard are in
    curl -s https://conductor.polaris.mattiasgees.be/metrics | grep -c '^conductor_'
    ```
 
-   Expected: `{"status":"ok","version":"<commit>"}`; `homeassistant`, `postgres`
-   and `tfl` `ok`; `rail` `down` with "no api_key configured" until the key is
-   in 1Password. Then open the URL in a browser: the board should show the
-   rooms, lights and music.
+   Expected: `{"status":"ok","version":"<commit>"}`; `homeassistant`, `postgres`,
+   `rail`, `tfl` and `calendar` `ok`. Then open the URL in a browser: the
+   board should show the rooms, lights and music.
 
    If it doesn't come up, see Troubleshooting. To take it off polaris again
    while you look, `sudo systemctl stop conductor` (the next switch starts it).
@@ -122,11 +122,11 @@ nix job on its pull request shows that.
   `journalctl -u conductor`. After the switch, check
   `journalctl -b | grep op-secrets` for a `WARNING` on `conductor-config`: a
   failed render keeps the old file, so the change wouldn't take effect.
-- **A secret** (a new HA token or TfL key): edit the 1Password item,
+- **A secret** (a new HA token, TfL, rail or calendar key): edit the 1Password item,
   `make switch` (re-renders the file), then `sudo systemctl restart conductor`.
-- **The rail key arriving:** add the field `rail_api_key` to the `conductor`
-  item, then in the conductor repo point the template's rail `api_key` at it
-  (written like `ha_token`'s reference) and release; `make update-conductor`,
+- **A new secret field:** add it to the `conductor` item first, check that it
+  reads (First deploy, step 2), then reference it in the conductor repo's
+  template (written like `ha_token`'s) and release; `make update-conductor`,
   then `make switch NIXNAME=polaris`.
 
 ## Troubleshooting

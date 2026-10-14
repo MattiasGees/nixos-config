@@ -269,13 +269,15 @@ place by hand is the service-account token — once, **before the first
        op://polaris/filebrowser/admin-password \
        op://polaris/pihole/password \
        op://polaris/conductor/ha_token \
-       op://polaris/conductor/tfl_app_key; do \
+       op://polaris/conductor/tfl_app_key \
+       op://polaris/conductor/rail_api_key \
+       op://polaris/conductor/google_calendar_key; do \
        printf "%s -> " "$r"; \
        nix run --impure nixpkgs#_1password-cli -- read "$r" >/dev/null && echo OK || echo FAIL; \
      done'
    ```
 
-   All nineteen must print `OK` before you `make switch`. A `FAIL` is a
+   All twenty must print `OK` before you `make switch`. A `FAIL` is a
    vault/item/field-name mismatch or a scope problem. (If a template gains a new
    reference, add it here: `grep -rho 'op://[^ }]*' modules`; conductor's
    template is `deploy/polaris.config.yaml.tpl` in the conductor repo.)
