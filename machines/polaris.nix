@@ -8,6 +8,8 @@
     ../modules/server/postgresql.nix
     ../modules/server/restic.nix
     ../modules/server/data-nfs-backup.nix
+    ../modules/server/gdrive-backup.nix
+    ../modules/server/github-backup.nix
     ../modules/server/mattias-nfs.nix
     ../modules/server/op-secrets.nix
     # No nvidia.nix here: polaris-vm (aarch64) inherits this file, so the
