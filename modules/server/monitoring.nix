@@ -129,6 +129,9 @@ in
     enable = true;
     port = 9712;
     url = "http://127.0.0.1:${toString config.services.bazarr.settings.general.port}";
+    # Without it exportarr skips the per-episode stats (bazarr_episode_*), so
+    # the Polaris media dashboard only sees movies.
+    environment.ENABLE_ADDITIONAL_METRICS = "true";
   };
 
   systemd.services.prometheus-exportarr-sonarr-exporter =
