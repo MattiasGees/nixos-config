@@ -5,6 +5,8 @@
 #   - polaris-backup-expected.prom publishes the unit's max age, so the alert
 #     rules in k8s-config (config/bases/polaris) stay generic over `unit`.
 # Unit names are given without ".service".
+# Removing or renaming a unit leaves its <unit>.prom in the textfile directory,
+# so delete that file by hand.
 { config, lib, pkgs, ... }:
 let
   cfg = config.polaris.backupMetrics;
