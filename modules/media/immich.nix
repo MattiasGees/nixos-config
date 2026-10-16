@@ -10,6 +10,9 @@
 #
 # Machine learning runs on CPU (default); CUDA is a deferred follow-up.
 # Listens on localhost:2283 (default), no firewall hole — Caddy is the ingress.
+# Prometheus metrics (host, API, repository timings, job queues) on :9283 (API
+# worker) and :9284 (microservices worker), all interfaces, opened on
+# tailscale0 only. Not Immich's default 8081/8082: Pi-hole's web UI owns 8081.
 #
 # mediaLocation is a plain dir inside the existing encrypted `tank/data`
 # dataset, so the originals sit on the redundant pool and ride the restic sweep.
@@ -26,7 +29,13 @@
     enable = true;
     mediaLocation = "/srv/data/immich";
     accelerationDevices = [ "/dev/nvidia0" "/dev/nvidiactl" "/dev/nvidia-uvm" ];
+    environment = {
+      IMMICH_TELEMETRY_INCLUDE = "all";
+      IMMICH_API_METRICS_PORT = "9283"; # k8s-config ScrapeConfig polaris-immich
+      IMMICH_MICROSERVICES_METRICS_PORT = "9284";
+    };
   };
+  networking.firewall.interfaces.tailscale0.allowedTCPPorts = [ 9283 9284 ];
 
   # For a non-default mediaLocation the module only adjusts ownership (tmpfiles
   # `e`), it doesn't create the dir — and tank/data's root is root-owned.

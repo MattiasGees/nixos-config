@@ -40,4 +40,10 @@ in
       };
     };
   };
+
+  # Tunnel metrics (connections to the Cloudflare edge, requests, status
+  # codes) for the k8s Prometheus (k8s-config ScrapeConfig polaris-cloudflared).
+  # All interfaces, opened on tailscale0 only.
+  systemd.services."cloudflared-tunnel-${tunnelId}".environment.TUNNEL_METRICS = "0.0.0.0:9181";
+  networking.firewall.interfaces.tailscale0.allowedTCPPorts = [ 9181 ];
 }
