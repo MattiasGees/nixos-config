@@ -33,6 +33,9 @@
     location = "/srv/data/postgres-backup";
     startAt = "02:30";
   };
+  # Run at next boot if polaris was off at 02:30, and keep the last trigger
+  # across reboots (k8s-config's PolarisBackupStale reads it).
+  systemd.timers.postgresqlBackup.timerConfig.Persistent = true;
 
   systemd.tmpfiles.rules = [
     "d /srv/fast/db/postgres    0755 root     root     - -"

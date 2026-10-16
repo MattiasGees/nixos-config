@@ -7,6 +7,7 @@
     ../modules/server/cloudflared.nix
     ../modules/server/postgresql.nix
     ../modules/server/restic.nix
+    ../modules/server/monitoring.nix
     ../modules/server/data-nfs-backup.nix
     ../modules/server/mattias-nfs.nix
     ../modules/server/op-secrets.nix
