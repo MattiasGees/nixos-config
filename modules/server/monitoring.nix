@@ -136,15 +136,18 @@ in
     arrConfigXml "/var/lib/private/prowlarr/config.xml";
   # Bazarr keeps its key in YAML, which exportarr can't parse: copy it into the
   # exporter's private runtime dir (0700, owned by the DynamicUser) as root
-  # before start.
+  # before start. Exporters run with UMask 0077, so the file comes out
+  # root-only: hand it to the runtime dir's owner, the DynamicUser.
   systemd.services.prometheus-exportarr-bazarr-exporter = {
     environment.API_KEY_FILE = "/run/exportarr-bazarr/api-key";
     serviceConfig = {
       RuntimeDirectory = "exportarr-bazarr";
       RuntimeDirectoryMode = "0700";
       ExecStartPre = "+" + pkgs.writeShellScript "exportarr-bazarr-api-key" ''
+        set -euo pipefail
         ${pkgs.yq-go}/bin/yq '.auth.apikey' ${config.services.bazarr.dataDir}/config/config.yaml \
           > /run/exportarr-bazarr/api-key
+        chown --reference=/run/exportarr-bazarr /run/exportarr-bazarr/api-key
       '';
     };
   };
