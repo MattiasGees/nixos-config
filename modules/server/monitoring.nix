@@ -15,12 +15,24 @@
 #   counters for the two NVMe and three HDD disks (autodiscovered).
 # - pihole exporter :9617: stats for the Pi-hole in services/pihole, the same
 #   exporter as the Raspberry Pi's, so one dashboard and rule set covers both.
+# - Caddy :9180 (media/caddy.nix): per-site request metrics.
+# - exportarr :9707 sonarr, :9708 radarr, :9710 prowlarr, :9712 bazarr: library,
+#   queue, health-check and indexer stats from each app's API.
+# - postgres exporter :9187: the shared PostgreSQL cluster (postgresql.nix).
 #
 # The exporters listen on all interfaces; the firewall is what isolates them:
 # the ports are open on tailscale0 only, not on the LAN, not behind Caddy.
 # Overview of what is and isn't monitored: the Observability page in the
 # Homecluster/NixOS wiki (Documentation).
-{ config, lib, ... }:
+{ config, lib, pkgs, ... }:
+let
+  # exportarr reads ApiKey and Port from an *arr config.xml given as a systemd
+  # credential (see the exportarr block below).
+  arrConfigXml = path: {
+    environment.CONFIG = "%d/config.xml";
+    serviceConfig.LoadCredential = lib.mkForce "config.xml:${path}";
+  };
+in
 {
   services.prometheus.exporters.node = {
     enable = true;
@@ -87,11 +99,73 @@
     after = [ "docker-pihole.service" ];
   };
 
+  # exportarr needs each app's API key. None of them is in 1Password, so read
+  # them from the apps' own config instead of keeping a copy: Sonarr, Radarr
+  # and Prowlarr via their config.xml (arrConfigXml), handed over as a systemd
+  # credential because the exporters run as a DynamicUser that can't read the
+  # app's data dir.
+  # The URLs carry the module's port too: exportarr only takes the port from
+  # config.xml when the file has one.
+  services.prometheus.exporters.exportarr-sonarr = {
+    enable = true;
+    port = 9707;
+    url = "http://127.0.0.1:${toString config.services.sonarr.settings.server.port}";
+  };
+  services.prometheus.exporters.exportarr-radarr = {
+    enable = true;
+    port = 9708;
+    url = "http://127.0.0.1:${toString config.services.radarr.settings.server.port}";
+  };
+  services.prometheus.exporters.exportarr-prowlarr = {
+    enable = true;
+    port = 9710;
+    url = "http://127.0.0.1:${toString config.services.prowlarr.settings.server.port}";
+  };
+  services.prometheus.exporters.exportarr-bazarr = {
+    enable = true;
+    port = 9712;
+    url = "http://127.0.0.1:${toString config.services.bazarr.settings.general.port}";
+  };
+
+  systemd.services.prometheus-exportarr-sonarr-exporter =
+    arrConfigXml "${config.services.sonarr.dataDir}/config.xml";
+  systemd.services.prometheus-exportarr-radarr-exporter =
+    arrConfigXml "${config.services.radarr.dataDir}/config.xml";
+  # DynamicUser + StateDirectory: the real path is under /var/lib/private.
+  systemd.services.prometheus-exportarr-prowlarr-exporter =
+    arrConfigXml "/var/lib/private/prowlarr/config.xml";
+  # Bazarr keeps its key in YAML, which exportarr can't parse: copy it into the
+  # exporter's private runtime dir (0700, owned by the DynamicUser) as root
+  # before start.
+  systemd.services.prometheus-exportarr-bazarr-exporter = {
+    environment.API_KEY_FILE = "/run/exportarr-bazarr/api-key";
+    serviceConfig = {
+      RuntimeDirectory = "exportarr-bazarr";
+      RuntimeDirectoryMode = "0700";
+      ExecStartPre = "+" + pkgs.writeShellScript "exportarr-bazarr-api-key" ''
+        ${pkgs.yq-go}/bin/yq '.auth.apikey' ${config.services.bazarr.dataDir}/config/config.yaml \
+          > /run/exportarr-bazarr/api-key
+      '';
+    };
+  };
+
+  services.prometheus.exporters.postgres = {
+    enable = true;
+    port = 9187; # k8s-config ScrapeConfig polaris-postgres
+    # Peer auth over the socket as the postgres OS user; no password needed.
+    runAsLocalSuperUser = true;
+  };
+
   networking.firewall.interfaces.tailscale0.allowedTCPPorts = [
     config.services.prometheus.exporters.node.port
     config.services.prometheus.exporters.restic.port
     config.services.prometheus.exporters.zfs.port
     config.services.prometheus.exporters.smartctl.port
     config.services.prometheus.exporters.pihole.port
+    config.services.prometheus.exporters.exportarr-sonarr.port
+    config.services.prometheus.exporters.exportarr-radarr.port
+    config.services.prometheus.exporters.exportarr-prowlarr.port
+    config.services.prometheus.exporters.exportarr-bazarr.port
+    config.services.prometheus.exporters.postgres.port
   ];
 }
