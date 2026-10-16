@@ -87,6 +87,79 @@ if run_gdrive DRIVES_FAIL=1; then fail "gdrive run 3 should fail"; fi
 echo "gdrive-backup.sh: ok"
 
 # --- github-backup.sh -------------------------------------------------------
-# (added in Task 2)
+
+h=$work/github
+export R=$h/remote
+mkdir -p "$R"
+export HOME=$work GIT_CONFIG_GLOBAL=$work/gitconfig
+"$real_git" config --global user.name test
+"$real_git" config --global user.email test@example.com
+"$real_git" config --global init.defaultBranch main
+
+# commit_to <bare repo>: push one new commit to its main branch.
+commit_to() {
+  local c=$work/checkout
+  rm -rf "$c"
+  "$real_git" clone -q "$1" "$c" 2>/dev/null
+  date +%s%N >> "$c/file"
+  "$real_git" -C "$c" add file
+  "$real_git" -C "$c" commit -qm change
+  "$real_git" -C "$c" push -q origin HEAD:refs/heads/main
+}
+for r in repo-a repo-a.wiki repo-b repo-d g1; do
+  "$real_git" init -q --bare "$R/$r.git"
+  commit_to "$R/$r.git"
+done
+
+# gh: only answers the exact owned-repos and gists queries.
+mkstub gh <<'EOF'
+case "$*" in
+  "api --paginate /user/repos?affiliation=owner&per_page=100 --jq "*)
+    printf 'repo-a\tfile://%s/repo-a.git\ttrue\n' "$R"
+    printf 'repo-b\tfile://%s/repo-b.git\ttrue\n' "$R"
+    if [ -n "${GH_EXTRA:-}" ]; then printf '%s\n' "$GH_EXTRA"; fi
+    ;;
+  "api --paginate /gists --jq "*)
+    printf 'g1\tfile://%s/g1.git\n' "$R"
+    ;;
+  *) echo "unexpected gh call: $*" >&2; exit 1 ;;
+esac
+EOF
+# git: repo-b has has_wiki=true but no wiki, which GitHub reports as not found.
+mkstub git <<EOF
+for a in "\$@"; do
+  case "\$a" in *repo-b.wiki.git) echo "remote: Repository not found." >&2; exit 128 ;; esac
+done
+exec "$real_git" "\$@"
+EOF
+
+run_github() { env BACKUP_ROOT="$h/root" GH_TOKEN=test-token-value "$@" bash "$github_script"; }
+m=$h/root/github
+head_of() { "$real_git" --git-dir "$1" rev-parse refs/heads/main; }
+
+# Run 1: owned repos, a wiki, a missing wiki, a gist.
+run_github || fail "github run 1 exited non-zero"
+[ "$("$real_git" --git-dir "$m/repos/repo-a.git" config core.bare)" = true ] || fail "repo-a not bare"
+[ "$(head_of "$m/repos/repo-a.git")" = "$(head_of "$R/repo-a.git")" ] || fail "repo-a not mirrored"
+[ -d "$m/repos/repo-a.wiki.git" ] || fail "repo-a wiki not mirrored"
+[ -d "$m/repos/repo-b.git" ] || fail "repo-b not mirrored"
+[ ! -e "$m/repos/repo-b.wiki.git" ] || fail "missing wiki should be skipped"
+[ -d "$m/gists/g1.git" ] || fail "gist not mirrored"
+! "$real_git" --git-dir "$m/repos/repo-a.git" config --local --get-regexp credential >/dev/null \
+  || fail "credential helper stored in mirror config"
+! grep -q test-token-value "$m/repos/repo-a.git/config" || fail "token stored in mirror config"
+
+# Run 2: new upstream commit, a broken repo, and a leftover partial clone.
+commit_to "$R/repo-a.git"
+mkdir -p "$m/repos/repo-d.git.tmp" && echo junk > "$m/repos/repo-d.git.tmp/junk"
+extra=$(printf 'repo-c\tfile://%s/nope.git\tfalse\nrepo-d\tfile://%s/repo-d.git\tfalse' "$R" "$R")
+if run_github GH_EXTRA="$extra"; then fail "github run 2 should fail (repo-c)"; fi
+[ "$(head_of "$m/repos/repo-a.git")" = "$(head_of "$R/repo-a.git")" ] || fail "repo-a not updated"
+[ "$(head_of "$m/repos/repo-d.git")" = "$(head_of "$R/repo-d.git")" ] || fail "repo-d not cloned past leftover tmp"
+[ ! -e "$m/repos/repo-d.git.tmp" ] || fail "leftover tmp not cleaned"
+[ ! -e "$m/repos/repo-c.git" ] || fail "failed clone left a mirror behind"
+[ -d "$m/gists/g1.git" ] || fail "gists skipped after a repo failure"
+
+echo "github-backup.sh: ok"
 
 echo "all cloud-backup tests passed"
