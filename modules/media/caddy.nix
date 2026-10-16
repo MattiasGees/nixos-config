@@ -40,6 +40,13 @@ in
     # ACME account email. The DNS challenge is per-site (acmeTls) rather than a
     # global acme_dns, because only the per-site tls block can set resolvers.
     email = "mattias@gees.dev";
+    # Prometheus metrics with a `host` label per site (request rates, status
+    # codes, latency), served on the tailnet-only metrics listener below.
+    globalConfig = ''
+      metrics {
+        per_host
+      }
+    '';
     virtualHosts."sonarr.polaris.mattiasgees.be".extraConfig = proxy 8989;
     virtualHosts."radarr.polaris.mattiasgees.be".extraConfig = proxy 7878;
     virtualHosts."prowlarr.polaris.mattiasgees.be".extraConfig = proxy 9696;
@@ -59,6 +66,11 @@ in
     # conductor (services/conductor.nix); LAN/tailnet only, no public tunnel
     # (it has no login).
     virtualHosts."conductor.polaris.mattiasgees.be".extraConfig = proxy 8420;
+    # Metrics listener for the k8s Prometheus (k8s-config ScrapeConfig
+    # polaris-caddy). Plain HTTP; the firewall opens it on tailscale0 only.
+    virtualHosts."http://:9180".extraConfig = ''
+      metrics /metrics
+    '';
   };
 
   # Route53 AWS credentials, rendered from op://polaris/caddy-route53/* by
@@ -71,4 +83,5 @@ in
   systemd.services.caddy.serviceConfig.EnvironmentFile = "/var/lib/secrets/caddy-route53.env";
 
   networking.firewall.allowedTCPPorts = [ 80 443 ];
+  networking.firewall.interfaces.tailscale0.allowedTCPPorts = [ 9180 ];
 }
