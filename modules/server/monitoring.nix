@@ -9,9 +9,17 @@
 #   trigger survives a reboot.
 # - restic exporter :9753: snapshot age/count/size read from the Hetzner repo
 #   every 6h, an independent check that backups actually land offsite.
+# - zfs exporter :9134: pool size/allocation/fragmentation/health and dataset
+#   usage. node_exporter already has pool state, but not how full a pool is.
+# - smartctl exporter :9633: SMART health, temperatures, wear and error
+#   counters for the two NVMe and three HDD disks (autodiscovered).
+# - pihole exporter :9617: stats for the Pi-hole in services/pihole, the same
+#   exporter as the Raspberry Pi's, so one dashboard and rule set covers both.
 #
-# Both exporters listen on all interfaces; the firewall is what isolates them:
+# The exporters listen on all interfaces; the firewall is what isolates them:
 # the ports are open on tailscale0 only, not on the LAN, not behind Caddy.
+# Overview of what is and isn't monitored: the Observability page in the
+# Homecluster/NixOS wiki (Documentation).
 { config, lib, ... }:
 {
   services.prometheus.exporters.node = {
@@ -47,8 +55,43 @@
     serviceConfig.RestartSec = "1min";
   };
 
+  services.prometheus.exporters.zfs = {
+    enable = true;
+    port = 9134; # k8s-config ScrapeConfig polaris-zfs
+  };
+
+  services.prometheus.exporters.smartctl = {
+    enable = true;
+    port = 9633; # k8s-config ScrapeConfig polaris-smartctl
+  };
+
+  # Pi-hole's web/API server is on :8081 (pihole.nix). Connecting via the LAN
+  # address rather than localhost makes the exporter's `hostname` label
+  # 192.168.1.50, matching the Pi's 192.168.1.86 in the shared dashboard.
+  services.prometheus.exporters.pihole = {
+    enable = true;
+    port = 9617; # k8s-config ScrapeConfig polaris-pihole
+    piholeHostname = "192.168.1.50";
+    piholePort = 8081;
+  };
+  # The module's `password` option would put the password on the command line
+  # and in the world-readable store; the exporter also reads PIHOLE_PASSWORD
+  # from the environment, so pass it via an op-secrets env file instead.
+  opSecrets.pihole-exporter = {
+    template = ./pihole-exporter.env.tpl;
+    path = "/var/lib/secrets/pihole-exporter.env";
+    owner = "root";
+  };
+  systemd.services.prometheus-pihole-exporter = {
+    serviceConfig.EnvironmentFile = "/var/lib/secrets/pihole-exporter.env";
+    after = [ "docker-pihole.service" ];
+  };
+
   networking.firewall.interfaces.tailscale0.allowedTCPPorts = [
     config.services.prometheus.exporters.node.port
     config.services.prometheus.exporters.restic.port
+    config.services.prometheus.exporters.zfs.port
+    config.services.prometheus.exporters.smartctl.port
+    config.services.prometheus.exporters.pihole.port
   ];
 }
