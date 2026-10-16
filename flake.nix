@@ -223,6 +223,7 @@
       checks.x86_64-linux = {
         polaris-zfs = import ./tests/polaris-zfs.nix { inherit pkgs; };
         backup-metrics-script = import ./tests/backup-metrics-script.nix { inherit pkgs; };
+        backup-metrics = import ./tests/backup-metrics.nix { inherit pkgs; };
       };
       # Same script test, buildable on the Macs (no Linux builder needed).
       checks.aarch64-darwin.backup-metrics-script =
