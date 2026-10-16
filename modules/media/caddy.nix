@@ -68,6 +68,9 @@ in
     virtualHosts."conductor.polaris.mattiasgees.be".extraConfig = proxy 8420;
     # Metrics listener for the k8s Prometheus (k8s-config ScrapeConfig
     # polaris-caddy). Plain HTTP; the firewall opens it on tailscale0 only.
+    # Apps that only serve metrics on their localhost port add a
+    # `handle_path /<app>/*` here from their own module (miniflux.nix,
+    # karakeep.nix), each rewritten to the metrics path only.
     virtualHosts."http://:9180".extraConfig = ''
       metrics /metrics
     '';

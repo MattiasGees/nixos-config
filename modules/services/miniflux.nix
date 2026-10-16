@@ -6,7 +6,7 @@
 # adminCredentialsFile (ADMIN_USERNAME/ADMIN_PASSWORD, rendered by op-secrets)
 # is required by the module; since the admin already exists in the migrated
 # DB, CREATE_ADMIN is a no-op and the file is just a break-glass credential.
-{ ... }:
+{ lib, ... }:
 {
   opSecrets.miniflux-admin = {
     template = ./miniflux.admin.env.tpl;
@@ -25,6 +25,23 @@
       # blocked by default (SSRF protection), so the Karakeep integration fails
       # with "connection to private network is blocked". Opt back in for it.
       INTEGRATION_ALLOW_PRIVATE_NETWORKS = "1";
+      # /metrics on the main listener. Only localhost may read it (the default
+      # METRICS_ALLOWED_NETWORKS, checked against the TCP peer, not
+      # X-Forwarded-For), which is how Caddy's tailnet-only metrics listener
+      # reaches it (k8s-config ScrapeConfig polaris-miniflux).
+      METRICS_COLLECTOR = "1";
     };
   };
+
+  # Caddy is also localhost to Miniflux, so the public vhost must not pass
+  # /metrics through.
+  services.caddy.virtualHosts."miniflux.polaris.mattiasgees.be".extraConfig = lib.mkBefore ''
+    respond /metrics 404
+  '';
+  services.caddy.virtualHosts."http://:9180".extraConfig = ''
+    handle_path /miniflux/* {
+      rewrite * /metrics
+      reverse_proxy localhost:8080
+    }
+  '';
 }

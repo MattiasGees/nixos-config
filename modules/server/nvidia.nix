@@ -22,4 +22,16 @@
     nvidiaPersistenced = true;
     package = config.boot.kernelPackages.nvidiaPackages.stable;
   };
+
+  # GPU utilisation, VRAM, temperature, power and NVENC/NVDEC load from
+  # nvidia-smi, scraped by the k8s Prometheus (k8s-config ScrapeConfig
+  # polaris-gpu). nvidia-smi failing (e.g. driver/library mismatch after an
+  # update) shows up as nvidia_smi_last_collect_success == 0. Tailnet only.
+  services.prometheus.exporters.nvidia-gpu = {
+    enable = true;
+    port = 9835;
+  };
+  networking.firewall.interfaces.tailscale0.allowedTCPPorts = [
+    config.services.prometheus.exporters.nvidia-gpu.port
+  ];
 }

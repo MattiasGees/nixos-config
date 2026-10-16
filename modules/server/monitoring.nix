@@ -19,6 +19,10 @@
 # - exportarr :9707 sonarr, :9708 radarr, :9710 prowlarr, :9712 bazarr: library,
 #   queue, health-check and indexer stats from each app's API.
 # - postgres exporter :9187: the shared PostgreSQL cluster (postgresql.nix).
+# - App metrics enabled in the apps' own modules: Immich :9283/:9284
+#   (media/immich.nix), cloudflared :9181 (cloudflared.nix), the GPU :9835
+#   (nvidia.nix), and Miniflux and Karakeep through Caddy's :9180 listener
+#   (services/miniflux.nix, services/karakeep.nix).
 #
 # The exporters listen on all interfaces; the firewall is what isolates them:
 # the ports are open on tailscale0 only, not on the LAN, not behind Caddy.
