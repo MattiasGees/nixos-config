@@ -64,6 +64,12 @@ in
         # bind; both stacks so Caddy's `localhost` (v4 or v6) reaches it. No TLS
         # port bound here — Caddy terminates TLS.
         FTLCONF_webserver_port = "8081o,[::]:8081o";
+        # Answer queries from any origin, not just directly connected subnets
+        # (the default "local"), so the k8s blackbox exporter can probe DNS
+        # over the tailnet (k8s-config Probes pihole-dns / pihole-blocking).
+        # polaris sits behind CGNAT, so this doesn't make it an open resolver
+        # on the internet.
+        FTLCONF_dns_listeningMode = "all";
       };
       environmentFiles = [ "/var/lib/secrets/pihole.env" ];
       volumes = [

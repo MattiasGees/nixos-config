@@ -15,10 +15,6 @@
 #   counters for the two NVMe and three HDD disks (autodiscovered).
 # - pihole exporter :9617: stats for the Pi-hole in services/pihole, the same
 #   exporter as the Raspberry Pi's, so one dashboard and rule set covers both.
-# - blackbox exporter :9115: probes run *from* polaris, because the cluster
-#   can't resolve or reach the LAN/tailnet-only *.polaris.mattiasgees.be names
-#   or the Pi-holes' LAN addresses. The targets are k8s-config Probe resources;
-#   only the modules are defined here.
 # - Caddy :9180 (media/caddy.nix): per-site request metrics.
 # - exportarr :9707 sonarr, :9708 radarr, :9710 prowlarr, :9712 bazarr: library,
 #   queue, health-check and indexer stats from each app's API.
@@ -35,43 +31,6 @@ let
   arrConfigXml = path: {
     environment.CONFIG = "%d/config.xml";
     serviceConfig.LoadCredential = lib.mkForce "config.xml:${path}";
-  };
-
-  # Blackbox modules, referenced by name from k8s-config Probes.
-  blackboxConfig = {
-    modules = {
-      # App health endpoints behind Caddy. Follows redirects (Pi-hole's
-      # /admin/ redirects to its login page); TLS expiry comes for free.
-      http_2xx = {
-        prober = "http";
-        timeout = "5s";
-        http.preferred_ip_protocol = "ip4";
-      };
-      # A Pi-hole resolves a normal name through its DoH upstream.
-      dns_resolve = {
-        prober = "dns";
-        timeout = "5s";
-        dns = {
-          preferred_ip_protocol = "ip4";
-          query_name = "google.com";
-          query_type = "A";
-          valid_rcodes = [ "NOERROR" ];
-          validate_answer_rrs.fail_if_none_matches_regexp = [ ".*\\tIN\\tA\\t.*" ];
-        };
-      };
-      # A Pi-hole blocks a known ad domain (answers 0.0.0.0).
-      dns_blocked = {
-        prober = "dns";
-        timeout = "5s";
-        dns = {
-          preferred_ip_protocol = "ip4";
-          query_name = "doubleclick.net";
-          query_type = "A";
-          valid_rcodes = [ "NOERROR" ];
-          validate_answer_rrs.fail_if_none_matches_regexp = [ ".*\\tIN\\tA\\t0\\.0\\.0\\.0$" ];
-        };
-      };
-    };
   };
 in
 {
@@ -140,12 +99,6 @@ in
     after = [ "docker-pihole.service" ];
   };
 
-  services.prometheus.exporters.blackbox = {
-    enable = true;
-    port = 9115; # prober for the k8s-config Probes polaris-http, pihole-dns, pihole-blocking
-    configFile = pkgs.writeText "blackbox.json" (builtins.toJSON blackboxConfig);
-  };
-
   # exportarr needs each app's API key. None of them is in 1Password, so read
   # them from the apps' own config instead of keeping a copy: Sonarr, Radarr
   # and Prowlarr via their config.xml (arrConfigXml), handed over as a systemd
@@ -209,7 +162,6 @@ in
     config.services.prometheus.exporters.zfs.port
     config.services.prometheus.exporters.smartctl.port
     config.services.prometheus.exporters.pihole.port
-    config.services.prometheus.exporters.blackbox.port
     config.services.prometheus.exporters.exportarr-sonarr.port
     config.services.prometheus.exporters.exportarr-radarr.port
     config.services.prometheus.exporters.exportarr-prowlarr.port
