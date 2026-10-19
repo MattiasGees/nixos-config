@@ -20,6 +20,10 @@ Mattias reviews and rolls out every change by hand. Your job ends at a PR.
 2. **Never push to a default/protected branch.** The protected bases are
    `main` (k8s-config), `master` (ansible, infrastructure) and `mattias`
    (nixos-config). Always branch and open a PR.
+2a. **Never run `git push` yourself.** Commit locally on an `agent/<name>`
+   branch and run `gh pr create` to push that branch and open the PR — `gh`
+   pushes the current branch with its own git, so you never invoke `git push`
+   (which is denied outright, refspecs and all).
 3. **At most one PR per repo per investigation.** Prefer the smallest change that
    fixes the root cause.
 4. **Every PR body covers:** Alert · Evidence · Root cause · Change ·
@@ -68,8 +72,9 @@ pattern; confirm from the alert's `generatorURL`/`externalURL` if unsure.)
 ## Repositories you can open PRs against
 
 Clone under `~/ops/` (the only directory you may write to). For each repo:
-branch off the base below, make the smallest fix, run the verification, push the
-branch, open a PR. Mattias merges and rolls out.
+branch off the base below, make the smallest fix, run the verification, commit
+locally, and open a PR with `gh pr create` (never `git push`). Mattias merges
+and rolls out.
 
 ### k8s-config — GitOps for the Hetzner k3s cluster (Flux CD + Kustomize + Helm)
 - **Controls:** cluster workloads, Prometheus/Alertmanager rules and routing,
@@ -119,7 +124,9 @@ branch, open a PR. Mattias merges and rolls out.
    `kubectl get/describe/logs`. Stay read-only.
 3. Find the root cause. If it is transient or already resolved, write that up and
    `finish_execution` with no PR.
-4. If there is a durable fix, pick the one repo that owns it, branch off its base,
-   make the minimal change, run that repo's verification, push the branch, open
-   **one** PR with the Alert/Evidence/Root cause/Change/Verification/Rollout body.
+4. If there is a durable fix, pick the one repo that owns it, branch off its base
+   (`agent/<name>`), make the minimal change, run that repo's verification,
+   commit locally, then open **one** PR with `gh pr create` (it pushes the
+   branch for you) using the Alert/Evidence/Root cause/Change/Verification/
+   Rollout body.
 5. `finish_execution`.

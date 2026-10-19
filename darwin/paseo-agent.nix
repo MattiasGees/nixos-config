@@ -121,7 +121,20 @@ in
         StandardErrorPath = "${agentHome}/Library/Logs/paseo-agent.err.log";
       };
       command = "/Applications/Paseo.app/Contents/Resources/bin/paseo daemon run --home ${agentHome}/.paseo";
-      path = [ "/opt/homebrew/bin" "/usr/bin" "/bin" "/usr/sbin" "${agentHome}/.nix-profile/bin" ];
+      # A launchd daemon has no login shell, so it sees only this literal PATH.
+      # home-manager useUserPackages = true installs home.packages to
+      # /etc/profiles/per-user/<user>/bin (NOT ~/.nix-profile/bin), so that must
+      # come first or the claude processes the daemon spawns can't find
+      # kubectl/gh/jq/yq-go/kustomize/promtool/ansible. /opt/homebrew/bin stays
+      # for the `claude` CLI (Homebrew cask).
+      path = [
+        "/etc/profiles/per-user/${agentUser}/bin"
+        "/run/current-system/sw/bin"
+        "/opt/homebrew/bin"
+        "/usr/bin"
+        "/bin"
+        "/usr/sbin"
+      ];
       environment = {
         HOME = agentHome;
         PASEO_HOME = "${agentHome}/.paseo";
@@ -192,6 +205,10 @@ in
       # Prefix-matched Bash rules also can't fully express "HTTP GET only" or a
       # port on a Tailscale IP; the real read-only guarantees come from the
       # unprivileged logins and remote branch protection (see ops/CLAUDE.md).
+      # The curl/git deny rules below are a porous speed-bump, not a boundary
+      # (curl flag order, shell tricks, alternative clients all evade prefix
+      # matching); the durable control — a network egress allowlist for this
+      # user — is a documented later item.
       home.file.".claude/settings.json".text = builtins.toJSON {
         disableClaudeAiConnectors = true;
         enabledPlugins = { };
@@ -215,12 +232,13 @@ in
             "Bash(ssh pi1:*)"
             "Bash(ssh atni:*)"
             "Bash(ssh seedbox:*)"
-            # Prometheus / Alertmanager HTTP GETs.
+            # Prometheus read-only API (GET; -s-prefixed consistently).
             "Bash(curl -s https://prometheus.k8s.mattiasgees.be:*)"
-            "Bash(curl https://prometheus.k8s.mattiasgees.be:*)"
-            "Bash(curl -s https://alertmanager.k8s.mattiasgees.be:*)"
-            "Bash(curl https://alertmanager.k8s.mattiasgees.be:*)"
             "Bash(curl -s https://grafana.k8s.mattiasgees.be:*)"
+            # Alertmanager: read PATHS only, never the whole host — a host-wide
+            # allow would let a silence POST ride in on top of it.
+            "Bash(curl -s https://alertmanager.k8s.mattiasgees.be/api/v2/alerts:*)"
+            "Bash(curl -s https://alertmanager.k8s.mattiasgees.be/api/v2/status:*)"
             # Git, gh (read + PR open), build/verify tools.
             "Bash(git:*)"
             "Bash(gh pr create:*)"
@@ -241,7 +259,12 @@ in
             "WebFetch(domain:runbooks.prometheus-operator.dev)"
           ];
           deny = [
-            # Never push to a default/protected branch.
+            # Never run `git push` at all — refspecs (git push origin HEAD:main)
+            # and `git -c <cfg>=<exec>` sidestep branch-specific denies. Branches
+            # reach the remote ONLY via `gh pr create` (gh's own git, not an
+            # intercepted Bash(git push)). Branch-specific denies kept as backup.
+            "Bash(git push:*)"
+            "Bash(git -c:*)"
             "Bash(git push origin main:*)"
             "Bash(git push origin master:*)"
             "Bash(git push origin mattias:*)"
@@ -267,7 +290,9 @@ in
             "Bash(curl http://127.0.0.1:6767:*)"
             "Bash(curl http://127.0.0.1:6768:*)"
             # No mutating HTTP (covers Alertmanager silences and any seedbox
-            # write): deny non-GET curl and silence tooling.
+            # write): deny every curl flag that sets a method or sends a body.
+            "Bash(curl -X:*)"
+            "Bash(curl -XPOST:*)"
             "Bash(curl -X POST:*)"
             "Bash(curl -X PUT:*)"
             "Bash(curl -X DELETE:*)"
@@ -275,6 +300,12 @@ in
             "Bash(curl --request:*)"
             "Bash(curl -d:*)"
             "Bash(curl --data:*)"
+            "Bash(curl --data-raw:*)"
+            "Bash(curl --data-binary:*)"
+            "Bash(curl -F:*)"
+            "Bash(curl --form:*)"
+            "Bash(curl -T:*)"
+            "Bash(curl --upload-file:*)"
             "Bash(amtool:*)"
             # No web search.
             "WebSearch"
