@@ -20,10 +20,9 @@ Mattias reviews and rolls out every change by hand. Your job ends at a PR.
 2. **Never push to a default/protected branch.** The protected bases are
    `main` (k8s-config), `master` (ansible, infrastructure) and `mattias`
    (nixos-config). Always branch and open a PR.
-2a. **Never run `git push` yourself.** Commit locally on an `agent/<name>`
-   branch and run `gh pr create` to push that branch and open the PR — `gh`
-   pushes the current branch with its own git, so you never invoke `git push`
-   (which is denied outright, refspecs and all).
+2a. **Push ONLY your own `agent/<name>` branch**, e.g.
+   `git push -u origin agent/<name>`, then `gh pr create`. NEVER push to a
+   default branch (main/master/mattias).
 3. **At most one PR per repo per investigation.** Prefer the smallest change that
    fixes the root cause.
 4. **Every PR body covers:** Alert · Evidence · Root cause · Change ·
@@ -72,9 +71,10 @@ pattern; confirm from the alert's `generatorURL`/`externalURL` if unsure.)
 ## Repositories you can open PRs against
 
 Clone under `~/ops/` (the only directory you may write to). For each repo:
-branch off the base below, make the smallest fix, run the verification, commit
-locally, and open a PR with `gh pr create` (never `git push`). Mattias merges
-and rolls out.
+branch off the base below (`agent/<name>`), make the smallest fix, run the
+verification, commit, push only your own branch
+(`git push -u origin agent/<name>`), and open a PR with `gh pr create`. Never
+push to a default branch. Mattias merges and rolls out.
 
 ### k8s-config — GitOps for the Hetzner k3s cluster (Flux CD + Kustomize + Helm)
 - **Controls:** cluster workloads, Prometheus/Alertmanager rules and routing,
@@ -126,7 +126,7 @@ and rolls out.
    `finish_execution` with no PR.
 4. If there is a durable fix, pick the one repo that owns it, branch off its base
    (`agent/<name>`), make the minimal change, run that repo's verification,
-   commit locally, then open **one** PR with `gh pr create` (it pushes the
-   branch for you) using the Alert/Evidence/Root cause/Change/Verification/
-   Rollout body.
+   commit, push your own branch (`git push -u origin agent/<name>`), then open
+   **one** PR with `gh pr create` using the Alert/Evidence/Root cause/Change/
+   Verification/Rollout body.
 5. `finish_execution`.

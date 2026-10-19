@@ -248,6 +248,7 @@ in
             "Bash(gh pr status:*)"
             "Bash(kustomize build:*)"
             "Bash(promtool:*)"
+            "Bash(jq:*)"
             "Bash(terraform fmt:*)"
             "Bash(terraform validate:*)"
             "Bash(ansible-playbook --syntax-check:*)"
@@ -259,11 +260,12 @@ in
             "WebFetch(domain:runbooks.prometheus-operator.dev)"
           ];
           deny = [
-            # Never run `git push` at all — refspecs (git push origin HEAD:main)
-            # and `git -c <cfg>=<exec>` sidestep branch-specific denies. Branches
-            # reach the remote ONLY via `gh pr create` (gh's own git, not an
-            # intercepted Bash(git push)). Branch-specific denies kept as backup.
-            "Bash(git push:*)"
+            # Speed-bump against pushing to a default branch or using
+            # `git -c <cfg>=<exec>` for arbitrary exec. NOT a boundary: the agent
+            # must still push its own agent/<name> branch (plain `git push` is
+            # allowed) so `gh pr create` can open the PR. A refspec like
+            # `git push origin HEAD:main` evades these prefixes — remote branch
+            # protection (deferred) is the real control.
             "Bash(git -c:*)"
             "Bash(git push origin main:*)"
             "Bash(git push origin master:*)"
