@@ -11,4 +11,8 @@
   # Keep the Paseo daemon off the tailnet on this machine.
   paseo.listenOnTailscale = false;
 
+  # macbook-m1.nix enables the investigation agent; it belongs on the physical
+  # MacBook only, so force it off here.
+  paseoAgent.enable = lib.mkForce false;
+
 }
