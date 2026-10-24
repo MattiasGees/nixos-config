@@ -37,7 +37,7 @@ NIX_CONFIG="experimental-features = nix-command flakes" \
 | `nixosConfigurations.server` / `server-arm64` | `lib/mkserver.nix` | Generic headless box; both use `hardware/server.nix` + `machines/server.nix` |
 | `nixosConfigurations.polaris` | `lib/mkserver.nix` | Home server (ZFS, media stack, self-hosted services). `extraModules` adds `hardware/polaris-extra.nix` (NVIDIA, ZFS pools), `modules/server/vmctl.nix`, and conductor (its flake's `nixosModules.default` + `modules/services/conductor.nix`) |
 | `nixosConfigurations.polaris-vm` | `lib/mkserver.nix` | aarch64 throwaway VM of polaris: `machines/polaris-vm.nix` imports `polaris.nix` and overrides networking/hostname |
-| `darwinConfigurations.macbook-m1` / `pacesetter` / `macbook-x86` | `lib/mkdarwin.nix` | `pacesetter` is `macbook-m1` with a different hostname |
+| `darwinConfigurations.macbook-m1` / `pacesetter` | `lib/mkdarwin.nix` | `pacesetter` is `macbook-m1` with a different hostname |
 | `homeConfigurations.mattias[@<arch>-linux]` | inline | `users/default/home-manager-server.nix` for non-NixOS Linux |
 
 NixOS builders import `hardware/<name>.nix`, `machines/<name>.nix` and `machines/shared.nix`; Darwin skips `hardware/`. Adding a host means creating those files and a builder call in `flake.nix`. `lib/mkhm.nix` and `lib/mkvm.nix` are not called (legacy).

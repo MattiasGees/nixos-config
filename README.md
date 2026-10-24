@@ -5,7 +5,7 @@ Personal Nix flake for my NixOS machines (desktop, home server `polaris`), Macs 
 ```bash
 git clone --recurse-submodules https://github.com/mattiasgees/nixos-config.git ~/Documents/git/nixos-config
 cd ~/Documents/git/nixos-config
-make switch NIXNAME=<host>   # desktop | server | polaris | macbook-m1 | pacesetter | macbook-x86
+make switch NIXNAME=<host>   # desktop | server | polaris | macbook-m1 | pacesetter
 make help                    # all targets
 ```
 

@@ -210,16 +210,6 @@
         lib = pkgs.lib;
       };
 
-      darwinConfigurations.macbook-x86 = mkDarwin "macbook-x86" rec {
-        inherit darwin home-manager user;
-        system = "x86_64-darwin";
-        pkgs = import nixpkgs {
-          inherit system;
-          config = { allowUnfree = true; };
-        };
-        lib = pkgs.lib;
-      };
-
       checks.x86_64-linux.polaris-zfs =
         import ./tests/polaris-zfs.nix { inherit pkgs; };
 
