@@ -108,9 +108,8 @@ in
       "font-jetbrains-mono"
       "font-jetbrains-mono-nerd-font"
       "font-source-code-pro"
-      # SF Pro / SF Mono: the Homebrew casks (font-sf-pro/font-sf-mono) are
-      # broken upstream (Apple renamed the .pkg inside the DMG). Install these
-      # two fonts manually from https://developer.apple.com/fonts/.
+      "font-sf-pro"
+      "font-sf-mono"
     ];
   };
 

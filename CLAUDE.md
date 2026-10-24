@@ -65,7 +65,7 @@ NixOS builders import `hardware/<name>.nix`, `machines/<name>.nix` and `machines
 - **Live-edit symlinks:** many home-manager modules use `mkOutOfStoreSymlink` to `~/Documents/git/nixos-config/...`, so config edits apply without a rebuild — and break if the repo lives elsewhere.
 - The username `mattias` is hardcoded in several places (`flake.nix`, `machines/shared.nix`, `users/default/nixos*.nix`, `machines/polaris.nix`, bootstrap scripts).
 - **Claude Code** config on the Macs and polaris is set up imperatively by `bootstrap-claude-code.sh`, run on activation via `modules/programs/claude-code-bootstrap.nix` (Claude Code rewrites its own config files, so home-manager can't own them).
-- **sketchybar** is a vendored SbarLua config from FelixKratz/dotfiles; its C helpers are built at activation. The menu-bar helper `helpers/menus/bin/menus` needs a manual macOS Accessibility grant. SF Pro / SF Mono must be installed manually from https://developer.apple.com/fonts/ (the Homebrew casks are broken).
+- **sketchybar** is a vendored SbarLua config from FelixKratz/dotfiles; its C helpers are built at activation. The menu-bar helper `helpers/menus/bin/menus` needs a manual macOS Accessibility grant.
 - Vendored trees — don't restyle: `modules/desktop/hyprland/rofi/`, `darwin/modules/sketchybar/config/`, `modules/editors/nvim/{AstroNvim,LazyNvim}`.
 
 ## Submodules
