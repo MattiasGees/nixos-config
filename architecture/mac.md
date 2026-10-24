@@ -1,6 +1,6 @@
 # Mac (Darwin) build structure
 
-What actually gets loaded for `darwinConfigurations.{macbook-m1,pacesetter,macbook-x86}`.
+What actually gets loaded for `darwinConfigurations.{macbook-m1,pacesetter}`.
 
 ## Entry point
 

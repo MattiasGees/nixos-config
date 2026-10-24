@@ -67,7 +67,7 @@ This repo is **one flake** (`flake.nix`) that builds several kinds of system:
 |--------|------------------|------------------|
 | `nixosConfigurations.desktop` | `mksys.nix` | Full NixOS desktop (this manual) |
 | `nixosConfigurations.{server,server-arm64,polaris,polaris-vm}` | `mkserver.nix` | Headless NixOS servers |
-| `darwinConfigurations.{macbook-m1,pacesetter,macbook-x86}` | `mkdarwin.nix` | macOS via nix-darwin |
+| `darwinConfigurations.{macbook-m1,pacesetter}` | `mkdarwin.nix` | macOS via nix-darwin |
 | `homeConfigurations.mattias` (+ `@x86_64-linux` / `@aarch64-linux`) | (inline) | Standalone home-manager, non-NixOS Linux |
 
 A **builder** is a function: give it a name + some inputs, it returns a
