@@ -22,8 +22,6 @@ in
   # User packages come from home-manager (pkgs/*.nix via
   # users/default/home-manager.nix), not environment.systemPackages.
 
-  nixpkgs.config.allowBroken = true;
-
   homebrew = {                            # Declare Homebrew using Nix-Darwin
     enable = true;
     onActivation = {
