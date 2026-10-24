@@ -86,4 +86,4 @@ nix build ".#darwinConfigurations.macbook-m1.system" --impure   # build only
 
 1. **Homebrew is declarative.** `onActivation.cleanup = "zap"` uninstalls anything not listed in `brews` / `casks` / `taps`. A manual `brew install` won't survive a switch.
 2. **yabai scripting addition.** `services.yabai.enableScriptingAddition` installs the sudoers entry that the activation script relies on for `yabai --load-sa`.
-3. **Manual steps on a fresh Mac:** grant Accessibility to sketchybar's `helpers/menus/bin/menus`, and install SF Pro / SF Mono from https://developer.apple.com/fonts/ (the Homebrew casks are broken).
+3. **Manual step on a fresh Mac:** grant Accessibility to sketchybar's `helpers/menus/bin/menus`.

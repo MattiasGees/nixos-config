@@ -57,7 +57,7 @@ brew tap FelixKratz/formulae
 brew install koekeishiya/formulae/yabai koekeishiya/formulae/skhd \
   FelixKratz/formulae/borders FelixKratz/formulae/sketchybar \
   lua switchaudio-osx
-brew install --cask sf-symbols font-sketchybar-app-font
+brew install --cask sf-symbols font-sketchybar-app-font font-sf-pro font-sf-mono
 
 # --- yabai -------------------------------------------------------------------
 
@@ -238,10 +238,6 @@ brew services restart borders
 brew services restart sketchybar
 
 # --- Manual steps ------------------------------------------------------------
-
-if ! compgen -G "$HOME/Library/Fonts/SF-Pro*" >/dev/null && ! compgen -G "/Library/Fonts/SF-Pro*" >/dev/null; then
-  warn "SF Pro / SF Mono not found: install them from https://developer.apple.com/fonts/ (the Homebrew casks are broken)"
-fi
 
 cat <<EOF
 
