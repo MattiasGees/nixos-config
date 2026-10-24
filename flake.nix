@@ -103,6 +103,19 @@
         (final: prev: {
           onnxruntime = prev.onnxruntime.override { openvinoSupport = false; };
         })
+        # Open WebUI: nixpkgs passes makeWrapperArgs as one string
+        # ("--set FRONTEND_BUILD_DIR …"), which makeWrapper rejects under
+        # structured attrs. Backport of nixpkgs f985be327f; drop once
+        # nixos-unstable includes it.
+        (final: prev: {
+          open-webui = prev.open-webui.overridePythonAttrs (old: {
+            makeWrapperArgs = [
+              "--set"
+              "FRONTEND_BUILD_DIR"
+              "${old.passthru.frontend}/share/open-webui"
+            ];
+          });
+        })
       ];
       };
     in
