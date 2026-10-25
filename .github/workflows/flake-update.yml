@@ -22,10 +22,13 @@ jobs:
       - uses: cachix/install-nix-action@v31
 
       # vmctl and conductor are private git+ssh inputs; evaluating polaris
-      # needs them.
-      - uses: webfactory/ssh-agent@v0.9.1
-        with:
-          ssh-private-key: ${{ secrets.FLAKE_INPUTS_SSH_KEY }}
+      # needs them. Rewrite their SSH URLs to HTTPS with a fine-grained token
+      # (Contents: read-only on those two repos), so flake.nix and flake.lock
+      # keep git+ssh for local builds.
+      - name: Access private flake inputs
+        env:
+          TOKEN: ${{ secrets.FLAKE_INPUTS_TOKEN }}
+        run: git config --global url."https://x-access-token:${TOKEN}@github.com/".insteadOf "ssh://git@github.com/"
 
       - name: Update flake.lock
         id: update
