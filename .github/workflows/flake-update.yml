@@ -34,7 +34,7 @@ jobs:
         id: update
         run: |
           scripts/flake-update.sh > "$RUNNER_TEMP/summary.md"
-          echo "nixpkgs=$(date -ud "@$(jq .nodes.nixpkgs.locked.lastModified flake.lock)" +%F)" >> "$GITHUB_OUTPUT"
+          echo "nixpkgs=$(date -ud "@$(jq '.nodes[.nodes.root.inputs.nixpkgs].locked.lastModified' flake.lock)" +%F)" >> "$GITHUB_OUTPUT"
 
       # Don't leave the token in ~/.gitconfig for the steps below.
       - name: Forget the flake inputs token

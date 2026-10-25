@@ -54,7 +54,8 @@ if [[ ${broken:-} ]]; then
   echo "> \`nixosConfigurations.${host}\` no longer evaluates after this update."
   echo
   echo '```'
-  tail -n 15 "$tmp/new.err"
+  # Only the final message; the stack trace above it is noise in a PR.
+  awk '/^ *error:/ { msg = "" } { msg = msg $0 "\n" } END { printf "%s", msg }' "$tmp/new.err"
   echo '```'
   echo
 fi
