@@ -17,9 +17,9 @@ jobs:
   update:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
 
-      - uses: cachix/install-nix-action@v31
+      - uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # v31.11.3
 
       # vmctl and conductor are private git+ssh inputs; evaluating polaris
       # needs them. Rewrite their SSH URLs to HTTPS with a fine-grained token
@@ -36,7 +36,14 @@ jobs:
           scripts/flake-update.sh > "$RUNNER_TEMP/summary.md"
           echo "nixpkgs=$(date -ud "@$(jq .nodes.nixpkgs.locked.lastModified flake.lock)" +%F)" >> "$GITHUB_OUTPUT"
 
-      - uses: peter-evans/create-pull-request@v7
+      # Don't leave the token in ~/.gitconfig for the steps below.
+      - name: Forget the flake inputs token
+        if: always()
+        run: git config --global --remove-section url."https://x-access-token:${TOKEN}@github.com/" || true
+        env:
+          TOKEN: ${{ secrets.FLAKE_INPUTS_TOKEN }}
+
+      - uses: peter-evans/create-pull-request@22a9089034f40e5a961c8808d113e2c98fb63676 # v7.0.11
         with:
           branch: automation/flake-update
           base: mattias
