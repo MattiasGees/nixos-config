@@ -11,6 +11,7 @@ darwin.lib.darwinSystem {
     ../machines/shared.nix
     ../darwin/configuration.nix
     ../darwin/paseo.nix
+    ../darwin/paseo-agent.nix
 
     {
       documentation.enable = false;

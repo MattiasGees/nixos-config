@@ -5,6 +5,9 @@
     hostName = "mattias-macbook";
   };
 
+  # The read-only Paseo investigation agent lives on this machine only.
+  paseoAgent.enable = true;
+
     fonts.packages = [
       pkgs.nerd-fonts.jetbrains-mono
       pkgs.nerd-fonts.iosevka
