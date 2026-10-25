@@ -1,0 +1,43 @@
+# Weekly `nix flake update` as a PR against `mattias`. The PR description is
+# the output of scripts/flake-update.sh: which polaris services change version
+# (with changelog links) and which flake inputs moved. Nothing is built here;
+# check the PR with `make switch NIXNAME=polaris` before merging.
+name: flake-update
+
+on:
+  schedule:
+    - cron: "0 5 * * 1" # Mondays 05:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: cachix/install-nix-action@v31
+
+      # vmctl and conductor are private git+ssh inputs; evaluating polaris
+      # needs them.
+      - uses: webfactory/ssh-agent@v0.9.1
+        with:
+          ssh-private-key: ${{ secrets.FLAKE_INPUTS_SSH_KEY }}
+
+      - name: Update flake.lock
+        id: update
+        run: |
+          scripts/flake-update.sh > "$RUNNER_TEMP/summary.md"
+          echo "nixpkgs=$(date -ud "@$(jq .nodes.nixpkgs.locked.lastModified flake.lock)" +%F)" >> "$GITHUB_OUTPUT"
+
+      - uses: peter-evans/create-pull-request@v7
+        with:
+          branch: automation/flake-update
+          base: mattias
+          delete-branch: true
+          commit-message: "chore: nix flake update (nixpkgs ${{ steps.update.outputs.nixpkgs }})"
+          title: "chore: nix flake update (nixpkgs ${{ steps.update.outputs.nixpkgs }})"
+          body-path: ${{ runner.temp }}/summary.md

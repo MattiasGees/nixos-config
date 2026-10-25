@@ -11,7 +11,7 @@ make switch NIXNAME=<host>   # build as the user, then activate with sudo
 make build-server            # build nixosConfigurations.server without activating
 make home-manager            # standalone home-manager (non-NixOS Linux)
 make setup-home-manager      # same, backing up existing dotfiles with `.backup`
-make update                  # nix flake update
+make update                  # nix flake update + summary of polaris service version changes
 ```
 
 To build without activating, mirror the Makefile:
@@ -26,7 +26,8 @@ NIX_CONFIG="experimental-features = nix-command flakes" \
 - `--impure` is required: `homeConfigurations` reads `builtins.getEnv "USER"` / `"HOME"`.
 - The `vmctl` and `conductor` inputs are **private** `git+ssh` repos. Evaluate as a user with GitHub SSH access, never as root — this is why `make switch` on Linux builds unprivileged and only uses sudo to activate.
 - `conductor` (the home dashboard) is pinned to a release tag (`?ref=refs/tags/vX.Y.Z`); `make update-conductor [TAG=…]` (`scripts/update-conductor.sh`) moves it, and `make switch NIXFLAGS="--override-input conductor '…'"` tries a branch without touching the pin. Its config template (the house layout) is in the conductor repo, `deploy/polaris.config.yaml.tpl`, not here: this repo is public. Runbook: `docs/polaris/conductor.md`.
-- The only flake check is `checks.x86_64-linux.polaris-zfs` (a NixOS VM test of `scripts/create-zfs-pools.sh`). No CI, linter or formatter.
+- The only flake check is `checks.x86_64-linux.polaris-zfs` (a NixOS VM test of `scripts/create-zfs-pools.sh`). No CI checks, linter or formatter.
+- The only GitHub workflow, `.github/workflows/flake-update.yml`, opens a weekly flake-update PR. Its description comes from `scripts/flake-update.sh` (also behind `make update`): every enabled `services.<name>` with a `package` option on polaris, plus kernel/NVIDIA/ZFS/Docker/Nix (`scripts/service-versions.nix`), compared before and after the update. It only evaluates (no build), and a module that throws after the update shows up in the summary as a warning.
 - PRs target the `mattias` branch.
 
 ## Hosts (`flake.nix`)

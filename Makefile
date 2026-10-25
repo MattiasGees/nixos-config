@@ -37,9 +37,9 @@ install:
 	@rm -f $(NIX_INSTALL_SCRIPT)
 	@echo "Nix installation completed. You may need to restart your shell."
 
+# nix flake update, then print which polaris services change version.
 update:
-	@echo "Updating flake..."
-	nix flake update
+	./scripts/flake-update.sh
 
 # Pin conductor to its newest release (or TAG=vX.Y.Z) and update flake.lock.
 update-conductor:
