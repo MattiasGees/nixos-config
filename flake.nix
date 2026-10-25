@@ -103,25 +103,22 @@
         (final: prev: {
           onnxruntime = prev.onnxruntime.override { openvinoSupport = false; };
         })
-        # Open WebUI -> chromadb -> posthog: nixpkgs marks posthog broken
-        # with mcp 2, though only one test hits mcp 2's field rename.
-        # Backport of the "unbreak" commit of nixpkgs #578265. The assert
-        # fails once upstream has unbroken posthog; then drop this overlay.
+        # Open WebUI 0.12.3 pins mcp==1.27.2 and imports
+        # mcp.client.streamable_http.streamablehttp_client, which mcp 2 removed
+        # (nixpkgs#575004 bumped mcp to 2.2.0) -> ImportError at startup. Give it
+        # mcp_1, as nixpkgs did for mistral-vibe (#578726). This also keeps
+        # chromadb -> posthog buildable, since nixpkgs only marks posthog broken
+        # with mcp >= 2. 0.12.4 moved to mcp 2 (+ httpx2); the assert fails once
+        # nixpkgs ships it, then drop this overlay.
         (final: prev: {
-          pythonPackagesExtensions = prev.pythonPackagesExtensions ++ [
-            (pyfinal: pyprev: {
-              posthog =
-                assert prev.lib.assertMsg (pyprev.posthog.meta.broken or false)
-                  "flake.nix: nixpkgs#578265 posthog backport no longer needed; remove the overlay";
-                pyprev.posthog.overridePythonAttrs (old: {
-                  disabledTests = old.disabledTests ++ [
-                    "test_prepare_tool_result_delivers_into_call_tool_result_models"
-                    "test_capture_from_worker_thread_wakes_loop_bound_queue"
-                  ];
-                  meta = old.meta // { broken = false; };
-                });
-            })
-          ];
+          open-webui =
+            assert prev.lib.assertMsg (prev.lib.versionOlder prev.open-webui.version "0.12.4")
+              "flake.nix: open-webui ${prev.open-webui.version} supports mcp 2; remove the mcp_1 overlay";
+            prev.open-webui.override {
+              python3Packages = prev.python3Packages.overrideScope (pyfinal: pyprev: {
+                mcp = pyfinal.mcp_1;
+              });
+            };
         })
       ];
       };
