@@ -103,18 +103,25 @@
         (final: prev: {
           onnxruntime = prev.onnxruntime.override { openvinoSupport = false; };
         })
-        # Open WebUI: nixpkgs passes makeWrapperArgs as one string
-        # ("--set FRONTEND_BUILD_DIR …"), which makeWrapper rejects under
-        # structured attrs. Backport of nixpkgs f985be327f; drop once
-        # nixos-unstable includes it.
+        # Open WebUI -> chromadb -> posthog: nixpkgs marks posthog broken
+        # with mcp 2, though only one test hits mcp 2's field rename.
+        # Backport of the "unbreak" commit of nixpkgs #578265. The assert
+        # fails once upstream has unbroken posthog; then drop this overlay.
         (final: prev: {
-          open-webui = prev.open-webui.overridePythonAttrs (old: {
-            makeWrapperArgs = [
-              "--set"
-              "FRONTEND_BUILD_DIR"
-              "${old.passthru.frontend}/share/open-webui"
-            ];
-          });
+          pythonPackagesExtensions = prev.pythonPackagesExtensions ++ [
+            (pyfinal: pyprev: {
+              posthog =
+                assert prev.lib.assertMsg (pyprev.posthog.meta.broken or false)
+                  "flake.nix: nixpkgs#578265 posthog backport no longer needed; remove the overlay";
+                pyprev.posthog.overridePythonAttrs (old: {
+                  disabledTests = old.disabledTests ++ [
+                    "test_prepare_tool_result_delivers_into_call_tool_result_models"
+                    "test_capture_from_worker_thread_wakes_loop_bound_queue"
+                  ];
+                  meta = old.meta // { broken = false; };
+                });
+            })
+          ];
         })
       ];
       };
