@@ -225,6 +225,10 @@
 
       checks.x86_64-linux.polaris-zfs =
         import ./tests/polaris-zfs.nix { inherit pkgs; };
+      checks.x86_64-linux.cloud-backup =
+        import ./tests/cloud-backup.nix { inherit pkgs; };
+      checks.aarch64-darwin.cloud-backup =
+        import ./tests/cloud-backup.nix { pkgs = nixpkgs.legacyPackages.aarch64-darwin; };
 
     };
 }
