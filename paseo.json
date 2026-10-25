@@ -1,0 +1,19 @@
+{
+  "worktree": {
+    "setup": "git submodule update --init --recursive"
+  },
+  "scripts": {
+    "build-mac": {
+      "command": "NIX_CONFIG=\"experimental-features = nix-command flakes\" nix build \".#darwinConfigurations.macbook-m1.system\" --impure --no-link"
+    },
+    "build-pacesetter": {
+      "command": "NIX_CONFIG=\"experimental-features = nix-command flakes\" nix build \".#darwinConfigurations.pacesetter.system\" --impure --no-link"
+    },
+    "eval-polaris": {
+      "command": "NIX_CONFIG=\"experimental-features = nix-command flakes\" nix eval --raw \".#nixosConfigurations.polaris.config.system.build.toplevel.drvPath\" --impure"
+    },
+    "eval-server": {
+      "command": "NIX_CONFIG=\"experimental-features = nix-command flakes\" nix eval --raw \".#nixosConfigurations.server.config.system.build.toplevel.drvPath\" --impure"
+    }
+  }
+}

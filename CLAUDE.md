@@ -58,6 +58,7 @@ NixOS builders import `hardware/<name>.nix`, `machines/<name>.nix` and `machines
 - `darwin/modules/` — Mac home-manager modules (sketchybar, kitty, ghostty, vscode). `darwin/modules/archive/` is unused.
 - `hardware/polaris.nix` is raw `nixos-generate-config` output and may be overwritten; hand-maintained hardware bits go in `hardware/polaris-extra.nix`.
 - Human docs: `docs/polaris/` runbooks, `docs/workstation-manual.md` (desktop), `architecture/mac.md` (Darwin), `SERVER-SETUP.md` (generic servers / non-NixOS).
+- `paseo.json` — [Paseo](https://paseo.sh) worktree setup (submodule init) and on-demand scripts (`build-mac`, `build-pacesetter`, `eval-polaris`, `eval-server`). Paseo reads it from the committed base branch.
 
 ## Conventions and gotchas
 
