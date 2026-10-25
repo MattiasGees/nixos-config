@@ -6,7 +6,7 @@ name: flake-update
 
 on:
   schedule:
-    - cron: "0 5 * * 1" # Mondays 05:00 UTC
+    - cron: "0 5 * * 5" # Fridays 05:00 UTC
   workflow_dispatch:
 
 permissions:
