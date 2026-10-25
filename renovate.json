@@ -2,5 +2,22 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
     "config:recommended"
+  ],
+  "enabledManagers": [
+    "custom.regex",
+    "github-actions"
+  ],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Bump OCI image tags declared inline in virtualisation.oci-containers (filebrowser, pihole, dnsproxy, and any future image = \"repo:tag\";).",
+      "managerFilePatterns": [
+        "/\\.nix$/"
+      ],
+      "matchStrings": [
+        "image = \"(?<depName>[^\"]+?):(?<currentValue>[^\"]+?)\";"
+      ],
+      "datasourceTemplate": "docker"
+    }
   ]
 }
