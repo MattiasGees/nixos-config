@@ -55,7 +55,7 @@ in
     # Pi-hole resolver + web UI. Host networking → binds :53 directly and sees
     # real client IPs. Upstream is the local DoH forwarder above.
     pihole = {
-      image = "pihole/pihole:2026.10.0";
+      image = "pihole/pihole:2026.10.1";
       dependsOn = [ "dnsproxy" ];
       environment = {
         TZ = "UTC";
