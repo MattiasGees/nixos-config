@@ -103,23 +103,6 @@
         (final: prev: {
           onnxruntime = prev.onnxruntime.override { openvinoSupport = false; };
         })
-        # Open WebUI 0.12.3 pins mcp==1.27.2 and imports
-        # mcp.client.streamable_http.streamablehttp_client, which mcp 2 removed
-        # (nixpkgs#575004 bumped mcp to 2.2.0) -> ImportError at startup. Give it
-        # mcp_1, as nixpkgs did for mistral-vibe (#578726). This also keeps
-        # chromadb -> posthog buildable, since nixpkgs only marks posthog broken
-        # with mcp >= 2. 0.12.4 moved to mcp 2 (+ httpx2); the assert fails once
-        # nixpkgs ships it, then drop this overlay.
-        (final: prev: {
-          open-webui =
-            assert prev.lib.assertMsg (prev.lib.versionOlder prev.open-webui.version "0.12.4")
-              "flake.nix: open-webui ${prev.open-webui.version} supports mcp 2; remove the mcp_1 overlay";
-            prev.open-webui.override {
-              python3Packages = prev.python3Packages.overrideScope (pyfinal: pyprev: {
-                mcp = pyfinal.mcp_1;
-              });
-            };
-        })
       ];
       };
     in
