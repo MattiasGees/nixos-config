@@ -9,6 +9,13 @@ pkgs.testers.runNixOSTest {
   nodes.machine = { ... }: {
     imports = [ ../modules/server/zfs.nix ];
     networking.hostId = "deadbeef";
+    # As in hardware/polaris-extra.nix, which this test can't import (GPU etc.).
+    # Without it nothing imports the pools after the reboot below. They don't
+    # exist yet on first boot, so these import units wait, then fail, harmlessly.
+    boot.zfs.extraPools = [ "tank" "fast" "scratch" ];
+    # The default /dev/disk/by-id is empty here: virtual disks have no serial.
+    # Not by-uuid either: pool members share a UUID, so only one would show up.
+    boot.zfs.devNodes = "/dev";
     # vdb = fast member, vdc = nvme2, vdd/vde/vdf = tank raidz1, vdg = scratch.
     virtualisation.emptyDiskImages = [ 512 512 2048 2048 2048 512 ];
     environment.systemPackages = [ pkgs.zfs ];
