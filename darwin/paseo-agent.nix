@@ -16,9 +16,11 @@
 #  key, its env file (CLAUDE_CODE_OAUTH_TOKEN, GH_TOKEN), its kubeconfig and the
 #  bot's git identity are rendered from the `paseo-agent` 1Password vault by
 #  op-secrets (darwin/op-secrets.nix) at every `make switch`; the templates in
-#  ./paseo-agent/*.tpl hold only op:// references. The Hub keys are NEVER
-#  rendered here — only the `paseo-agent-setup` script (./paseo-agent/setup.sh)
-#  reads them. Rotation = change the value in 1Password + `make switch`.
+#  ./paseo-agent/*.tpl hold only op:// references. The Hub keys and Hetzner
+#  tokens live in a second vault, `paseo-agent-admin`, that the Mac's service
+#  account can't read; only the `paseo-agent-setup` script
+#  (./paseo-agent/setup.sh) uses them. Rotation = change the value in
+#  1Password + `make switch`.
 #
 { config, lib, pkgs, user, ... }:
 
@@ -42,11 +44,12 @@ let
 
   # Interactive/one-off setup steps (1Password items, GitHub invites, Hub
   # enrollment, verification). Uses the Homebrew `op` on PATH, deliberately
-  # not pkgs._1password-cli (signed binary with desktop-app unlock).
+  # not pkgs._1password-cli (signed binary with desktop-app unlock). git is
+  # for deploy-trigger's fresh clone of k8s-config.
   setupScript = pkgs.writeShellApplication {
     name = "paseo-agent-setup";
     runtimeInputs = with pkgs; [
-      gh jq kubectl awscli2 fluxcd openssh coreutils gnused curl prometheus-alertmanager
+      gh jq kubectl awscli2 fluxcd openssh coreutils gnused curl prometheus-alertmanager git
     ];
     text = builtins.readFile ./paseo-agent/setup.sh;
   };
@@ -163,12 +166,23 @@ in
         fi
       fi
 
+      # ~/.paseo/env is agent-controlled: only read it (as the agent) when it's
+      # a regular file and not a symlink, and bound every read with a timeout
+      # so a swapped-in FIFO can't hang activation.
+      PASEO_AGENT_ENV_OK=""
+      if ${pkgs.coreutils}/bin/timeout 10 sudo -u ${agentUser} \
+           /bin/sh -c '[ -f "$1" ] && [ ! -L "$1" ]' sh ${envFile}; then
+        PASEO_AGENT_ENV_OK=1
+      fi
+
       # Restart the agent daemon when its rendered env changed (first render or
       # a rotation): launchd (re)started it earlier in activation, before
-      # op-secrets ran, and it only reads the env file at start. The file is
-      # read as the agent (never by root through an agent-controlled path); the
+      # op-secrets ran, and it only reads the env file at start. The
       # last-seen checksum is kept root-only.
-      PASEO_AGENT_ENV_SUM="$(sudo -u ${agentUser} ${pkgs.coreutils}/bin/sha256sum ${envFile} 2>/dev/null | ${pkgs.coreutils}/bin/cut -d' ' -f1 || true)"
+      PASEO_AGENT_ENV_SUM=""
+      if [ -n "$PASEO_AGENT_ENV_OK" ]; then
+        PASEO_AGENT_ENV_SUM="$(${pkgs.coreutils}/bin/timeout 10 sudo -u ${agentUser} ${pkgs.coreutils}/bin/sha256sum ${envFile} 2>/dev/null | ${pkgs.coreutils}/bin/cut -d' ' -f1 || true)"
+      fi
       if [ -n "$PASEO_AGENT_ENV_SUM" ] \
          && [ "$(${pkgs.coreutils}/bin/cat /var/db/paseo-agent-env.sha256 2>/dev/null || true)" != "$PASEO_AGENT_ENV_SUM" ]; then
         if /bin/launchctl kickstart -k system/dev.paseo.agent; then
@@ -188,9 +202,12 @@ in
       # lands in a URL or .git/config. A repo the bot can't see yet (e.g.
       # infrastructure before it's invited) warns; a later switch retries.
       sudo -u ${agentUser} /bin/mkdir -p "${agentHome}/ops/worktrees"
-      PASEO_AGENT_GH_TOKEN="$(sudo -u ${agentUser} ${pkgs.gnused}/bin/sed -n 's/^GH_TOKEN=//p' ${envFile} 2>/dev/null || true)"
+      PASEO_AGENT_GH_TOKEN=""
+      if [ -n "$PASEO_AGENT_ENV_OK" ]; then
+        PASEO_AGENT_GH_TOKEN="$(${pkgs.coreutils}/bin/timeout 10 sudo -u ${agentUser} ${pkgs.gnused}/bin/sed -n 's/^GH_TOKEN=//p' ${envFile} 2>/dev/null || true)"
+      fi
       if [ -z "$PASEO_AGENT_GH_TOKEN" ]; then
-        echo "paseo-agent: no GH_TOKEN in ${envFile} yet; skipping repo clones"
+        echo "paseo-agent: no GH_TOKEN in a regular ${envFile} yet; skipping repo clones"
       else
         for repo in ${lib.concatStringsSep " " agentRepos}; do
           if [ -d "${agentHome}/ops/$repo/.git" ]; then continue; fi
@@ -204,7 +221,7 @@ in
           fi
         done
       fi
-      unset PASEO_AGENT_GH_TOKEN
+      unset PASEO_AGENT_GH_TOKEN PASEO_AGENT_ENV_OK
 
       # Make the admin home private to mattias (hides kubeconfig / ssh keys from
       # the new unprivileged user).

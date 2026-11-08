@@ -6,22 +6,31 @@
 # Run it as mattias (the admin), NOT as root and NOT as the agent.
 #
 # Secret handling: nothing here echoes a secret. Secrets travel via stdin or
-# environment variables (never argv where avoidable); agent-side commands run
-# with `sudo -u paseo-agent -H`, receiving secrets via --preserve-env=<VAR>.
-# The Hub keys are only ever handed to a single command, never written to the
-# agent's files.
+# environment variables (never argv where avoidable). Agent-side commands run
+# with `sudo -u paseo-agent -H`, and on macOS any same-uid process can read
+# another's environment (ps -E), so the ONLY secret ever handed to an
+# agent-owned process is the single-purpose Hub enroll_key (daemons:enroll),
+# once, for `hub connect`. admin_key / dispatch_key / Hetzner tokens are used
+# by mattias-side processes only and are never written to the agent's files.
 #
-# 1Password contract (vault paseo-agent; must match darwin/paseo-agent/*.tpl):
-#   ssh-key     private_key                     -> rendered ~/.ssh/id_ed25519
-#   github-bot  username, email, token          -> rendered git identity + GH_TOKEN
-#   claude      oauth_token                     -> rendered CLAUDE_CODE_OAUTH_TOKEN
-#   kubeconfig  kubeconfig                      -> rendered ~/.kube/config
-#   hetzner     k8s_readonly_token, atni_readonly_token  (pushed to GitHub secrets)
-#   hub         dispatch_key, admin_key                  (script only, never rendered)
+# 1Password contract — two vaults:
+#   vault paseo-agent (the Mac's service account reads ONLY this; exactly what
+#   darwin/paseo-agent/*.tpl renders):
+#     ssh-key     private_key             -> ~/.ssh/id_ed25519
+#     github-bot  username, email, token  -> git identity + GH_TOKEN
+#     claude      oauth_token             -> CLAUDE_CODE_OAUTH_TOKEN
+#     kubeconfig  kubeconfig              -> ~/.kube/config
+#   vault paseo-agent-admin (script only; the service account has NO access):
+#     hub                 dispatch_key (runs:dispatch -> AWS),
+#                         admin_key (configuration:install + :validate; mattias only),
+#                         enroll_key (daemons:enroll only; the agent sees it once)
+#     hetzner             k8s_readonly_token, atni_readonly_token (-> GitHub secrets)
+#     op-service-account  token (backup of /etc/op/token)
 
 umask 077
 
 VAULT=paseo-agent
+ADMIN_VAULT=paseo-agent-admin
 AGENT=paseo-agent
 AGENT_HOME=/Users/paseo-agent
 AGENT_BIN=/etc/profiles/per-user/paseo-agent/bin
@@ -56,17 +65,17 @@ bin() { command -v "$1" || die "$1 not found on PATH"; }
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
-# agent [-e VAR]... [-C DIR] CMD [ARG]...
+# agent [-e VAR]... CMD [ARG]...
 # Run CMD (an absolute path) as the agent with HOME=its home and a fixed PATH.
 # -e preserves VAR, which the caller has set via a command prefix, e.g.
-#   GH_TOKEN="$tok" agent -e GH_TOKEN /path/to/gh ...
-# so secrets reach the agent's process via its environment, not argv.
+#   PASEO_HUB_API_KEY="$enroll_key" agent -e PASEO_HUB_API_KEY /path/to/paseo ...
+# (env, not argv). The agent can read that environment while CMD runs, so
+# only ever pass it the enroll_key — never admin_key or dispatch_key.
 agent() {
-  local keep="" dir=/
+  local keep=""
   while [ $# -gt 0 ]; do
     case $1 in
       -e) keep="${keep:+$keep,}$2"; shift 2 ;;
-      -C) dir=$2; shift 2 ;;
       *) break ;;
     esac
   done
@@ -74,11 +83,7 @@ agent() {
   if [ -n "$keep" ]; then
     opts=(--preserve-env="$keep" "${opts[@]}")
   fi
-  (
-    cd / &&
-      sudo "${opts[@]}" /usr/bin/env PATH="$AGENT_PATH" \
-        /bin/sh -c 'cd "$1" || exit 1; shift; exec "$@"' sh "$dir" "$@"
-  )
+  (cd / && sudo "${opts[@]}" /usr/bin/env PATH="$AGENT_PATH" "$@")
 }
 
 require_not_root() {
@@ -96,78 +101,107 @@ require_op() {
   fi
 }
 
-OP_ITEMS=""
-load_items() {
-  OP_ITEMS="$(op item list --vault "$VAULT" --format json | jq -r '.[].title')" ||
-    die "could not list items in vault $VAULT"
+# Item titles per vault (not secret), loaded once per vault by load_items.
+declare -A OP_ITEMS=()
+load_items() { # VAULT
+  OP_ITEMS[$1]="$(op item list --vault "$1" --format json | jq -r '.[].title')" ||
+    die "could not list items in vault $1"
 }
 
-item_exists() {
-  case $'\n'"$OP_ITEMS"$'\n' in
-    *$'\n'"$1"$'\n'*) return 0 ;;
+item_exists() { # VAULT ITEM
+  case $'\n'"${OP_ITEMS[$1]:-}"$'\n' in
+    *$'\n'"$2"$'\n'*) return 0 ;;
     *) return 1 ;;
   esac
 }
 
-# field_set ITEM FIELD -> success if FIELD exists on ITEM with a non-empty value.
+ensure_vault() { # VAULT
+  if op vault get "$1" >/dev/null 2>&1; then
+    skip "vault $1 exists"
+  else
+    op vault create "$1" >/dev/null || die "could not create vault $1"
+    say "1Password: created vault $1"
+  fi
+}
+
+# field_set VAULT ITEM FIELD -> success if FIELD exists on ITEM with a non-empty value.
 field_set() {
-  item_exists "$1" || return 1
+  item_exists "$1" "$2" || return 1
   local out
-  out="$(op item get "$1" --vault "$VAULT" --format json --reveal |
-    jq -r --arg f "$2" 'if any(.fields[]?; .label == $f and ((.value // "") != "")) then "yes" else "no" end')" ||
-    die "could not read item $1 from vault $VAULT"
+  out="$(op item get "$2" --vault "$1" --format json --reveal |
+    jq -r --arg f "$3" 'if any(.fields[]?; .label == $f and ((.value // "") != "")) then "yes" else "no" end')" ||
+    die "could not read item $2 from vault $1"
   [ "$out" = yes ]
 }
 
-# op_put ITEM FIELD TYPE — make FIELD on ITEM hold $OP_VALUE, creating ITEM (a
-# Secure Note) if needed. The caller sets OP_VALUE via a command prefix; it is
-# fed to op as a JSON item template on stdin (multi-line values survive intact).
+# op_put VAULT ITEM FIELD TYPE — make FIELD on ITEM hold $OP_VALUE, creating
+# ITEM (a Secure Note) if needed. The caller sets OP_VALUE via a command prefix
+# (OP_VALUE="" with OP_ALLOW_EMPTY=1 blanks the field); it is fed to op as a
+# JSON item template on stdin, so multi-line values survive intact and nothing
+# secret is on argv. Failures die explicitly (callers may run it in an `if`).
 op_put() {
-  local item=$1 field=$2 type=$3
-  [ -n "${OP_VALUE:-}" ] || die "internal: empty value for $item/$field"
-  if item_exists "$item"; then
-    op item get "$item" --vault "$VAULT" --format json --reveal |
+  local vault=$1 item=$2 field=$3 type=$4
+  if [ -z "${OP_VALUE:-}" ] && [ -z "${OP_ALLOW_EMPTY:-}" ]; then
+    die "internal: empty value for $vault/$item/$field"
+  fi
+  if item_exists "$vault" "$item"; then
+    op item get "$item" --vault "$vault" --format json --reveal |
       jq --arg f "$field" --arg t "$type" '
         if any(.fields[]?; .label == $f)
         then .fields |= map(if .label == $f then (.value = $ENV.OP_VALUE | .type = $t) else . end)
         else .fields += [{id: $f, label: $f, type: $t, value: $ENV.OP_VALUE}]
         end' |
-      op item edit "$item" --vault "$VAULT" >/dev/null
-    say "1Password: updated $item/$field"
+      op item edit "$item" --vault "$vault" >/dev/null ||
+      die "1Password: could not update $vault/$item/$field"
+    say "1Password: updated $vault/$item/$field"
   else
     jq -n --arg title "$item" --arg f "$field" --arg t "$type" \
       '{title: $title, category: "SECURE_NOTE", fields: [{id: $f, label: $f, type: $t, value: $ENV.OP_VALUE}]}' |
-      op item create - --vault "$VAULT" >/dev/null
-    OP_ITEMS="${OP_ITEMS:+$OP_ITEMS$'\n'}$item"
-    say "1Password: created $item with field $field"
+      op item create - --vault "$vault" >/dev/null ||
+      die "1Password: could not create $vault/$item"
+    OP_ITEMS[$vault]="${OP_ITEMS[$vault]:+${OP_ITEMS[$vault]}$'\n'}$item"
+    say "1Password: created $vault/$item with field $field"
   fi
 }
 
-# op_get ITEM/FIELD -> the value on stdout (callers capture it; never printed).
+# op_get VAULT/ITEM/FIELD -> the value on stdout (callers capture it; never printed).
 op_get() {
-  op read --no-newline "op://$VAULT/$1" 2>/dev/null ||
-    die "1Password: op://$VAULT/$1 is missing or unreadable (run: paseo-agent-setup init)"
+  local v
+  v="$(op read --no-newline "op://$1" 2>/dev/null)" ||
+    die "1Password: op://$1 is missing or unreadable (run: paseo-agent-setup init)"
+  [ -n "$v" ] || die "1Password: op://$1 is empty (run: paseo-agent-setup init)"
+  printf '%s' "$v"
 }
 
-# prompt_field ITEM FIELD TYPE HINT — ask for a missing value (empty = skip).
+# prompt_field VAULT ITEM FIELD TYPE HINT — ask for a missing value (empty = skip).
 prompt_field() {
-  local item=$1 field=$2 type=$3 hint=$4 val=""
-  if field_set "$item" "$field"; then
-    skip "$item/$field already in 1Password"
+  local vault=$1 item=$2 field=$3 type=$4 hint=$5 val=""
+  if field_set "$vault" "$item" "$field"; then
+    skip "$vault/$item/$field already in 1Password"
     return 0
   fi
   # (`|| val=""`: EOF on stdin counts as "skip", not a set -e abort.)
   if [ "$type" = CONCEALED ]; then
-    read -rsp "$item/$field ($hint). Paste it, hidden; empty = skip for now: " val || val=""
+    read -rsp "$vault/$item/$field ($hint). Paste it, hidden; empty = skip for now: " val || val=""
     printf '\n' >&2
   else
-    read -rp "$item/$field ($hint); empty = skip for now: " val || val=""
+    read -rp "$vault/$item/$field ($hint); empty = skip for now: " val || val=""
   fi
   if [ -z "$val" ]; then
-    skip "$item/$field left empty for now"
+    skip "$vault/$item/$field left empty for now"
     return 0
   fi
-  OP_VALUE="$val" op_put "$item" "$field" "$type"
+  OP_VALUE="$val" op_put "$vault" "$item" "$field" "$type"
+}
+
+# yes_no PROMPT -> success only on an explicit y/yes (EOF = no).
+yes_no() {
+  local ans=""
+  read -rp "$1 [y/N] " ans || ans=""
+  case $ans in
+    [yY] | [yY][eE][sS]) return 0 ;;
+    *) return 1 ;;
+  esac
 }
 
 # fp_of_private FILE -> SHA256 fingerprint of its public half.
@@ -180,9 +214,9 @@ fp_of_private() {
 # init
 # ---------------------------------------------------------------------------
 init_ssh_key() {
-  local src=$1 key fp ans
-  if field_set ssh-key private_key; then
-    skip "ssh-key/private_key already in 1Password"
+  local src=$1 key fp
+  if field_set "$VAULT" ssh-key private_key; then
+    skip "$VAULT/ssh-key/private_key already in 1Password"
   else
     [ -r "$src" ] || die "ssh-key: private key $src not readable (pass --ssh-key PATH)"
     key="$(cat "$src")"
@@ -190,7 +224,7 @@ init_ssh_key() {
     fp="$(fp_of_private "$WORK/key")" || die "ssh-key: $src is not an unencrypted OpenSSH private key"
     [ "$fp" = "$EXPECTED_FP" ] || die "ssh-key: $src has fingerprint $fp, expected $EXPECTED_FP"
     say "ssh-key: $src matches $EXPECTED_FP"
-    OP_VALUE="$key" op_put ssh-key private_key CONCEALED
+    OP_VALUE="$key" op_put "$VAULT" ssh-key private_key CONCEALED
     key=""
   fi
 
@@ -206,34 +240,48 @@ init_ssh_key() {
   say "ssh-key: round-trip from 1Password OK ($fp)"
 
   if [ -e "$src" ]; then
-    read -rp "Delete the scratch private key $src now (rm -P)? [y/N] " ans || ans=""
-    case $ans in
-      [yY] | [yY][eE][sS])
-        /bin/rm -P "$src"
-        say "removed $src"
-        ;;
-      *) skip "kept $src (delete it yourself once you're happy)" ;;
-    esac
+    if yes_no "Delete the scratch private key $src now (rm -P)?"; then
+      /bin/rm -P "$src"
+      say "removed $src"
+    else
+      skip "kept $src (delete it yourself once you're happy)"
+    fi
   fi
 }
 
+# The Mac's service account reads ONLY $VAULT. Its token is backed up in
+# $ADMIN_VAULT/op-service-account/token, so a lost /etc/op/token is restored
+# from there instead of minting a second service account.
 init_service_account() {
-  local tok inst
+  local tok inst backed_up=1
   if sudo /bin/test -e "$TOKEN_FILE"; then
     skip "$TOKEN_FILE already present"
     return 0
   fi
   inst="$(bin install)"
-  tok="$(op service-account create paseo-agent-mac --vault "$VAULT:read_items" --raw)" ||
-    die "could not create service account paseo-agent-mac"
-  [ -n "$tok" ] || die "op service-account create returned no token"
+  if field_set "$ADMIN_VAULT" op-service-account token; then
+    tok="$(op_get "$ADMIN_VAULT/op-service-account/token")"
+    say "reusing the service-account token backed up in $ADMIN_VAULT/op-service-account (no new service account)"
+  else
+    tok="$(op service-account create paseo-agent-mac --vault "$VAULT:read_items" --raw)" ||
+      die "could not create service account paseo-agent-mac"
+    [ -n "$tok" ] || die "op service-account create returned no token"
+    say "created service account paseo-agent-mac (read_items on $VAULT only; no access to $ADMIN_VAULT)"
+    # Back it up IMMEDIATELY. If that fails, still write /etc/op/token below so
+    # the one-time token isn't lost, then stop loudly.
+    if ! (OP_VALUE="$tok" op_put "$ADMIN_VAULT" op-service-account token CONCEALED); then
+      backed_up=0
+    fi
+  fi
   if ! sudo /bin/test -d /etc/op; then
     sudo "$inst" -d -m 0700 -o root -g wheel /etc/op
     say "created /etc/op (root 0700)"
   fi
   printf '%s' "$tok" | sudo "$inst" -m 0600 -o root -g wheel /dev/stdin "$TOKEN_FILE"
   tok=""
-  say "created service account paseo-agent-mac (read_items on $VAULT); token written to $TOKEN_FILE (root 0600)"
+  say "wrote $TOKEN_FILE (root 0600)"
+  [ "$backed_up" = 1 ] ||
+    die "backing the new token up to $ADMIN_VAULT/op-service-account/token FAILED; it exists only in $TOKEN_FILE — store it in 1Password by hand before anything else"
 }
 
 cmd_init() {
@@ -250,29 +298,29 @@ cmd_init() {
   done
   require_op
 
-  if op vault get "$VAULT" >/dev/null 2>&1; then
-    skip "vault $VAULT exists"
-  else
-    op vault create "$VAULT" >/dev/null
-    say "1Password: created vault $VAULT"
-  fi
-  load_items
+  ensure_vault "$VAULT"
+  ensure_vault "$ADMIN_VAULT"
+  load_items "$VAULT"
+  load_items "$ADMIN_VAULT"
 
+  # Rendered onto the Mac (vault the service account reads).
   init_ssh_key "$ssh_key"
-
-  prompt_field github-bot username STRING "the bot's GitHub login"
-  prompt_field github-bot email STRING "the bot's commit email (its GitHub noreply address is fine)"
-  prompt_field github-bot token CONCEALED "bot classic PAT, repo scope only, no workflow"
-  prompt_field claude oauth_token CONCEALED "\`claude setup-token\` output (run it as any user, paste the token)"
-  if field_set kubeconfig kubeconfig; then
-    skip "kubeconfig/kubeconfig already in 1Password"
+  prompt_field "$VAULT" github-bot username STRING "the bot's GitHub login"
+  prompt_field "$VAULT" github-bot email STRING "the bot's commit email (its GitHub noreply address is fine)"
+  prompt_field "$VAULT" github-bot token CONCEALED "bot classic PAT, repo scope only, no workflow"
+  prompt_field "$VAULT" claude oauth_token CONCEALED "\`claude setup-token\` output (run it as any user, paste the token)"
+  if field_set "$VAULT" kubeconfig kubeconfig; then
+    skip "$VAULT/kubeconfig/kubeconfig already in 1Password"
   else
-    say "kubeconfig/kubeconfig missing: run 'paseo-agent-setup kubeconfig' (builds it from the cluster's paseo-agent-token)"
+    say "$VAULT/kubeconfig/kubeconfig missing: run 'paseo-agent-setup kubeconfig' (builds it from the cluster's paseo-agent-token)"
   fi
-  prompt_field hetzner k8s_readonly_token CONCEALED "Hetzner Cloud console > k8s project > Security > API tokens, Read-only"
-  prompt_field hetzner atni_readonly_token CONCEALED "Hetzner Cloud console > atni project > Security > API tokens, Read-only"
-  prompt_field hub dispatch_key CONCEALED "Hub > Settings > API keys, scope runs:dispatch"
-  prompt_field hub admin_key CONCEALED "Hub > Settings > API keys, scopes daemons:enroll, configuration:install, configuration:validate"
+
+  # Script-only (admin vault; never rendered, the service account can't read it).
+  prompt_field "$ADMIN_VAULT" hetzner k8s_readonly_token CONCEALED "Hetzner Cloud console > k8s project > Security > API tokens, Read-only"
+  prompt_field "$ADMIN_VAULT" hetzner atni_readonly_token CONCEALED "Hetzner Cloud console > atni project > Security > API tokens, Read-only"
+  prompt_field "$ADMIN_VAULT" hub dispatch_key CONCEALED "Hub > Settings > API keys: a key with ONLY runs:dispatch ticked (goes to AWS Secrets Manager)"
+  prompt_field "$ADMIN_VAULT" hub admin_key CONCEALED "Hub > Settings > API keys: a key with ONLY configuration:install + configuration:validate ticked (mattias-side deploy/listing only)"
+  prompt_field "$ADMIN_VAULT" hub enroll_key CONCEALED "Hub > Settings > API keys: a key with ONLY daemons:enroll ticked (handed to the agent once by hub-connect; revoke it afterwards)"
 
   init_service_account
   say "next: make switch NIXNAME=macbook-m1   # renders the agent's secrets from 1Password"
@@ -281,21 +329,68 @@ cmd_init() {
 # ---------------------------------------------------------------------------
 # github
 # ---------------------------------------------------------------------------
+ensure_protect_mattias() {
+  local existing
+  existing="$(gh api "repos/$GH_OWNER/nixos-config/rulesets" --paginate \
+    --jq '.[] | select(.name == "protect-mattias") | .id')" ||
+    die "could not list rulesets on $GH_OWNER/nixos-config; not inviting the bot"
+  if [ -n "$existing" ]; then
+    skip "ruleset protect-mattias already exists on $GH_OWNER/nixos-config (id $existing)"
+    return 0
+  fi
+  jq -n '{
+      name: "protect-mattias",
+      target: "branch",
+      enforcement: "active",
+      conditions: {ref_name: {include: ["refs/heads/mattias"], exclude: []}},
+      rules: [
+        {type: "pull_request", parameters: {
+          required_approving_review_count: 1,
+          dismiss_stale_reviews_on_push: false,
+          require_code_owner_review: false,
+          require_last_push_approval: false,
+          required_review_thread_resolution: false}},
+        {type: "deletion"},
+        {type: "non_fast_forward"}
+      ],
+      bypass_actors: [{actor_id: 5, actor_type: "RepositoryRole", bypass_mode: "always"}]
+    }' | gh api -X POST "repos/$GH_OWNER/nixos-config/rulesets" --input - --silent ||
+    die "creating ruleset protect-mattias on $GH_OWNER/nixos-config failed; not inviting the bot"
+  say "created ruleset protect-mattias on $GH_OWNER/nixos-config (refs/heads/mattias: 1 approval, no deletion, no force-push; admins bypass)"
+}
+
+# Transparency only (accepted risk): private repos on GitHub Free can't have
+# branch protection, so the bot can push to their default branch.
+warn_unprotected() { # REPO
+  local branch n
+  branch="$(gh api "repos/$GH_OWNER/$1" --jq .default_branch 2>/dev/null || true)"
+  [ -n "$branch" ] || branch=main
+  n="$(gh api "repos/$GH_OWNER/$1/rules/branches/$branch" \
+    --jq '[.[] | select(.type == "pull_request")] | length' 2>/dev/null || true)"
+  case $n in '' | *[!0-9]*) n=0 ;; esac
+  if [ "$n" = 0 ]; then
+    printf '%s\n' "WARNING: $1 $branch has no branch protection (GitHub Free) — the bot can push to it directly. Accepted risk; see wiki \"Security recommendations\" #3."
+  fi
+}
+
 cmd_github() {
-  local repos=(k8s-config nixos-config ansible)
+  local repos=(k8s-config nixos-config ansible) private=(k8s-config ansible)
   while [ $# -gt 0 ]; do
     case $1 in
-      --infrastructure) repos+=(infrastructure); shift ;;
+      --infrastructure) repos+=(infrastructure); private+=(infrastructure); shift ;;
       *) die "github: unknown argument $1" ;;
     esac
   done
   require_op
-  local bot bot_token login r invites id name n=0 existing
-  bot="$(op_get github-bot/username)"
-  bot_token="$(op_get github-bot/token)"
+  local bot bot_token login r invites id name n=0
+  bot="$(op_get "$VAULT/github-bot/username")"
+  bot_token="$(op_get "$VAULT/github-bot/token")"
   login="$(GH_TOKEN="$bot_token" gh api /user --jq .login)" ||
     die "GitHub rejected github-bot/token"
   [ "$login" = "$bot" ] || die "github-bot/token belongs to '$login', not '$bot'"
+
+  # Protect nixos-config's mattias branch BEFORE the bot gets push access.
+  ensure_protect_mattias
 
   for r in "${repos[@]}"; do
     if gh api "repos/$GH_OWNER/$r/collaborators/$bot" --silent >/dev/null 2>&1; then
@@ -315,31 +410,11 @@ cmd_github() {
     n=$((n + 1))
   done <<<"$invites"
   [ "$n" -gt 0 ] || skip "no pending $GH_OWNER/* invitations for $bot"
+  bot_token=""
 
-  existing="$(gh api "repos/$GH_OWNER/nixos-config/rulesets" --paginate \
-    --jq '.[] | select(.name == "protect-mattias") | .id')"
-  if [ -n "$existing" ]; then
-    skip "ruleset protect-mattias already exists on $GH_OWNER/nixos-config (id $existing)"
-  else
-    jq -n '{
-      name: "protect-mattias",
-      target: "branch",
-      enforcement: "active",
-      conditions: {ref_name: {include: ["refs/heads/mattias"], exclude: []}},
-      rules: [
-        {type: "pull_request", parameters: {
-          required_approving_review_count: 1,
-          dismiss_stale_reviews_on_push: false,
-          require_code_owner_review: false,
-          require_last_push_approval: false,
-          required_review_thread_resolution: false}},
-        {type: "deletion"},
-        {type: "non_fast_forward"}
-      ],
-      bypass_actors: [{actor_id: 5, actor_type: "RepositoryRole", bypass_mode: "always"}]
-    }' | gh api -X POST "repos/$GH_OWNER/nixos-config/rulesets" --input - --silent
-    say "created ruleset protect-mattias on $GH_OWNER/nixos-config (refs/heads/mattias: 1 approval, no deletion, no force-push; admins bypass)"
-  fi
+  for r in "${private[@]}"; do
+    warn_unprotected "$r"
+  done
 }
 
 # ---------------------------------------------------------------------------
@@ -348,16 +423,16 @@ cmd_github() {
 cmd_secrets() {
   require_op
   local v cur
-  v="$(op_get hetzner/k8s_readonly_token)"
+  v="$(op_get "$ADMIN_VAULT/hetzner/k8s_readonly_token")"
   printf '%s' "$v" | gh secret set HCLOUD_TOKEN_READONLY -R "$GH_OWNER/infrastructure"
   say "GitHub: set HCLOUD_TOKEN_READONLY on $GH_OWNER/infrastructure (always re-set: Actions secrets can't be read back to compare)"
-  v="$(op_get hetzner/atni_readonly_token)"
+  v="$(op_get "$ADMIN_VAULT/hetzner/atni_readonly_token")"
   printf '%s' "$v" | gh secret set HCLOUD_TOKEN_ATNI_READONLY -R "$GH_OWNER/infrastructure"
   say "GitHub: set HCLOUD_TOKEN_ATNI_READONLY on $GH_OWNER/infrastructure"
 
   aws sts get-caller-identity >/dev/null 2>&1 ||
     die "AWS credentials don't work — run 'aws login' and re-run 'paseo-agent-setup secrets'"
-  v="$(op_get hub/dispatch_key)"
+  v="$(op_get "$ADMIN_VAULT/hub/dispatch_key")"
   if aws secretsmanager describe-secret --region "$AWS_REGION" --secret-id "$AWS_SECRET_NAME" >/dev/null 2>&1; then
     cur="$(aws secretsmanager get-secret-value --region "$AWS_REGION" --secret-id "$AWS_SECRET_NAME" \
       --query SecretString --output text 2>/dev/null || true)"
@@ -393,8 +468,8 @@ cmd_reconcile() {
 # ---------------------------------------------------------------------------
 cmd_kubeconfig() {
   require_op
-  load_items
-  local token ca cfg cur
+  load_items "$VAULT"
+  local token ca cfg cur want got
   token="$(kubectl --context "$ADMIN_CONTEXT" -n paseo get secret paseo-agent-token \
     -o jsonpath='{.data.token}' | base64 -d)" ||
     die "could not read Secret paseo/paseo-agent-token via context $ADMIN_CONTEXT"
@@ -428,13 +503,20 @@ cmd_kubeconfig() {
   token=""
 
   cur=""
-  if field_set kubeconfig kubeconfig; then
-    cur="$(op_get kubeconfig/kubeconfig)"
+  if field_set "$VAULT" kubeconfig kubeconfig; then
+    cur="$(op_get "$VAULT/kubeconfig/kubeconfig")"
   fi
   if [ "$cur" = "$cfg" ]; then
-    skip "1Password kubeconfig/kubeconfig is already current"
+    skip "1Password $VAULT/kubeconfig/kubeconfig is already current"
   else
-    OP_VALUE="$cfg" op_put kubeconfig kubeconfig CONCEALED
+    OP_VALUE="$cfg" op_put "$VAULT" kubeconfig kubeconfig CONCEALED
+    # Round-trip: what op-secrets will render must be byte-for-byte what we built.
+    want="$(printf '%s' "$cfg" | sha256sum | cut -d' ' -f1)"
+    got="$(op read --no-newline "op://$VAULT/kubeconfig/kubeconfig" | sha256sum | cut -d' ' -f1)" ||
+      die "kubeconfig: could not read op://$VAULT/kubeconfig/kubeconfig back"
+    [ "$want" = "$got" ] ||
+      die "kubeconfig: 1Password round-trip MISMATCH (sha256 built $want, stored $got) — fix the item before rendering"
+    say "kubeconfig: round-trip from 1Password OK (sha256 $want)"
     say "next: make switch NIXNAME=macbook-m1   # renders it to $AGENT_HOME/.kube/config"
   fi
   cfg=""
@@ -444,6 +526,7 @@ cmd_kubeconfig() {
 # ---------------------------------------------------------------------------
 # hub-connect
 # ---------------------------------------------------------------------------
+# hub_state FIELD — read the agent daemon's Hub status AS THE AGENT, no key.
 hub_state() {
   agent "$PASEO" hub status --json --home "$AGENT_HOME/.paseo" 2>/dev/null |
     jq -r "(if type == \"array\" then .[0] else . end) | .$1 // empty" 2>/dev/null || true
@@ -451,62 +534,70 @@ hub_state() {
 
 cmd_hub_connect() {
   require_op
-  local admin_key state daemon_id slug
-  admin_key="$(op_get hub/admin_key)"
+  load_items "$ADMIN_VAULT"
+  local enroll_key admin_key state daemon_id slug
   state="$(hub_state state)"
   case $state in
     connected | connecting | reconnecting)
       skip "agent daemon already enrolled with the Hub (state: $state)"
       ;;
     *)
-      PASEO_HUB_API_KEY="$admin_key" agent -e PASEO_HUB_API_KEY \
+      # The agent-owned process can read its own environment, so it gets the
+      # single-purpose daemons:enroll key and nothing else.
+      enroll_key="$(op_get "$ADMIN_VAULT/hub/enroll_key")"
+      PASEO_HUB_API_KEY="$enroll_key" agent -e PASEO_HUB_API_KEY \
         "$PASEO" hub connect "$HUB" --permission hub.execute --home "$AGENT_HOME/.paseo"
+      enroll_key=""
       say "enrolled the agent daemon with $HUB (permission hub.execute)"
+      say "REMINDER: revoke the enroll key now — Hub > Settings > API keys (it was exposed to the agent's process)"
+      if yes_no "Blank $ADMIN_VAULT/hub/enroll_key in 1Password now?"; then
+        OP_VALUE="" OP_ALLOW_EMPTY=1 op_put "$ADMIN_VAULT" hub enroll_key CONCEALED
+      else
+        skip "left $ADMIN_VAULT/hub/enroll_key as is"
+      fi
       ;;
   esac
 
+  # Daemon listing runs as mattias with the admin key (never in an agent process).
   daemon_id="$(hub_state daemonId)"
   if [ -z "$daemon_id" ]; then
     say "WARNING: 'paseo hub status' reports no daemonId yet; re-run hub-connect in a moment for the slug"
   else
+    admin_key="$(op_get "$ADMIN_VAULT/hub/admin_key")"
     slug="$(printf 'Authorization: Bearer %s\n' "$admin_key" |
       curl -fsS -H @- "$HUB/api/v1/configuration-resources" |
       jq -r --arg id "$daemon_id" '.daemons[]? | select(.id == $id) | .slug')" ||
       die "could not list Hub configuration resources"
+    admin_key=""
     if [ -n "$slug" ]; then
       say "Hub daemon slug for the agent: $slug (id $daemon_id)"
     else
       say "WARNING: daemon $daemon_id not found in the Hub's configuration resources"
     fi
   fi
-  admin_key=""
   say "Pair your phone: sudo -iu paseo-agent /Applications/Paseo.app/Contents/Resources/bin/paseo pair"
 }
 
 # ---------------------------------------------------------------------------
-# deploy-trigger
+# deploy-trigger — entirely as mattias, from a fresh clone of origin/main
+# (never the agent's checkout: the agent controls its working tree and refs).
 # ---------------------------------------------------------------------------
 cmd_deploy_trigger() {
   require_op
-  local repo="$AGENT_HOME/ops/k8s-config" gh_token admin_key
-  [ -x "$AGENT_BIN/git" ] || die "$AGENT_BIN/git missing — has 'make switch NIXNAME=macbook-m1' run?"
-  agent /bin/test -d "$repo/.git" ||
-    die "$repo is not cloned yet (make switch clones it once github-bot/token is in 1Password)"
-  gh_token="$(op_get github-bot/token)"
-  GH_TOKEN="$gh_token" agent -e GH_TOKEN -C "$repo" "$AGENT_BIN/git" pull --ff-only
-  gh_token=""
-  say "pulled $repo (fast-forward only)"
-  agent /bin/test -d "$repo/.paseo/triggers" ||
-    die "$repo/.paseo/triggers/ does not exist yet — merge the k8s-config trigger PR first"
+  local src="$WORK/k8s-config" sha admin_key
+  gh repo clone "$GH_OWNER/k8s-config" "$src" -- --depth 1 --branch main --quiet ||
+    die "could not clone $GH_OWNER/k8s-config@main with your gh auth"
+  sha="$(git -C "$src" rev-parse HEAD)"
+  say "cloned $GH_OWNER/k8s-config@main ($sha) into a private temp dir"
+  [ -d "$src/.paseo/triggers" ] ||
+    die "$GH_OWNER/k8s-config@main has no .paseo/triggers/ yet — merge the k8s-config trigger PR first"
 
-  admin_key="$(op_get hub/admin_key)"
-  PASEO_HUB_API_KEY="$admin_key" agent -e PASEO_HUB_API_KEY -C "$repo" \
-    "$PASEO" hub deploy --hub "$HUB" --dry-run
+  admin_key="$(op_get "$ADMIN_VAULT/hub/admin_key")"
+  (cd "$src" && PASEO_HUB_API_KEY="$admin_key" "$PASEO" hub deploy --hub "$HUB" --dry-run)
   say "dry-run OK; deploying"
-  PASEO_HUB_API_KEY="$admin_key" agent -e PASEO_HUB_API_KEY -C "$repo" \
-    "$PASEO" hub deploy --hub "$HUB"
+  (cd "$src" && PASEO_HUB_API_KEY="$admin_key" "$PASEO" hub deploy --hub "$HUB")
   admin_key=""
-  say "deployed $repo/.paseo triggers to $HUB"
+  say "deployed $GH_OWNER/k8s-config@$sha (.paseo/triggers) to $HUB"
 }
 
 # ---------------------------------------------------------------------------
@@ -514,7 +605,7 @@ cmd_deploy_trigger() {
 # ---------------------------------------------------------------------------
 VERIFY_ROWS=()
 VERIFY_FAILS=0
-record() {
+record() { # PASS|FAIL|SKIP DESCRIPTION (SKIP doesn't count as a failure)
   VERIFY_ROWS+=("$(printf '%-4s  %s' "$1" "$2")")
   if [ "$1" = FAIL ]; then
     VERIFY_FAILS=$((VERIFY_FAILS + 1))
@@ -537,8 +628,10 @@ cmd_verify() {
     record FAIL "$ADMIN_HOME is mode $mode (want 700)"
   fi
 
-  # (b) the agent can't read the admin kubeconfig
-  if agent /bin/cat "$ADMIN_HOME/.kube/config" >/dev/null 2>&1; then
+  # (b) the agent can't read the admin kubeconfig (only meaningful if it exists)
+  if [ ! -e "$ADMIN_HOME/.kube/config" ]; then
+    record SKIP "$ADMIN_HOME/.kube/config does not exist; can't test that the agent is denied"
+  elif agent /bin/cat "$ADMIN_HOME/.kube/config" >/dev/null 2>&1; then
     record FAIL "agent CAN read $ADMIN_HOME/.kube/config"
   else
     record PASS "agent cannot read $ADMIN_HOME/.kube/config"
@@ -582,17 +675,18 @@ cmd_verify() {
     fi
     # -W opens a direct-tcpip channel immediately, so the server's forwarding
     # policy is really exercised (-L only binds a local port and never asks the
-    # server until something connects). A remote sshd banner = forwarding works;
-    # sshd's "administratively prohibited" = refused; anything else (e.g. no
-    # connection at all) proves nothing and fails.
+    # server until something connects). PASS only on sshd's policy refusal,
+    # "administratively prohibited". Anything else — a remote banner (forwarding
+    # works), "connect failed"/"Connection refused" (forwarding was allowed,
+    # the target just wasn't listening), no connection — is FAIL, raw output shown.
     out="$(agent "$timeout_bin" 20 "$ssh_bin" -o ConnectTimeout=10 -o ExitOnForwardFailure=yes \
       -W localhost:22 "$h" </dev/null 2>&1 | head -c 4096 || true)"
-    if [[ $out == *SSH-2.0-* ]]; then
-      record FAIL "$h: TCP forwarding to localhost:22 is ALLOWED"
-    elif [[ $out == *"prohibited"* || $out == *"open failed"* ]]; then
-      record PASS "$h: TCP forwarding refused"
+    if [[ $out == *"administratively prohibited"* ]]; then
+      record PASS "$h: TCP forwarding refused (administratively prohibited)"
     else
-      record FAIL "$h: forwarding test inconclusive (no connection?)"
+      out="${out//$'\r'/}"
+      out="${out//$'\n'/ | }"
+      record FAIL "$h: TCP forwarding NOT refused by policy; ssh said: '${out:0:200}'"
     fi
   done
 
@@ -631,14 +725,14 @@ usage() {
   cat <<'EOF'
 paseo-agent-setup — set up the read-only Paseo investigation agent (run as mattias)
 
-  init [--ssh-key PATH]      create the paseo-agent vault + items (prompts for missing values),
-                             store the agent SSH key, write /etc/op/token for make switch
-  github [--infrastructure]  invite + accept the bot on the repos; protect-mattias ruleset on nixos-config
+  init [--ssh-key PATH]      create the paseo-agent + paseo-agent-admin vaults and items (prompts for
+                             missing values), store the agent SSH key, write /etc/op/token for make switch
+  github [--infrastructure]  protect-mattias ruleset on nixos-config, then invite + accept the bot on the repos
   secrets                    Hetzner read-only tokens -> GitHub secrets; Hub dispatch key -> AWS Secrets Manager
   reconcile                  flux reconcile flux-system, paseo, prometheus-csp, prometheus; list paseo pods
   kubeconfig                 build the agent's read-only kubeconfig from the cluster and store it in 1Password
-  hub-connect                enroll the agent daemon with the Hub (hub.execute) and print its daemon slug
-  deploy-trigger             as the agent: pull k8s-config, paseo hub deploy --dry-run, then deploy
+  hub-connect                enroll the agent daemon with the Hub (enroll-only key) and print its daemon slug
+  deploy-trigger             as you: fresh clone of k8s-config@main, paseo hub deploy --dry-run, then deploy
   verify                     PASS/FAIL checks of the agent's read-only posture and its daemon
   smoke-test                 fire a synthetic PaseoSmokeTest alert at Alertmanager
   help                       show this list

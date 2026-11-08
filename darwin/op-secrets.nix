@@ -22,7 +22,9 @@
 #  - Writes happen AS THE OWNER. On darwin the targets typically sit in a
 #    user's own home (which that user controls), so a root write there would
 #    follow any symlink the user planted. `op inject` still runs as root (only
-#    root can read the token) into a root-only temp dir; the rendered bytes are
+#    root can read the token) into a root-only 0700 scratch dir,
+#    /var/db/op-secrets (not /tmp; stale files from an interrupted run are
+#    removed at the start of each run); the rendered bytes are
 #    then streamed on stdin to a small helper run via `sudo -u <owner>` that
 #    does install -d/mktemp/chown/chmod/mv. A render can therefore never give the
 #    owner a file anywhere they couldn't already write. (owner = "root" skips
@@ -38,6 +40,9 @@ let
   op = "${pkgs._1password-cli}/bin/op";
   tokenFile = "/etc/op/token";
   cu = "${pkgs.coreutils}/bin";
+  # Root-only scratch for `op inject` output (plaintext, briefly) — a fixed dir
+  # under /var/db, not /tmp, emptied at the start and end of every run.
+  scratchDir = "/var/db/op-secrets";
 
   # Runs as the file's owner. Usage: place <dest> <mode> <owner> <group>, with
   # the rendered content on stdin.
@@ -60,7 +65,7 @@ let
 
   renderOne = name: s:
     let
-      rendered = ''"$opSecretsTmp"/${lib.escapeShellArg name}'';
+      rendered = "${scratchDir}/${lib.escapeShellArg name}";
       asOwner = lib.optionalString (s.owner != "root") "/usr/bin/sudo -u ${lib.escapeShellArg s.owner} ";
     in
     ''
@@ -117,13 +122,15 @@ in
       # if/&& so a 1Password problem can only ever warn.)
       if [ ! -r ${tokenFile} ]; then
         echo "op-secrets: no token at ${tokenFile}; skipping (consumers use last-good if present)" >&2
-      elif ! opSecretsToken="$(${cu}/cat ${tokenFile})" || ! opSecretsTmp="$(${cu}/mktemp -d)"; then
-        echo "op-secrets: WARNING could not read ${tokenFile} or create a temp dir; skipping all renders" >&2
+      elif ! opSecretsToken="$(${cu}/cat ${tokenFile})" \
+           || ! ${cu}/install -d -m 0700 -o root -g wheel ${scratchDir} \
+           || ! ${cu}/rm -rf -- ${scratchDir}/*; then
+        echo "op-secrets: WARNING could not read ${tokenFile} or prepare ${scratchDir}; skipping all renders" >&2
       else
         ${lib.concatStringsSep "\n" (lib.mapAttrsToList renderOne cfg)}
-        ${cu}/rm -rf "$opSecretsTmp"
+        ${cu}/rm -rf -- ${scratchDir}/* || true
       fi
-      unset opSecretsToken opSecretsTmp
+      unset opSecretsToken
     '';
   };
 }
