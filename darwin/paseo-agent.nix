@@ -138,6 +138,17 @@ in
     # The setup script — macbook-m1 only, because it lives inside this mkIf.
     environment.systemPackages = [ setupScript ];
 
+    # --- 1c. pty isolation for everything run AS the agent -------------------
+    # paseo-agent-setup and activation run agent-controlled code (its
+    # ~/.ssh/config ProxyCommand, a kubectl exec plugin in its kubeconfig,
+    # anything under its home) via `sudo -u paseo-agent`. use_pty gives each
+    # such command its own pseudo-terminal, so it can't push keystrokes into
+    # the calling terminal (TIOCSTI). Rendered by nix-darwin to
+    # /etc/sudoers.d/10-nix-darwin-extra-config.
+    security.sudo.extraConfig = ''
+      Defaults>${agentUser} use_pty
+    '';
+
     # --- 2. Lock the admin home + wire the agent's daemon --------------------
     # postActivation runs last (after user creation), as root. We: create the
     # agent's launchd log dir (launchd won't mkdir -p the parents), point its

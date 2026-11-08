@@ -62,6 +62,20 @@ die() {
 # Absolute path of a command (sudo may not search our PATH).
 bin() { command -v "$1" || die "$1 not found on PATH"; }
 
+# clean STRING -> one printable line (≤200 chars) for echoing output produced
+# by agent-side commands or bot-writable content: newlines become " | " and
+# every other control character (ESC, CR, …) becomes "?", so it can't drive
+# the terminal.
+clean() {
+  local s=$1
+  s="${s//$'\n'/ | }"
+  s="${s//[[:cntrl:]]/?}"
+  printf '%s' "${s:0:200}"
+}
+
+# scrub — the same for a stream (keeps tabs/newlines, control chars -> "?").
+scrub() { LC_ALL=C tr '\000-\010\013-\037\177' '?'; }
+
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
@@ -259,7 +273,10 @@ init_service_account() {
     return 0
   fi
   inst="$(bin install)"
-  if field_set "$ADMIN_VAULT" op-service-account token; then
+  if item_exists "$ADMIN_VAULT" op-service-account; then
+    # A backup item exists: never mint a second service account.
+    field_set "$ADMIN_VAULT" op-service-account token ||
+      die "$ADMIN_VAULT/op-service-account exists but its token field is empty — fix it (paste the paseo-agent-mac token) or delete the item in 1Password, then re-run init"
     tok="$(op_get "$ADMIN_VAULT/op-service-account/token")"
     say "reusing the service-account token backed up in $ADMIN_VAULT/op-service-account (no new service account)"
   else
@@ -527,9 +544,12 @@ cmd_kubeconfig() {
 # hub-connect
 # ---------------------------------------------------------------------------
 # hub_state FIELD — read the agent daemon's Hub status AS THE AGENT, no key.
+# Agent-produced, so cleaned before anyone prints it.
 hub_state() {
-  agent "$PASEO" hub status --json --home "$AGENT_HOME/.paseo" 2>/dev/null |
-    jq -r "(if type == \"array\" then .[0] else . end) | .$1 // empty" 2>/dev/null || true
+  local v
+  v="$(agent "$PASEO" hub status --json --home "$AGENT_HOME/.paseo" 2>/dev/null |
+    jq -r "(if type == \"array\" then .[0] else . end) | .$1 // empty" 2>/dev/null || true)"
+  clean "$v"
 }
 
 cmd_hub_connect() {
@@ -583,6 +603,13 @@ cmd_hub_connect() {
 # (never the agent's checkout: the agent controls its working tree and refs).
 # ---------------------------------------------------------------------------
 cmd_deploy_trigger() {
+  local assume_yes=""
+  while [ $# -gt 0 ]; do
+    case $1 in
+      --yes) assume_yes=1; shift ;;
+      *) die "deploy-trigger: unknown argument $1" ;;
+    esac
+  done
   require_op
   local src="$WORK/k8s-config" sha admin_key
   gh repo clone "$GH_OWNER/k8s-config" "$src" -- --depth 1 --branch main --quiet ||
@@ -592,10 +619,21 @@ cmd_deploy_trigger() {
   [ -d "$src/.paseo/triggers" ] ||
     die "$GH_OWNER/k8s-config@main has no .paseo/triggers/ yet — merge the k8s-config trigger PR first"
 
+  # The bot can push to k8s-config main (GitHub Free, accepted risk), so show
+  # exactly what would be deployed — cleaned, it's bot-writable text.
+  say "commit: $(clean "$(git -C "$src" log -1 --format='%h %an %ad %s')")"
+  say "trigger files:"
+  git -C "$src" ls-files -- .paseo/triggers | scrub | sed 's/^/    /'
+
   admin_key="$(op_get "$ADMIN_VAULT/hub/admin_key")"
-  (cd "$src" && PASEO_HUB_API_KEY="$admin_key" "$PASEO" hub deploy --hub "$HUB" --dry-run)
-  say "dry-run OK; deploying"
-  (cd "$src" && PASEO_HUB_API_KEY="$admin_key" "$PASEO" hub deploy --hub "$HUB")
+  (cd "$src" && PASEO_HUB_API_KEY="$admin_key" "$PASEO" hub deploy --hub "$HUB" --dry-run) 2>&1 | scrub
+  say "dry-run OK"
+  if [ -z "$assume_yes" ] && ! yes_no "Deploy this to Hub?"; then
+    admin_key=""
+    skip "not deployed (answer was not y)"
+    return 0
+  fi
+  (cd "$src" && PASEO_HUB_API_KEY="$admin_key" "$PASEO" hub deploy --hub "$HUB") 2>&1 | scrub
   admin_key=""
   say "deployed $GH_OWNER/k8s-config@$sha (.paseo/triggers) to $HUB"
 }
@@ -647,13 +685,13 @@ cmd_verify() {
   if [ "$out" = no ]; then
     record PASS "agent: kubectl auth can-i get secrets -A = no"
   else
-    record FAIL "agent: kubectl auth can-i get secrets -A = '${out:-error}' (want no)"
+    record FAIL "agent: kubectl auth can-i get secrets -A = '$(clean "${out:-error}")' (want no)"
   fi
   out="$(agent /usr/bin/env "$kcfg" "$kubectl_bin" auth can-i create pods --subresource=exec -A 2>/dev/null || true)"
   if [ "$out" = no ]; then
     record PASS "agent: kubectl auth can-i create pods/exec -A = no"
   else
-    record FAIL "agent: kubectl auth can-i create pods/exec -A = '${out:-error}' (want no)"
+    record FAIL "agent: kubectl auth can-i create pods/exec -A = '$(clean "${out:-error}")' (want no)"
   fi
 
   # (d) fleet logins: logs readable, no sudo, no forwarding
@@ -686,6 +724,7 @@ cmd_verify() {
     else
       out="${out//$'\r'/}"
       out="${out//$'\n'/ | }"
+      out="${out//[[:cntrl:]]/?}"
       record FAIL "$h: TCP forwarding NOT refused by policy; ssh said: '${out:0:200}'"
     fi
   done
@@ -732,7 +771,8 @@ paseo-agent-setup — set up the read-only Paseo investigation agent (run as mat
   reconcile                  flux reconcile flux-system, paseo, prometheus-csp, prometheus; list paseo pods
   kubeconfig                 build the agent's read-only kubeconfig from the cluster and store it in 1Password
   hub-connect                enroll the agent daemon with the Hub (enroll-only key) and print its daemon slug
-  deploy-trigger             as you: fresh clone of k8s-config@main, paseo hub deploy --dry-run, then deploy
+  deploy-trigger [--yes]     as you: fresh clone of k8s-config@main, show commit + trigger files,
+                             paseo hub deploy --dry-run, confirm (y/N; --yes skips), then deploy
   verify                     PASS/FAIL checks of the agent's read-only posture and its daemon
   smoke-test                 fire a synthetic PaseoSmokeTest alert at Alertmanager
   help                       show this list
