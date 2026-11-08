@@ -66,6 +66,29 @@
   users.users.mattias.openssh.authorizedKeys.keyFiles = [ githubKeys ];
   services.openssh.settings.PasswordAuthentication = false;
 
+  # Read-only login for the Paseo investigation agent. systemd-journal lets it
+  # read logs; deliberately NOT in wheel/docker/libvirtd, and NOT in
+  # nix.settings.trusted-users. The private key is held by the agent user on the
+  # Mac; only the public key is declared here.
+  users.users.paseo-agent = {
+    isNormalUser = true;
+    home = "/home/paseo-agent";
+    group = "users";
+    extraGroups = [ "systemd-journal" ];
+    shell = pkgs.zsh;
+    openssh.authorizedKeys.keys = [
+      "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBdx8VAsOS3SjaTZgvKnfRdg6fyQ1AfUmcQsASzhqbyA paseo-agent@mattias-macbook"
+    ];
+  };
+  # Lock down what the agent's SSH session can do: no forwarding or tunnels.
+  services.openssh.extraConfig = lib.mkAfter ''
+    Match User paseo-agent
+      AllowTcpForwarding no
+      AllowAgentForwarding no
+      X11Forwarding no
+      PermitTunnel no
+  '';
+
   # Claude Code plugins/marketplaces/MCP servers, set up on each switch by the
   # same bootstrap the Mac uses (claude-code itself comes from pkgs/dev.nix).
   home-manager.users.mattias.imports = [ ../modules/programs/claude-code-bootstrap.nix ];
