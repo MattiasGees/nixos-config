@@ -38,16 +38,16 @@
         "nixpkgs": "nixpkgs"
       },
       "locked": {
-        "lastModified": 1793311172,
-        "narHash": "sha256-WV9q3VnVX96jmviKmZRJfVUeyRUcnOP56WYjGj9NvDY=",
-        "ref": "refs/tags/v0.7.0",
-        "rev": "6dcfad35884d484e5cb486d3f5175ca14d07cc23",
-        "revCount": 217,
+        "lastModified": 1794175206,
+        "narHash": "sha256-OOBHrSsWrloGkvB4TLRO1UZQoyphOPzJgm5SOujT81U=",
+        "ref": "refs/tags/v0.8.0",
+        "rev": "212dd652d5167e99a26a5fde8a2099fe7817a7d0",
+        "revCount": 219,
         "type": "git",
         "url": "ssh://git@github.com/MattiasGees/conductor"
       },
       "original": {
-        "ref": "refs/tags/v0.7.0",
+        "ref": "refs/tags/v0.8.0",
         "type": "git",
         "url": "ssh://git@github.com/MattiasGees/conductor"
       }
