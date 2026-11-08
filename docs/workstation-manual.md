@@ -410,9 +410,10 @@ Darwin and `server-arm64` / `polaris-vm` import nixpkgs without these overlays.
 | Roll back a bad change | Reboot and pick the previous generation in systemd-boot, or `sudo nixos-rebuild switch --rollback` |
 | Update all packages | `make update` (runs `nix flake update`) then `make switch` |
 
-**There is no linter or CI.** Verification means a successful build/switch.
-(The only flake check is `checks.x86_64-linux.polaris-zfs`, a VM test of the
-polaris ZFS pool script.)
+**There is no linter.** PRs run `.github/workflows/checks.yml`, which evaluates
+every host except `desktop` and runs `checks.x86_64-linux.polaris-zfs` (the only
+flake check, a VM test of the polaris ZFS pool script). `desktop` is not covered,
+so verification here means a successful build/switch.
 
 ---
 

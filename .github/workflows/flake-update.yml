@@ -1,7 +1,8 @@
 # Weekly `nix flake update` as a PR against `mattias`. The PR description is
 # the output of scripts/flake-update.sh: which polaris services change version
 # (with changelog links) and which flake inputs moved. Nothing is built here;
-# check the PR with `make switch NIXNAME=polaris` before merging.
+# checks.yml runs on the PR, but still try it with `make switch NIXNAME=polaris`
+# before merging.
 name: flake-update
 
 on:
@@ -43,8 +44,12 @@ jobs:
         env:
           TOKEN: ${{ secrets.FLAKE_INPUTS_TOKEN }}
 
+      # PRs opened with the default GITHUB_TOKEN don't trigger checks.yml, so use
+      # a fine-grained token (Contents and Pull requests: read/write on this repo
+      # only). Until that secret exists, the PR opens without checks.
       - uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
         with:
+          token: ${{ secrets.FLAKE_UPDATE_PR_TOKEN || github.token }}
           branch: automation/flake-update
           base: mattias
           delete-branch: true
