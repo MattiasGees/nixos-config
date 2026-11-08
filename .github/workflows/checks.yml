@@ -1,0 +1,87 @@
+# PR checks: everything here runs on the runner alone. CI holds nothing that can
+# reach a machine (no SSH keys, Tailscale auth, 1Password token, self-hosted
+# runner or binary cache the machines pull from) and never deploys; real data,
+# hardware and networking are still only exercised by `make switch`.
+name: checks
+
+on:
+  pull_request:
+    branches: [mattias]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: checks-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  secret-templates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - run: scripts/check-secret-templates.sh
+
+  # Hosts that don't need the private flake inputs, so no token. desktop is left
+  # out on purpose: it doesn't evaluate (see CLAUDE.md).
+  eval:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        attr:
+          - nixosConfigurations.server.config.system.build.toplevel
+          - nixosConfigurations.server-arm64.config.system.build.toplevel
+          - nixosConfigurations.polaris-vm.config.system.build.toplevel
+          - darwinConfigurations.macbook-m1.system
+          - darwinConfigurations.pacesetter.system
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # v31.11.3
+
+      - run: nix eval --impure --raw ".#${{ matrix.attr }}.drvPath"
+
+  # The only job with the token, which reads the private vmctl and conductor
+  # repos. Fork PRs don't get secrets, so they skip this instead of failing.
+  polaris:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # v31.11.3
+
+      # Same rewrite as flake-update.yml: git+ssh inputs over HTTPS with a
+      # fine-grained token (Contents: read-only on those two repos).
+      - name: Access private flake inputs
+        env:
+          TOKEN: ${{ secrets.FLAKE_INPUTS_TOKEN }}
+        run: git config --global url."https://x-access-token:${TOKEN}@github.com/".insteadOf "ssh://git@github.com/"
+
+      - name: Evaluate polaris
+        run: nix eval --impure --raw ".#nixosConfigurations.polaris.config.system.build.toplevel.drvPath"
+
+      # Its plugin hash has to be redone after Go bumps. The rest of polaris is
+      # too big to build here (onnxruntime from source, NVIDIA, CUDA, ...).
+      - name: Build Caddy with plugins
+        run: nix build --impure --no-link -L ".#nixosConfigurations.polaris.config.services.caddy.package"
+
+  polaris-zfs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # v31.11.3
+
+      - run: nix build --impure --no-link -L ".#checks.x86_64-linux.polaris-zfs"
