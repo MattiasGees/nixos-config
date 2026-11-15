@@ -47,7 +47,7 @@ jobs:
       # PRs opened with the default GITHUB_TOKEN don't trigger checks.yml, so use
       # a fine-grained token (Contents and Pull requests: read/write on this repo
       # only). Until that secret exists, the PR opens without checks.
-      - uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
+      - uses: peter-evans/create-pull-request@3ffccacd46053766916f087ce41d627c0b8cf2d1 # v8.1.3
         with:
           token: ${{ secrets.FLAKE_UPDATE_PR_TOKEN || github.token }}
           branch: automation/flake-update
