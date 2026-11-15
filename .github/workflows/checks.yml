@@ -43,7 +43,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # v31.11.3
+      - uses: cachix/install-nix-action@3dc140bfc76c49fbd4dd958429132e3746bcb086 # v31.11.5
 
       - run: nix eval --impure --raw ".#${{ matrix.attr }}.drvPath"
 
@@ -57,7 +57,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # v31.11.3
+      - uses: cachix/install-nix-action@3dc140bfc76c49fbd4dd958429132e3746bcb086 # v31.11.5
 
       # Same rewrite as flake-update.yml: git+ssh inputs over HTTPS with a
       # fine-grained token (Contents: read-only on those two repos).
@@ -82,6 +82,6 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # v31.11.3
+      - uses: cachix/install-nix-action@3dc140bfc76c49fbd4dd958429132e3746bcb086 # v31.11.5
 
       - run: nix build --impure --no-link -L ".#checks.x86_64-linux.polaris-zfs"
