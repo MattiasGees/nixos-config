@@ -1,0 +1,213 @@
+From dd43bf67dde4f5f9b31509d3ab85a37158d26777 Mon Sep 17 00:00:00 2001
+From: Sven Grunewaldt <strayer@olle-orks.org>
+Date: Tue, 27 Oct 2026 16:16:39 +0100
+Subject: [PATCH] fix(bar): follow the menu bar reveal on macOS 27 so clicks
+ reach the bar
+
+macOS 27 moved the menu bar into MenuBarAgent, which keeps a transparent
+window at kCGStatusWindowLevel over the whole menu bar strip while the
+menu bar is set to auto-hide. A click on that window reveals the native
+menu bar instead of reaching the bar, so no click_script fires for a bar
+at the default level. The window is recreated every time the menu bar
+hides again, so even topmost=on (which shares its level) only works
+until the next reveal. The reveal itself runs through an event tap, so
+a window above the strip does not block it.
+
+Follow the menu bar instead: while it is hidden on the space of a top
+bar, place the bar windows one level above the MenuBarAgent window; when
+it is revealed, drop back to the configured level so the native menu bar
+and its status items are usable above the bar. The window server posts
+notifications 1302 (revealed) and 1301 (hidden) for this, and
+SLSIsMenuBarVisibleOnSpace answers the current state, so the switch is
+a level change plus reorder of the existing windows, with no rebuild.
+The level is also re-applied when a bar moves to another space and when
+the auto-hide setting changes, since neither necessarily redraws.
+
+This applies to every topmost mode on macOS 27 and later. A topmost=off
+top bar therefore sits above application windows while the menu bar is
+hidden; the strip is covered by the MenuBarAgent window for those
+windows anyway. Bars at other positions keep their configured level.
+
+Verified on macOS 27.2 (26B123), notched display, auto-hidden menu bar,
+topmost=off: clicks reach the bar while the menu bar is hidden, the
+revealed menu bar and status items sit above the bar, clicks work again
+after each reveal/hide cycle across repeated cycles and app switches,
+and a bottom bar keeps its configured level. The visibility query
+returned the settled state inside the notification handler in every
+tested cycle. Not tested: several displays with separate spaces
+disabled, show_in_fullscreen=on, non-topmost popups overlapping a
+lifted bar.
+
+Fixes #852
+---
+ src/bar.c         | 26 ++++++++++++++++++++++++--
+ src/bar_manager.c |  9 +++++++++
+ src/bar_manager.h |  1 +
+ src/event.c       |  6 ++++++
+ src/event.h       |  1 +
+ src/misc/extern.h |  1 +
+ src/sketchybar.c  | 11 +++++++++++
+ 7 files changed, 53 insertions(+), 2 deletions(-)
+
+diff --git a/src/bar.c b/src/bar.c
+index 236735ed..37f7f84a 100644
+--- a/src/bar.c
++++ b/src/bar.c
+@@ -81,9 +81,31 @@ static void bar_calculate_popup_anchor_for_bar_item(struct bar* bar, struct bar_
+   popup_calculate_bounds(&bar_item->popup, bar);
+ }
+ 
++// macOS 27 moved the menu bar into MenuBarAgent, which keeps a transparent
++// window at kCGStatusWindowLevel over the whole menu bar strip while the menu
++// bar is auto-hidden. A click on it reveals the menu bar instead of reaching
++// a window below it, so a bar in that strip never sees its clicks. The reveal
++// itself runs through an event tap and is not blocked by windows above the
++// strip. While the menu bar is hidden on the space of a top bar, lift the bar
++// above that window; once the menu bar is revealed, fall back to the
++// configured level so the menu bar and its status items stay usable above
++// the bar.
++static uint32_t bar_window_level(struct bar* bar) {
++  uint32_t level = g_bar_manager.window_level;
++  if (__builtin_available(macOS 27.0, *)) {
++    if (g_bar_manager.position == POSITION_TOP
++        && (int32_t)level <= kCGStatusWindowLevel
++        && !SLSIsMenuBarVisibleOnSpace(g_connection, bar->dsid)) {
++      level = kCGStatusWindowLevel + 1;
++    }
++  }
++  return level;
++}
++
+ void bar_order_item_windows(struct bar* bar) {
+   if (bar->sid < 1 || bar->adid < 1 || !bar->shown) return;
+-  window_set_level(&bar->window, g_bar_manager.window_level);
++  uint32_t level = bar_window_level(bar);
++  window_set_level(&bar->window, level);
+   window_order(&bar->window, NULL, W_ABOVE);
+ 
+   struct window* previous_window = NULL;
+@@ -96,7 +118,7 @@ void bar_order_item_windows(struct bar* bar) {
+     if (bar_item->position == POSITION_POPUP) continue;
+ 
+     struct window* window = bar_item_get_window(bar_item, bar->adid);
+-    window_set_level(window, g_bar_manager.window_level);
++    window_set_level(window, level);
+ 
+     if (!first_window) first_window = window;
+ 
+diff --git a/src/bar_manager.c b/src/bar_manager.c
+index 5fc521fc..7b6af09a 100644
+--- a/src/bar_manager.c
++++ b/src/bar_manager.c
+@@ -448,6 +448,13 @@ void bar_manager_refresh(struct bar_manager* bar_manager, bool forced) {
+   bar_manager_clear_needs_update(bar_manager);
+ }
+ 
++// The level of a bar depends on whether the menu bar is revealed on its
++// space, so re-apply the levels and the window order without redrawing.
++void bar_manager_handle_menu_bar_reveal(struct bar_manager* bar_manager) {
++  for (int i = 0; i < bar_manager->bar_count; ++i)
++    bar_order_item_windows(bar_manager->bars[i]);
++}
++
+ void bar_manager_resize(struct bar_manager* bar_manager) {
+   for (int i = 0; i < bar_manager->bar_count; ++i)
+     bar_resize(bar_manager->bars[i]);
+@@ -967,6 +974,8 @@ void bar_manager_handle_space_change(struct bar_manager* bar_manager, bool force
+       bar_manager->bars[i]->dsid = dsid;
+       if (!bar_manager->sticky && bar_manager->bars[i]->shown)
+         bar_change_space(bar_manager->bars[i], dsid);
++      // The menu bar may be revealed on one space and hidden on another.
++      bar_order_item_windows(bar_manager->bars[i]);
+     }
+     if (i == bar_manager->bar_count - 1)
+       separator[0] = '\0';
+diff --git a/src/bar_manager.h b/src/bar_manager.h
+index 95d124a6..0a7404c8 100644
+--- a/src/bar_manager.h
++++ b/src/bar_manager.h
+@@ -116,6 +116,7 @@ void bar_manager_handle_mouse_exited(struct bar_manager* bar_manager, struct bar
+ void bar_manager_handle_front_app_switch(struct bar_manager* bar_manager, char* info);
+ void bar_manager_handle_space_change(struct bar_manager* bar_manager, bool forced);
+ void bar_manager_handle_display_change(struct bar_manager* bar_manager);
++void bar_manager_handle_menu_bar_reveal(struct bar_manager* bar_manager);
+ void bar_manager_handle_system_woke(struct bar_manager* bar_manager);
+ void bar_manager_handle_system_will_sleep(struct bar_manager* bar_manager);
+ void bar_manager_handle_volume_change(struct bar_manager* bar_manager, float volume);
+diff --git a/src/event.c b/src/event.c
+index 0c05b58e..584832b2 100644
+--- a/src/event.c
++++ b/src/event.c
+@@ -47,6 +47,11 @@ static void event_menu_bar_hidden_changed(void* context) {
+   bar_manager_resize(&g_bar_manager);
+   g_bar_manager.bar_needs_update = true;
+   bar_manager_refresh(&g_bar_manager, false);
++  bar_manager_handle_menu_bar_reveal(&g_bar_manager);
++}
++
++static void event_menu_bar_reveal_changed(void* context) {
++  bar_manager_handle_menu_bar_reveal(&g_bar_manager);
+ }
+ 
+ static void event_system_woke(void* context) {
+@@ -365,6 +370,7 @@ static callback_type* event_handler[] = {
+   [COVER_CHANGED]              = event_cover_changed,
+   [DISTRIBUTED_NOTIFICATION]   = event_distributed_notification,
+   [MENU_BAR_HIDDEN_CHANGED]    = event_menu_bar_hidden_changed,
++  [MENU_BAR_REVEAL_CHANGED]    = event_menu_bar_reveal_changed,
+   [SYSTEM_WOKE]                = event_system_woke,
+   [SYSTEM_WILL_SLEEP]          = event_system_will_sleep,
+   [SHELL_REFRESH]              = event_shell_refresh,
+diff --git a/src/event.h b/src/event.h
+index 627acff8..c3180420 100644
+--- a/src/event.h
++++ b/src/event.h
+@@ -12,6 +12,7 @@ enum event_type {
+   DISPLAY_RESIZED,
+   DISPLAY_CHANGED,
+   MENU_BAR_HIDDEN_CHANGED,
++  MENU_BAR_REVEAL_CHANGED,
+   SYSTEM_WOKE,
+   SYSTEM_WILL_SLEEP,
+   SHELL_REFRESH,
+diff --git a/src/misc/extern.h b/src/misc/extern.h
+index f559c9f1..fa1f2e6d 100644
+--- a/src/misc/extern.h
++++ b/src/misc/extern.h
+@@ -37,6 +37,7 @@ extern CFStringRef SLSCopyBestManagedDisplayForRect(int cid, CGRect rect);
+ extern CGError SLSGetCurrentCursorLocation(int cid, CGPoint *point);
+ extern CFStringRef SLSCopyActiveMenuBarDisplayIdentifier(int cid);
+ extern CGError SLSGetMenuBarAutohideEnabled(int cid, int *enabled);
++extern bool SLSIsMenuBarVisibleOnSpace(int cid, uint64_t sid);
+ extern CGError SLSGetRevealedMenuBarBounds(CGRect *rect, int cid, uint64_t sid);
+ extern CGError SLSGetDisplayMenubarHeight(uint32_t did, uint32_t *height);
+ extern CFStringRef SLSCopyBestManagedDisplayForPoint(int cid, CGPoint point);
+diff --git a/src/sketchybar.c b/src/sketchybar.c
+index 7d58cc89..b3c27709 100644
+--- a/src/sketchybar.c
++++ b/src/sketchybar.c
+@@ -189,6 +189,12 @@ static void space_events(uint32_t event, void* data, size_t data_length, void* c
+   event_post(&ev);
+ }
+ 
++// 1302: the auto-hidden menu bar was revealed, 1301: it was hidden again.
++static void menu_bar_events(uint32_t event, void* data, size_t data_length, void* context) {
++  struct event ev = { NULL, MENU_BAR_REVEAL_CHANGED };
++  event_post(&ev);
++}
++
+ static void system_events(uint32_t event, void* data, size_t data_length, void* context) {
+   if (event == 1322) {
+     g_disable_capture = clock_gettime_nsec_np(CLOCK_MONOTONIC_RAW_APPROX);
+@@ -225,6 +231,11 @@ int main(int argc, char **argv) {
+     SLSRegisterNotifyProc((void*)space_events, 1328, NULL);
+   }
+ 
++  if (__builtin_available(macOS 27.0, *)) {
++    SLSRegisterNotifyProc((void*)menu_bar_events, 1301, NULL);
++    SLSRegisterNotifyProc((void*)menu_bar_events, 1302, NULL);
++  }
++
+   workspace_event_handler_init(&g_workspace_context);
+   bar_manager_init(&g_bar_manager);
+ 
