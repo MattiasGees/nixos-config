@@ -34,7 +34,8 @@ in
       };
     };
     taps = [
-      "FelixKratz/formulae"
+      # FelixKratz/formulae dropped: sketchybar comes from nixpkgs (patched)
+      # via services.sketchybar below.
       # "homebrew/cask-drivers"
       # koekeishiya/formulae dropped: yabai/skhd come from nixpkgs via
       # services.yabai/services.skhd, and newer Homebrew refuses the tap.
@@ -42,7 +43,6 @@ in
       "vitobotta/tap"                     # hetzner_k3s
     ];
     brews = [
-      "FelixKratz/formulae/sketchybar"
       "theseal/ssh-askpass/ssh-askpass"
       # "ddcctl"
       # "ykman"
@@ -113,9 +113,27 @@ in
     ];
   };
 
+  # sketchybarrc runs under Homebrew's lua (SbarLua is built against it), and
+  # several items shell out to brew CLIs; nix-darwin's agent PATH lacks them.
+  launchd.user.agents.sketchybar.path = [ "/opt/homebrew/bin" ];
+
   # scripts/setup-brew-wm.sh mirrors yabai/skhd/jankyborders for Macs without
   # nix-darwin (work laptop) — keep the two in sync.
   services = {
+    # Config lives in darwin/modules/sketchybar (home-manager, ~/.config).
+    # macOS 27.2 puts an invisible MenuBarAgent window (level 25) over the top
+    # strip of notched displays while the menu bar auto-hides, swallowing all
+    # hover/clicks on the bar. The patch (strayer/SketchyBar@dd43bf6) lifts the
+    # bar above it only while the menu bar is hidden. Drop it once upstream
+    # fixes FelixKratz/SketchyBar#852 in a release.
+    sketchybar = {
+      enable = true;
+      package = pkgs.sketchybar.overrideAttrs (old: {
+        patches = (old.patches or [ ]) ++ [
+          ./modules/sketchybar/patches/macos27-menubar-agent.patch
+        ];
+      });
+    };
     yabai = {                             # Tiling window manager
       enable = true;
       enableScriptingAddition = true;     # Loads SA on startup & sets up sudoers
@@ -159,7 +177,7 @@ in
     skhd = {
       enable = true;
       skhdConfig = ''
-        shift + alt - r : sudo launchctl kickstart -k system/org.nixos.yabai-sa && launchctl kickstart -k gui/$(id -u)/org.nixos.skhd && brew services restart sketchybar
+        shift + alt - r : sudo launchctl kickstart -k system/org.nixos.yabai-sa && launchctl kickstart -k gui/$(id -u)/org.nixos.skhd && launchctl kickstart -k gui/$(id -u)/org.nixos.sketchybar
         shift + alt - y : launchctl kickstart -k gui/$(id -u)/org.nixos.yabai && sudo launchctl kickstart -k system/org.nixos.yabai-sa
 
         shift + alt - t : ghostty
