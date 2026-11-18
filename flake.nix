@@ -49,11 +49,12 @@
       };
 
       # yabai source for the Macs: Christian-SC26's fork, which handles macOS 27
-      # Mission Control (see services.yabai in darwin/configuration.nix). Tracks
-      # master, so the weekly flake update moves it. Drop once upstream yabai
-      # releases macOS 27 fixes.
+      # Mission Control (see services.yabai in darwin/configuration.nix). Pinned
+      # to a release tag; scripts/flake-update.sh (weekly PR, `make update`)
+      # moves it to the newest one. Drop once upstream yabai releases macOS 27
+      # fixes.
       yabai-fork = {
-        url = "github:Christian-SC26/yabai";
+        url = "github:Christian-SC26/yabai/v7.3.4";
         flake = false;
       };
 

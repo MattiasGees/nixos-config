@@ -140,9 +140,10 @@ in
     # a BSP gap (asmvik/yabai#2851). Christian-SC26's fork detects Mission
     # Control via WindowManager's overlay windows and works around 27.2 jumping
     # spaces when Mission Control opens (#2847). Built from source with the
-    # nixpkgs recipe from the fork's master (the `yabai-fork` flake input, moved
-    # by the weekly flake update); setup-brew-wm.sh installs the fork's Homebrew
-    # tap. Go back to upstream (both places) once it releases macOS 27 fixes.
+    # nixpkgs recipe from a fork release (the `yabai-fork` flake input, moved
+    # to the newest tag by scripts/flake-update.sh); setup-brew-wm.sh installs
+    # the fork's Homebrew tap. Go back to upstream (both places) once it
+    # releases macOS 27 fixes.
     yabai = {                             # Tiling window manager
       enable = true;
       package =
@@ -150,14 +151,10 @@ in
           # yabai's version lives in src/yabai.c (#define MAJOR/MINOR/PATCH).
           yabaiC = builtins.readFile "${yabaiSrc}/src/yabai.c";
           part = name: builtins.head (builtins.match ".*#define ${name} +([0-9]+).*" yabaiC);
-          release = "${part "MAJOR"}.${part "MINOR"}.${part "PATCH"}";
-          date = builtins.substring 0 8 yabaiSrc.lastModifiedDate;
         in
         pkgs.yabai.overrideAttrs (old: {
-          version = "${release}-unstable-${builtins.substring 0 4 date}-${builtins.substring 4 2 date}-${builtins.substring 6 2 date}";
+          version = "${part "MAJOR"}.${part "MINOR"}.${part "PATCH"}";
           src = yabaiSrc;
-          # `yabai --version` prints only the release (yabai-v7.3.4).
-          preVersionCheck = "version=${release}";
         });
       enableScriptingAddition = true;     # Loads SA on startup & sets up sudoers
       config = {
