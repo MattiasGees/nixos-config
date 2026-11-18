@@ -48,6 +48,15 @@
         flake = false;
       };
 
+      # yabai source for the Macs: Christian-SC26's fork, which handles macOS 27
+      # Mission Control (see services.yabai in darwin/configuration.nix). Tracks
+      # master, so the weekly flake update moves it. Drop once upstream yabai
+      # releases macOS 27 fixes.
+      yabai-fork = {
+        url = "github:Christian-SC26/yabai";
+        flake = false;
+      };
+
       nixpkgs-wayland.inputs.nixpkgs.follows = "nixpkgs";
     };
 
@@ -58,6 +67,7 @@
       mkServer = import ./lib/mkserver.nix;
       user = "mattias";
       githubKeys = inputs.github-keys;
+      yabaiSrc = inputs.yabai-fork;
       system = "x86_64-linux";
       pkgs  = import nixpkgs {
       inherit system; 
@@ -191,7 +201,7 @@
         };
 
       darwinConfigurations.macbook-m1 = mkDarwin "macbook-m1" rec {
-        inherit darwin home-manager user githubKeys;
+        inherit darwin home-manager user githubKeys yabaiSrc;
         system = "aarch64-darwin";
         pkgs = import nixpkgs {
           inherit system;
@@ -201,7 +211,7 @@
       };
 
       darwinConfigurations.pacesetter = mkDarwin "pacesetter" rec {
-        inherit darwin home-manager user githubKeys;
+        inherit darwin home-manager user githubKeys yabaiSrc;
         system = "aarch64-darwin";
         pkgs = import nixpkgs {
           inherit system;

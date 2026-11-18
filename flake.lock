@@ -729,7 +729,8 @@
         "nixpkgs-unstable": "nixpkgs-unstable",
         "nixpkgs-wayland": "nixpkgs-wayland",
         "vmctl": "vmctl",
-        "xremap-flake": "xremap-flake"
+        "xremap-flake": "xremap-flake",
+        "yabai-fork": "yabai-fork"
       }
     },
     "systems": {
@@ -888,6 +889,22 @@
       "original": {
         "owner": "xremap",
         "repo": "nix-flake",
+        "type": "github"
+      }
+    },
+    "yabai-fork": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1794942042,
+        "narHash": "sha256-ZdfMKCx/MKah/N4Vu5fsHcCcfCHB+GjwBCcISc0O9pc=",
+        "owner": "Christian-SC26",
+        "repo": "yabai",
+        "rev": "2cdd9e4b3e1fe4a7c62eae68b99b78c163ab5ec4",
+        "type": "github"
+      },
+      "original": {
+        "owner": "Christian-SC26",
+        "repo": "yabai",
         "type": "github"
       }
     }

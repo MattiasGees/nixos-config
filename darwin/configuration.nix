@@ -4,7 +4,7 @@
 #  post-activation hooks. Per-host bits live in machines/<host>.nix.
 #
 
-{ config, pkgs, user, system, ... }:
+{ config, pkgs, lib, user, system, yabaiSrc, ... }:
 let
   wallpaper = ../wallpapers/Sienna.jpg;   # Desktop background, set in postActivation
 in
@@ -140,19 +140,25 @@ in
     # a BSP gap (asmvik/yabai#2851). Christian-SC26's fork detects Mission
     # Control via WindowManager's overlay windows and works around 27.2 jumping
     # spaces when Mission Control opens (#2847). Built from source with the
-    # nixpkgs recipe; setup-brew-wm.sh installs the fork's Homebrew tap. Go back
-    # to upstream (both places) once it releases macOS 27 fixes.
+    # nixpkgs recipe from the fork's master (the `yabai-fork` flake input, moved
+    # by the weekly flake update); setup-brew-wm.sh installs the fork's Homebrew
+    # tap. Go back to upstream (both places) once it releases macOS 27 fixes.
     yabai = {                             # Tiling window manager
       enable = true;
-      package = pkgs.yabai.overrideAttrs (old: {
-        version = "7.3.4";
-        src = pkgs.fetchFromGitHub {
-          owner = "Christian-SC26";
-          repo = "yabai";
-          tag = "v7.3.4";
-          hash = "sha256-hHgPo8AQTxPnYlO1vPrBgDigzGHu7XHFqJywX57LK5s=";
-        };
-      });
+      package =
+        let
+          # yabai's version lives in src/yabai.c (#define MAJOR/MINOR/PATCH).
+          yabaiC = builtins.readFile "${yabaiSrc}/src/yabai.c";
+          part = name: builtins.head (builtins.match ".*#define ${name} +([0-9]+).*" yabaiC);
+          release = "${part "MAJOR"}.${part "MINOR"}.${part "PATCH"}";
+          date = builtins.substring 0 8 yabaiSrc.lastModifiedDate;
+        in
+        pkgs.yabai.overrideAttrs (old: {
+          version = "${release}-unstable-${builtins.substring 0 4 date}-${builtins.substring 4 2 date}-${builtins.substring 6 2 date}";
+          src = yabaiSrc;
+          # `yabai --version` prints only the release (yabai-v7.3.4).
+          preVersionCheck = "version=${release}";
+        });
       enableScriptingAddition = true;     # Loads SA on startup & sets up sudoers
       config = {
         layout = "bsp";
