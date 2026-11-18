@@ -4,7 +4,7 @@
 #  post-activation hooks. Per-host bits live in machines/<host>.nix.
 #
 
-{ config, pkgs, user, system, ... }:
+{ config, pkgs, lib, user, system, yabaiSrc, ... }:
 let
   wallpaper = ../wallpapers/Sienna.jpg;   # Desktop background, set in postActivation
 in
@@ -134,8 +134,28 @@ in
         ];
       });
     };
+    # Upstream yabai 7.1.25 doesn't know macOS 27 and never notices Mission
+    # Control there (27.2's Dock no longer posts the AXExpose* notifications),
+    # so windows dragged to another space in Mission Control snap back or leave
+    # a BSP gap (asmvik/yabai#2851). Christian-SC26's fork detects Mission
+    # Control via WindowManager's overlay windows and works around 27.2 jumping
+    # spaces when Mission Control opens (#2847). Built from source with the
+    # nixpkgs recipe from a fork release (the `yabai-fork` flake input, moved
+    # to the newest tag by scripts/flake-update.sh); setup-brew-wm.sh installs
+    # the fork's Homebrew tap. Go back to upstream (both places) once it
+    # releases macOS 27 fixes.
     yabai = {                             # Tiling window manager
       enable = true;
+      package =
+        let
+          # yabai's version lives in src/yabai.c (#define MAJOR/MINOR/PATCH).
+          yabaiC = builtins.readFile "${yabaiSrc}/src/yabai.c";
+          part = name: builtins.head (builtins.match ".*#define ${name} +([0-9]+).*" yabaiC);
+        in
+        pkgs.yabai.overrideAttrs (old: {
+          version = "${part "MAJOR"}.${part "MINOR"}.${part "PATCH"}";
+          src = yabaiSrc;
+        });
       enableScriptingAddition = true;     # Loads SA on startup & sets up sudoers
       config = {
         layout = "bsp";

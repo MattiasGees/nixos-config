@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Run `nix flake update` and print a Markdown summary of what it changes:
+# Move release-tag-pinned inputs to their newest tag (bump_tag below), run
+# `nix flake update` and print a Markdown summary of what it changes:
 # the version of every service on a host before and after
 # (scripts/service-versions.nix), and the flake inputs that moved.
 #
@@ -26,6 +27,33 @@ versions() {
 echo "flake-update: evaluating ${host} before the update..." >&2
 versions > "$tmp/old.json"
 cp flake.lock "$tmp/old.lock"
+
+# Inputs pinned to a release tag (github:<repo>/vX.Y.Z) don't move with
+# `nix flake update`. Point them at the newest release tag first, so the
+# update below locks it. conductor isn't here: it's private and pinned on
+# purpose (`make update-conductor`).
+bump_tag() {
+  local repo=$1 current latest
+  current=$(grep -oE "github:${repo}/v[0-9]+\.[0-9]+\.[0-9]+\"" flake.nix | sed -E 's#.*/(v[^"]+)"#\1#' || true)
+  if [[ -z $current ]]; then
+    echo "flake-update: no ${repo} input pinned to a tag in flake.nix, skipping" >&2
+    return 0
+  fi
+  latest=$(git ls-remote --tags --refs "https://github.com/${repo}" 'v*' \
+    | sed 's#.*refs/tags/##' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n1 || true)
+  if [[ -z $latest ]]; then
+    echo "flake-update: couldn't list ${repo} tags, leaving it at ${current}" >&2
+    return 0
+  fi
+  # Only move forward (a deleted tag mustn't downgrade the pin).
+  if [[ $latest != "$current" && $(printf '%s\n' "$current" "$latest" | sort -V | tail -n1) == "$latest" ]]; then
+    # Portable in-place edit (GNU and BSD sed differ on -i).
+    sed -E "s#(github:${repo}/)${current}\"#\1${latest}\"#" flake.nix > "$tmp/flake.nix"
+    cat "$tmp/flake.nix" > flake.nix
+    echo "flake-update: ${repo} ${current} -> ${latest}" >&2
+  fi
+}
+bump_tag Christian-SC26/yabai   # yabai-fork (Macs)
 
 nix flake update
 
