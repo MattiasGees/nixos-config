@@ -134,8 +134,25 @@ in
         ];
       });
     };
+    # Upstream yabai 7.1.25 doesn't know macOS 27 and never notices Mission
+    # Control there (27.2's Dock no longer posts the AXExpose* notifications),
+    # so windows dragged to another space in Mission Control snap back or leave
+    # a BSP gap (asmvik/yabai#2851). Christian-SC26's fork detects Mission
+    # Control via WindowManager's overlay windows and works around 27.2 jumping
+    # spaces when Mission Control opens (#2847). Built from source with the
+    # nixpkgs recipe; setup-brew-wm.sh installs the fork's Homebrew tap. Go back
+    # to upstream (both places) once it releases macOS 27 fixes.
     yabai = {                             # Tiling window manager
       enable = true;
+      package = pkgs.yabai.overrideAttrs (old: {
+        version = "7.3.4";
+        src = pkgs.fetchFromGitHub {
+          owner = "Christian-SC26";
+          repo = "yabai";
+          tag = "v7.3.4";
+          hash = "sha256-hHgPo8AQTxPnYlO1vPrBgDigzGHu7XHFqJywX57LK5s=";
+        };
+      });
       enableScriptingAddition = true;     # Loads SA on startup & sets up sudoers
       config = {
         layout = "bsp";

@@ -8,6 +8,8 @@
 #    - No yabai scripting addition (needs SIP disabled). Without it, moving
 #      windows between spaces, space focus from sketchybar and sub-layer rules
 #      don't work. The SA isn't loaded on the nix Macs either while SIP is on.
+#    - yabai is the fork's prebuilt release binary (christian-sc26/formulae);
+#      nix builds the same tag from source.
 #    - Services run under the tools' own launchd labels, so the skhd restart
 #      bindings use `--restart-service` / `brew services` instead of org.nixos.*.
 #    - `layer=` is `sub-layer=` (yabai 6+), and the removed window_border*
@@ -54,7 +56,18 @@ install_file() {
 log "Installing packages"
 brew tap koekeishiya/formulae
 brew tap FelixKratz/formulae
-brew install koekeishiya/formulae/yabai koekeishiya/formulae/skhd \
+brew tap christian-sc26/formulae
+# yabai comes from Christian-SC26's fork, like on the nix Macs (see
+# darwin/configuration.nix): upstream doesn't handle macOS 27 Mission Control.
+# Replace an upstream install first; the two formulae share the name `yabai`,
+# so always use the full name (`brew upgrade christian-sc26/formulae/yabai`).
+upstream_yabai="$(brew list --formula --full-name 2>/dev/null | grep -xE '(koekeishiya|asmvik)/formulae/yabai' || true)"
+if [[ -n "$upstream_yabai" ]]; then
+  log "Replacing $upstream_yabai with christian-sc26/formulae/yabai"
+  yabai --stop-service 2>/dev/null || true
+  brew uninstall "$upstream_yabai"
+fi
+brew install christian-sc26/formulae/yabai koekeishiya/formulae/skhd \
   FelixKratz/formulae/borders FelixKratz/formulae/sketchybar \
   lua switchaudio-osx
 brew install --cask sf-symbols font-sketchybar-app-font font-sf-pro font-sf-mono
@@ -244,6 +257,7 @@ cat <<EOF
 Done. Remaining manual steps:
   - System Settings > Privacy & Security > Accessibility: allow yabai, skhd and
     $target/helpers/menus/bin/menus (sketchybar's menu widget), then run
-    \`yabai --restart-service && skhd --restart-service\`.
+    \`yabai --restart-service && skhd --restart-service\`. Each yabai upgrade
+    installs to a new path, so re-grant yabai's access after upgrading.
   - Log out and back in if the menu bar doesn't auto-hide.
 EOF
