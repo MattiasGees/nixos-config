@@ -6,8 +6,10 @@
 #  Mirrors services.{yabai,skhd,jankyborders} in darwin/configuration.nix —
 #  keep the two in sync. Differences from the nix-darwin setup:
 #    - No yabai scripting addition (needs SIP disabled). Without it, moving
-#      windows between spaces, space focus from sketchybar and sub-layer rules
-#      don't work. The SA isn't loaded on the nix Macs either while SIP is on.
+#      windows between spaces, destroying spaces (sketchybar right-click) and
+#      sub-layer rules don't work. The fork's `space --focus` does work without
+#      it on macOS 27, so left-clicking a space in sketchybar switches to it.
+#      The SA isn't loaded on the nix Macs either while SIP is on.
 #    - yabai is the fork's prebuilt release binary (christian-sc26/formulae);
 #      nix builds the same release tags from source (yabai-fork flake input).
 #    - Services run under the tools' own launchd labels, so the skhd restart
