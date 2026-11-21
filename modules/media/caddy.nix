@@ -35,7 +35,7 @@ in
       plugins = [ "github.com/caddy-dns/route53@v1.6.2" ];
       # FOD hash of Caddy + vendored plugin. Bumping either invalidates it:
       # set lib.fakeHash, build, and copy the "got: sha256-..." value.
-      hash = "sha256-/G82qaQUcNaCSmSHWnyOIYbK+K6oHHUHWEpR+4lke54=";
+      hash = "sha256-OCEWErFM5/iMXZKrQcsbJ5Hxmm6w88Ss9Uz/8N16EfY=";
     };
     # ACME account email. The DNS challenge is per-site (acmeTls) rather than a
     # global acme_dns, because only the per-site tls block can set resolvers.
