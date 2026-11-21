@@ -143,14 +143,13 @@ uses (shared with `server` and `polaris`):
 pkgs = import nixpkgs {
   inherit system;                     # x86_64-linux
   config = { allowUnfree = true; allowUnsupportedSystem = false; };
-  overlays = [ (final: prev: { ... }) (final: prev: { ... }) ];
+  overlays = [ (final: prev: { ... }) ];
 };
 ```
 
 - **`allowUnfree`** lets you install Slack, Spotify, Steam, etc.
 - **Overlays** modify the package set (see Part 6): one pins a list of packages
-  to `nixpkgs-unstable`, the other rebuilds `onnxruntime` without OpenVINO (for
-  Immich on polaris).
+  to `nixpkgs-unstable`.
 
 This overlaid `pkgs` is **passed by hand** into the builder (`inherit pkgs`), so
 every module sees the same package set — they don't each re-import nixpkgs.
@@ -388,8 +387,7 @@ The same package can be touched in several places; precedence:
      `dunst`, `slack`, `nwg-look`, `cartridges`, `steam`, `lutris`,
      `looking-glass`, `go`) at `nixpkgs-unstable.legacyPackages`. Both inputs
      currently track `nixos-unstable`, so this pin only matters when their
-     locked revisions differ;
-   - override `onnxruntime` with `openvinoSupport = false` (Immich ML on polaris).
+     locked revisions differ.
 3. **In-system overlay** (in `users/default/nixos.nix`) — rebuilds `waybar` with
    `-Dexperimental=true`.
 
