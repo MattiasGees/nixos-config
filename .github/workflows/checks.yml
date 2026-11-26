@@ -70,7 +70,7 @@ jobs:
         run: nix eval --impure --raw ".#nixosConfigurations.polaris.config.system.build.toplevel.drvPath"
 
       # Its plugin hash has to be redone after Go bumps. The rest of polaris is
-      # too big to build here (onnxruntime from source, NVIDIA, CUDA, ...).
+      # too big to build here (NVIDIA, CUDA, ...).
       - name: Build Caddy with plugins
         run: nix build --impure --no-link -L ".#nixosConfigurations.polaris.config.services.caddy.package"
 

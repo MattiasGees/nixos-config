@@ -48,4 +48,20 @@
   # "Operation not permitted" error on every start. Point HOME at the writable
   # cache dir it already uses (XDG_CACHE_HOME=/var/cache/immich).
   systemd.services.immich-machine-learning.environment.HOME = "/var/cache/immich";
+
+  # Keep ML inference on the CPU without rebuilding onnxruntime. nixpkgs builds
+  # onnxruntime with OpenVINO on Linux, and immich-ml has no setting to pick a
+  # provider: it always prefers OpenVINO, and runs it on device "GPU.<id>" as
+  # soon as OpenVINO lists any OpenCL GPU (immich_ml/sessions/ort.py,
+  # openvino_device). Here that GPU is the NVIDIA card via its OpenCL ICD, where
+  # OpenVINO fails to compile the face/OCR models ([GPU] ProgramBuilder build
+  # failed) -> HTTP 500 on every ML request. Pointing the OpenCL ICD loader at
+  # an empty vendors dir hides every OpenCL platform from this unit only, so
+  # OpenVINO sees no GPU and immich-ml uses device_type "CPU".
+  #
+  # This replaced a flake overlay building onnxruntime with
+  # openvinoSupport = false, which forced a from-source onnxruntime build on
+  # polaris whenever a flake update touched it; the stock onnxruntime and
+  # immich-machine-learning come from cache.nixos.org.
+  systemd.services.immich-machine-learning.environment.OCL_ICD_VENDORS = "/var/empty";
 }

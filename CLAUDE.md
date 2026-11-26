@@ -63,7 +63,7 @@ NixOS builders import `hardware/<name>.nix`, `machines/<name>.nix` and `machines
 
 ## Conventions and gotchas
 
-- **Overlays** live inline in `flake.nix` and apply only to the shared x86_64-linux `pkgs` (desktop, server, polaris): a few packages pinned to `nixpkgs-unstable` and `onnxruntime` built without OpenVINO (for Immich). Darwin, aarch64 hosts and standalone home-manager get un-overlaid `pkgs`. `overlays/` is unused.
+- **Overlays** live inline in `flake.nix` and apply only to the shared x86_64-linux `pkgs` (desktop, server, polaris): a few packages pinned to `nixpkgs-unstable`. Darwin, aarch64 hosts and standalone home-manager get un-overlaid `pkgs`. `overlays/` is unused.
 - **Secrets** on polaris come from 1Password at activation (`modules/server/op-secrets.nix`), rendered from the `*.tpl` files next to each module. Never put secrets in Nix strings — the store is world-readable.
 - **Live-edit symlinks:** many home-manager modules use `mkOutOfStoreSymlink` to `~/Documents/git/nixos-config/...`, so config edits apply without a rebuild — and break if the repo lives elsewhere.
 - The username `mattias` is hardcoded in several places (`flake.nix`, `machines/shared.nix`, `users/default/nixos*.nix`, `machines/polaris.nix`, bootstrap scripts).

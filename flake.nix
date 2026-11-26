@@ -96,24 +96,6 @@
           looking-glass = inputs.nixpkgs-unstable.legacyPackages.${system}.looking-glass;
           go = inputs.nixpkgs-unstable.legacyPackages.${system}.go;
         })
-        # Immich ML: nixpkgs' onnxruntime defaults openvinoSupport = stdenv.isLinux
-        # (on), so immich-machine-learning auto-selects the OpenVINO execution
-        # provider, which grabs a GPU device and fails to compile the face/OCR
-        # models ([GPU] ProgramBuilder build failed) -> HTTP 500 on every ML request,
-        # stalling the job pipeline. Build onnxruntime WITHOUT OpenVINO so Immich
-        # falls back to CPUExecutionProvider (the intended CPU inference on polaris,
-        # which has no Intel GPU). Rebuilds onnxruntime from source.
-        #
-        # Override the TOP-LEVEL (C++) onnxruntime, NOT python3Packages.onnxruntime:
-        # the python module is a wheel built from `onnxruntime.dist` and only the C++
-        # package carries the `openvinoSupport` arg (the python one errors on it). It
-        # takes the C++ package as input via python-packages.nix
-        # (`onnxruntime = pkgs.onnxruntime.override { python3Packages = self;
-        # pythonSupport = true; }`, which doesn't set openvinoSupport), so this
-        # `.override` merges and openvinoSupport=false propagates into the wheel.
-        (final: prev: {
-          onnxruntime = prev.onnxruntime.override { openvinoSupport = false; };
-        })
       ];
       };
     in
