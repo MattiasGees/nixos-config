@@ -26,12 +26,14 @@
 let
   bootstrapScript = ../../bootstrap-claude-code.sh;
   markerName = ".nix-bootstrap." + builtins.baseNameOf "${bootstrapScript}";
-  # Where `claude` (and git) live, appended to activation's PATH. Darwin: the
+  # Where `claude`, git and jq live, appended to activation's PATH. jq comes
+  # straight from the store (the script reads Claude Code's JSON state). Darwin: the
   # claude-code@latest Homebrew cask. Linux: the nixpkgs claude-code in the
   # user profile, plus the system profile for git (the NixOS home-manager
   # service starts with a minimal PATH).
   extraPath = lib.concatStringsSep ":" (
-    lib.optionals pkgs.stdenv.hostPlatform.isDarwin [ "/opt/homebrew/bin" ]
+    [ "${pkgs.jq}/bin" ]
+    ++ lib.optionals pkgs.stdenv.hostPlatform.isDarwin [ "/opt/homebrew/bin" ]
     ++ lib.optionals pkgs.stdenv.hostPlatform.isLinux [
       "${config.home.profileDirectory}/bin"
       "/run/current-system/sw/bin"

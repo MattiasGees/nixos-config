@@ -42,14 +42,19 @@ MARKETPLACES_FILE="${CLAUDE_DIR}/plugins/known_marketplaces.json"
 is_installed() { [ -f "${INSTALLED_FILE}" ] && grep -qF "\"$1\":" "${INSTALLED_FILE}"; }
 # "<id>": true in settings.json's enabledPlugins
 is_enabled() { [ -f "${SETTINGS_FILE}" ] && grep -qE "\"$1\"[[:space:]]*:[[:space:]]*true" "${SETTINGS_FILE}"; }
-# "<name>": { ... } key in known_marketplaces.json
-has_marketplace() { [ -f "${MARKETPLACES_FILE}" ] && grep -qF "\"$1\":" "${MARKETPLACES_FILE}"; }
+# Registered marketplace's "<source> <installLocation>", empty when unregistered.
+# Needs jq (pkgs/core.nix; the activation hook puts it on PATH too).
+marketplace_entry() {
+  [ -f "${MARKETPLACES_FILE}" ] || return 0
+  jq -r --arg n "$1" '.[$n] // empty | "\(.source.repo // .source.path // "?") \(.installLocation // "?")"' "${MARKETPLACES_FILE}"
+}
 
 # claude-plugins-official is normally auto-added on Claude Code's first
 # interactive run; listing it covers a fresh Mac where that hasn't happened yet.
 MARKETPLACES=(
   "claude-plugins-official anthropics/claude-plugins-official"
   "karpathy-skills forrestchang/andrej-karpathy-skills"
+  "impeccable pbakaus/impeccable"
 )
 
 PLUGINS=(
@@ -57,7 +62,13 @@ PLUGINS=(
   frontend-design@claude-plugins-official
   superpowers@claude-plugins-official
   andrej-karpathy-skills@karpathy-skills
+  impeccable@impeccable
 )
+
+if ! command -v jq >/dev/null 2>&1; then
+  echo "error: 'jq' not found (pkgs/core.nix)." >&2
+  exit 1
+fi
 
 if ! command -v claude >/dev/null 2>&1; then
   echo "error: 'claude' CLI not found (Darwin: claude-code@latest cask; Linux: pkgs/dev.nix). Run make switch first." >&2
@@ -69,9 +80,17 @@ failed=0
 echo "==> Marketplaces"
 for entry in "${MARKETPLACES[@]}"; do
   read -r name source <<<"${entry}"
-  if has_marketplace "${name}"; then
+  read -r have_source have_location <<<"$(marketplace_entry "${name}")"
+  if [ "${have_source:-}" = "${source}" ] && [ -d "${have_location:-}" ]; then
     echo "  - ${name}: present"
   else
+    # Registered from somewhere else, or its checkout is gone: e.g. the
+    # karpathy-skills entry left behind by the old home-manager module (#81)
+    # pointed at a /nix/store path that has since been garbage-collected.
+    if [ -n "${have_source:-}" ]; then
+      echo "  - ${name}: stale (${have_source} at ${have_location}), re-adding"
+      claude plugin marketplace remove "${name}" || { failed=1; continue; }
+    fi
     claude plugin marketplace add "${source}" || failed=1
   fi
 done
