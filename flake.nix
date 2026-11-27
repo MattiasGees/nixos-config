@@ -54,7 +54,7 @@
       # moves it to the newest one. Drop once upstream yabai releases macOS 27
       # fixes.
       yabai-fork = {
-        url = "github:Christian-SC26/yabai/v7.3.5";
+        url = "github:Christian-SC26/yabai/v7.3.6";
         flake = false;
       };
 
